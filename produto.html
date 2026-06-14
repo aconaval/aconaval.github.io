@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Aço Naval — Produto</title>
+<meta name="description" content="Veja detalhes e faça seu pedido">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#001f4d;
+  --blue:#1557a8;
+  --blue-mid:#1e6ec4;
+  --blue-light:#e8f0fb;
+  --steel:#4a6580;
+  --green:#156d3a;
+  --green-light:#e8f5ee;
+  --red:#c0392b;
+  --bg:#f7f8fc;
+  --white:#fff;
+  --border:#dde4ef;
+  --text:#17202e;
+  --muted:#6b7a93;
+  --shadow:0 2px 16px rgba(0,30,80,.08);
+  --shadow-lg:0 8px 40px rgba(0,30,80,.14);
+  --r:12px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── TOPBAR ── */
+.topbar{
+  position:sticky;top:0;z-index:100;
+  background:rgba(0,31,77,.97);backdrop-filter:blur(12px);
+  height:56px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;box-shadow:0 1px 0 rgba(255,255,255,.07)
+}
+.topbar-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.topbar-logo-icon{width:34px;height:34px;background:var(--blue-mid);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px}
+.topbar-logo-text{font-family:'Inter',sans-serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:.3px;line-height:1.1}
+.topbar-logo-text small{display:block;font-size:10px;color:rgba(255,255,255,.45);font-weight:400;font-family:'DM Sans',sans-serif;letter-spacing:.4px}
+.topbar-back{display:flex;align-items:center;gap:6px;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer;background:none;border:none;padding:6px 10px;border-radius:7px;transition:all .15s}
+.topbar-back:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* ── LAYOUT ── */
+.page-wrap{max-width:960px;margin:0 auto;padding:28px 16px 60px}
+
+/* ── GALLERY ── */
+.gallery-wrap{display:grid;grid-template-columns:1fr 88px;gap:10px;margin-bottom:28px}
+.gallery-main{
+  aspect-ratio:4/3;background:#fff;border-radius:var(--r);
+  overflow:hidden;border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  cursor:zoom-in;position:relative
+}
+.gallery-main img{width:100%;height:100%;object-fit:contain;padding:16px;transition:transform .3s}
+.gallery-main:hover img{transform:scale(1.03)}
+.gallery-main-placeholder{font-size:72px;opacity:.15}
+.gal-arrow{
+  position:absolute;top:50%;transform:translateY(-50%);z-index:30;
+  width:42px;height:42px;border-radius:50%;border:none;
+  background:rgba(255,255,255,.92);box-shadow:0 2px 10px rgba(0,0,0,.18);
+  color:var(--navy);font-size:20px;cursor:pointer;z-index:4;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;opacity:0
+}
+.gallery-main:hover .gal-arrow{opacity:1}
+.gal-arrow:hover{background:#fff;transform:translateY(-50%) scale(1.08)}
+.gal-arrow.prev{left:10px}
+.gal-arrow.next{right:10px}
+.gal-counter{z-index:30;
+  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  background:rgba(0,40,85,.78);color:#fff;font-size:11px;font-weight:600;
+  padding:3px 10px;border-radius:20px;z-index:4;letter-spacing:.3px;backdrop-filter:blur(4px)
+}
+@media(max-width:700px){ .gal-arrow{opacity:1;width:38px;height:38px;font-size:18px} }
+.gallery-strip{display:flex;flex-direction:column;gap:8px;overflow-y:auto;max-height:100%}
+.gal-thumb{
+  width:80px;height:80px;border-radius:8px;background:#fff;
+  border:2px solid var(--border);overflow:hidden;cursor:pointer;flex-shrink:0;
+  transition:border-color .15s,transform .15s;display:flex;align-items:center;justify-content:center
+}
+.gal-thumb img{width:100%;height:100%;object-fit:contain;padding:4px}
+.gal-thumb.active{border-color:var(--blue)}
+.gal-thumb:hover:not(.active){border-color:#aac3e8;transform:scale(1.04)}
+.gal-thumb-3d{
+  background:linear-gradient(135deg,#001f4d 0%,#1557a8 100%);
+  color:#fff;font-size:22px;flex-direction:column;gap:3px
+}
+.gal-thumb-3d span{font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.8}
+.gallery-main.is-3d{cursor:default}
+.gal-section-label{
+  font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.6px;text-align:center;padding:2px 0 4px;line-height:1
+}
+
+/* ── PRODUCT INFO ── */
+.prod-layout{display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start}
+.prod-info{}
+.prod-cat{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--blue);background:var(--blue-light);padding:3px 11px;border-radius:20px;letter-spacing:.3px;text-transform:uppercase;margin-bottom:10px}
+.prod-name{font-family:'Inter',sans-serif;font-size:clamp(26px,4vw,36px);font-weight:700;color:var(--navy);line-height:1.15;margin-bottom:14px;letter-spacing:-.3px}
+.info-block{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.info-block-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.info-block-val{font-size:14px;color:var(--text);line-height:1.6}
+.info-badges{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+.info-badge{font-size:12px;font-weight:500;color:var(--steel);background:#fff;border:1px solid var(--border);padding:4px 11px;border-radius:20px;display:flex;align-items:center;gap:4px}
+
+/* ── CLIENT PHOTOS ── */
+.clientes-section{margin-top:20px}
+.clientes-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.clientes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.clientes-thumb{
+  aspect-ratio:1;border-radius:8px;object-fit:cover;
+  background:#fff;border:1.5px solid var(--border);cursor:pointer;
+  transition:transform .2s,border-color .15s
+}
+.clientes-thumb:hover{transform:scale(1.04);border-color:var(--blue)}
+
+/* ── PRICE CARD ── */
+.price-card{
+  background:#fff;border:1px solid var(--border);border-radius:var(--r);
+  box-shadow:var(--shadow);position:sticky;top:72px;overflow:hidden
+}
+.price-card-head{background:var(--navy);padding:16px 18px}
+.price-card-head-title{font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:rgba(255,255,255,.55);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px}
+.price-avista{font-family:'Inter',sans-serif;font-size:32px;font-weight:700;color:#fff;line-height:1}
+.price-avista-tag{font-size:11px;color:#5fcd8a;font-weight:600;margin-top:3px}
+.price-card-body{padding:16px 18px}
+.price-parc{background:var(--blue-light);border-radius:8px;padding:10px 12px;margin-bottom:14px}
+.price-parc-tag{font-size:11px;font-weight:700;color:var(--blue);margin-bottom:3px}
+.price-parc-val{font-size:17px;font-weight:700;color:var(--blue)}
+.price-parc-sub{font-size:10px;color:var(--blue);font-weight:600;letter-spacing:.3px;margin-top:2px}
+.divider{height:1px;background:var(--border);margin:14px 0}
+.feature-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--steel);margin-bottom:8px}
+.feature-row:last-child{margin-bottom:0}
+.feature-icon{font-size:15px;flex-shrink:0;width:20px;text-align:center}
+
+/* ── FORM ── */
+.form-section{padding:16px 18px;border-top:1px solid var(--border);background:#fafcff}
+.form-title{font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:var(--navy);margin-bottom:12px}
+.form-group{margin-bottom:10px}
+.form-label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
+.form-input,.form-textarea{
+  width:100%;font-family:'DM Sans',sans-serif;font-size:14px;
+  padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;
+  background:#fff;color:var(--text);transition:border-color .15s
+}
+.form-input:focus,.form-textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(21,87,168,.1)}
+.form-input.err{border-color:var(--red)}
+.form-textarea{resize:vertical;min-height:64px}
+.btn-pedir{
+  width:100%;padding:14px;border-radius:10px;
+  background:var(--green);color:#fff;border:none;
+  font-family:'Inter',sans-serif;font-size:16px;font-weight:700;
+  cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;
+  margin-top:12px;letter-spacing:.2px
+}
+.btn-pedir:hover{background:#0f5229;transform:translateY(-1px);box-shadow:0 4px 16px rgba(21,109,58,.3)}
+.btn-pedir:active{transform:none}
+.btn-pedir:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* ── SUCCESS ── */
+.success-box{
+  display:none;text-align:center;padding:24px 20px;
+  background:var(--green-light);border-radius:10px;border:1px solid #b3dfc5
+}
+.success-box.show{display:block}
+.success-icon{font-size:40px;margin-bottom:10px}
+.success-title{font-family:'Inter',sans-serif;font-size:18px;font-weight:700;color:var(--green);margin-bottom:6px}
+.success-text{font-size:13px;color:#2d7a4f;line-height:1.5}
+
+/* ── LOADING / ERROR ── */
+.screen{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;gap:14px}
+.screen.active{display:flex}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.screen-icon{font-size:52px;opacity:.3}
+.screen-title{font-family:'Inter',sans-serif;font-size:22px;font-weight:700;color:var(--navy)}
+.screen-sub{font-size:14px;color:var(--muted);max-width:360px;line-height:1.6}
+
+/* ── LIGHTBOX ── */
+.lb-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);
+  z-index:900;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px
+}
+.lb-overlay.open{display:flex}
+.lb-header{display:flex;align-items:center;justify-content:space-between;width:100%;max-width:720px}
+.lb-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:700;color:#fff}
+.lb-close{background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:18px;transition:background .15s}
+.lb-close:hover{background:rgba(255,255,255,.3)}
+.lb-main{position:relative;width:100%;max-width:720px}
+.lb-img{width:100%;max-height:68vh;object-fit:contain;border-radius:10px;background:#111;display:block}
+.lb-nav{
+  position:absolute;top:50%;transform:translateY(-50%);
+  background:rgba(255,255,255,.18);border:none;color:#fff;
+  width:40px;height:40px;border-radius:50%;cursor:pointer;font-size:20px;
+  display:flex;align-items:center;justify-content:center;transition:background .15s
+}
+.lb-nav:hover{background:rgba(255,255,255,.35)}
+.lb-nav.prev{left:-50px}.lb-nav.next{right:-50px}
+.lb-strip{display:flex;gap:8px;max-width:720px;overflow-x:auto;padding:4px 0;scrollbar-width:none}
+.lb-strip::-webkit-scrollbar{display:none}
+.lb-strip-thumb{width:58px;height:58px;border-radius:6px;object-fit:contain;flex-shrink:0;background:#222;border:2px solid transparent;cursor:pointer;padding:2px;transition:border-color .15s}
+.lb-strip-thumb.active{border-color:#fff}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--navy);color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;transition:transform .3s;pointer-events:none;white-space:nowrap;box-shadow:var(--shadow-lg)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:700px){
+  .page-wrap{padding:12px 12px 40px}
+
+  /* Layout em coluna única */
+  .prod-layout{grid-template-columns:1fr;gap:18px}
+  .price-card{position:static}
+
+  /* Galeria: foto grande em cima, thumbs em faixa horizontal embaixo */
+  .gallery-wrap{grid-template-columns:1fr;gap:10px;margin-bottom:18px}
+  .gallery-main{aspect-ratio:1/1;border-radius:12px}
+  .gallery-main img{padding:10px}
+  .gallery-strip{
+    flex-direction:row;overflow-x:auto;overflow-y:visible;max-height:unset;
+    gap:8px;padding:2px 0 6px;-webkit-overflow-scrolling:touch;
+    scroll-snap-type:x proximity;align-items:center
+  }
+  .gallery-strip::-webkit-scrollbar{display:none}
+  .gal-thumb{width:62px;height:62px;flex-shrink:0;scroll-snap-align:start}
+  /* Labels de seção (Projeto/Clientes) ficam verticais na faixa horizontal */
+  .gal-section-label{
+    writing-mode:vertical-rl;transform:rotate(180deg);
+    padding:0 2px;font-size:8px;flex-shrink:0;align-self:stretch;
+    display:flex;align-items:center;border-left:1px solid var(--border)
+  }
+
+  /* Título e textos */
+  .prod-name{font-size:24px;margin-bottom:10px}
+  .prod-cat{font-size:10px;padding:3px 9px}
+  .info-block{padding:12px 14px;margin-bottom:10px}
+  .info-badges{gap:6px;margin-bottom:14px}
+  .info-badge{font-size:11px;padding:4px 9px}
+
+  /* Card de preço — ocupa largura toda */
+  .price-card-head{padding:14px 16px}
+  .price-avista{font-size:28px}
+  .price-card-body,.form-section{padding:14px 16px}
+
+  /* Botões grandes e tocáveis */
+  .btn-pedir{padding:15px;font-size:16px}
+
+  /* Lightbox */
+  .lb-nav.prev{left:8px}.lb-nav.next{right:8px}
+  .lb-nav{width:40px;height:40px}
+  .lb-img-wrap img{max-height:70vh}
+
+  /* Formulário: 16px evita zoom no iOS, grids colapsam */
+  .form-input,.form-textarea,.form-select{font-size:16px}
+  #form-grid-cpf-fone,#form-grid-num,#form-grid-cidade{grid-template-columns:1fr !important}
+
+  /* Topbar */
+  .topbar{padding:0 14px;height:52px}
+  .topbar-logo-text{font-size:15px}
+  .topbar-logo-icon{width:30px;height:30px;font-size:15px}
+}
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <a class="topbar-logo" href="loja.html">
+    <div class="topbar-logo-icon">⚓</div>
+    <div class="topbar-logo-text">AÇO NAVAL<small>Catálogo Online</small></div>
+  </a>
+  <div style="display:flex;align-items:center;gap:4px">
+    <button class="topbar-back" onclick="history.back()">← Catálogo</button>
+    <button class="topbar-back" onclick="compartilharProduto()" title="Compartilhar" style="font-size:16px;padding:6px 8px">🔗</button>
+  </div>
+</header>
+
+<!-- SCREENS -->
+<div class="screen active" id="screen-loading">
+  <div class="spinner"></div>
+  <div style="font-size:14px;color:var(--muted)">Carregando produto…</div>
+</div>
+
+<div class="screen" id="screen-erro">
+  <div class="screen-icon">🔍</div>
+  <div class="screen-title">Produto não encontrado</div>
+  <div class="screen-sub">O link pode estar desatualizado ou o produto foi removido do catálogo.</div>
+  <a href="loja.html" style="margin-top:8px;display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none">← Ver catálogo completo</a>
+</div>
+
+<div class="page-wrap" id="prod-page" style="display:none">
+
+  <!-- GALLERY -->
+  <div class="gallery-wrap" id="gallery-wrap">
+    <div class="gallery-main" id="gallery-main">
+      <div class="gallery-main-placeholder">⚙️</div>
+    </div>
+    <div class="gallery-strip" id="gallery-strip"></div>
+  </div>
+
+  <!-- CONTENT LAYOUT -->
+  <div class="prod-layout">
+
+    <!-- LEFT: Info -->
+    <div class="prod-info">
+      <div class="prod-cat" id="prod-cat" style="display:none"></div>
+      <h1 class="prod-name" id="prod-name"></h1>
+
+      <div class="info-badges" id="info-badges">
+        <span class="info-badge">🚚 Entrega em todo o RS</span>
+        <span class="info-badge">💳 12x sem juros</span>
+        <span class="info-badge">✅ Pague ao receber</span>
+      </div>
+
+      <div class="info-block" id="info-dim" style="display:none">
+        <div class="info-block-label">📏 Medidas</div>
+        <div class="info-block-val" id="prod-dim"></div>
+      </div>
+
+      <div class="info-block" id="info-obs" style="display:none">
+        <div class="info-block-label">📝 Descrição</div>
+        <div class="info-block-val" id="prod-obs"></div>
+      </div>
+
+      <!-- Client photos -->
+      <div class="clientes-section" id="clientes-section" style="display:none">
+        <div class="clientes-label">
+          📸 Fotos de Clientes
+          <span style="font-weight:400;color:#aaa;font-size:10px" id="clientes-count"></span>
+        </div>
+        <div class="clientes-grid" id="clientes-grid"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Price + Form -->
+    <div>
+      <div class="price-card">
+        <div class="price-card-head">
+          <div class="price-card-head-title">À vista (PIX)</div>
+          <div class="price-avista" id="price-avista">R$ —</div>
+          <div class="price-avista-tag">10% de desconto</div>
+        </div>
+        <div class="price-card-body">
+          <div class="price-parc">
+            <div class="price-parc-tag">💳 Cartão de crédito</div>
+            <div class="price-parc-val" id="price-parc">12x de R$ —</div>
+            <div class="price-parc-sub">SEM JUROS · Total: <span id="price-total">R$ —</span></div>
+          </div>
+          <div class="feature-row"><span class="feature-icon">🏭</span> Fabricação própria</div>
+          <div class="feature-row"><span class="feature-icon">🚚</span> Frete incluso no RS</div>
+          <div class="feature-row"><span class="feature-icon">💬</span> Confirmaçāo via WhatsApp</div>
+          <div class="divider"></div>
+
+          <div class="form-section" style="padding:0;border:none;background:none">
+            <div class="form-title">📦 Fazer Pedido</div>
+            <div class="form-group">
+              <label class="form-label">Nome Completo <span style="color:var(--red)">*</span></label>
+              <input class="form-input" id="f-nome" placeholder="Seu nome ou razão social">
+            </div>
+            <div class="form-group">
+              <label class="form-label">E-mail</label>
+              <input class="form-input" id="f-email" type="email" placeholder="seu@email.com" inputmode="email" autocomplete="email">
+            </div>
+            <div id="form-grid-cpf-fone" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="form-group">
+                <label class="form-label">CPF / CNPJ</label>
+                <input class="form-input" id="f-cpf" placeholder="000.000.000-00" oninput="maskDoc(this)" maxlength="18">
+              </div>
+              <div class="form-group">
+                <label class="form-label">WhatsApp <span style="color:var(--red)">*</span></label>
+                <input class="form-input" id="f-fone" placeholder="(51) 99999-9999" oninput="maskFone(this)" inputmode="tel" maxlength="15">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Rua / Avenida <span style="color:var(--red)">*</span></label>
+              <input class="form-input" id="f-rua" placeholder="Ex: Rua das Flores">
+            </div>
+            <div id="form-grid-num" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+              <div class="form-group">
+                <label class="form-label">Número</label>
+                <input class="form-input" id="f-num" placeholder="123">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Bairro</label>
+                <input class="form-input" id="f-bairro" placeholder="Centro">
+              </div>
+              <div class="form-group">
+                <label class="form-label">CEP</label>
+                <input class="form-input" id="f-cep" placeholder="00000-000" oninput="maskCEP(this)">
+              </div>
+            </div>
+            <div id="form-grid-cidade" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="form-group">
+                <label class="form-label">Cidade <span style="color:var(--red)">*</span></label>
+                <input class="form-input" id="f-cidade" placeholder="Ex: Porto Alegre">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Estado</label>
+                <select class="form-input" id="f-estado" style="cursor:pointer">
+                  <option value="">Selecione...</option>
+                  <option>AC</option><option>AL</option><option>AP</option><option>AM</option>
+                  <option>BA</option><option>CE</option><option>DF</option><option>ES</option>
+                  <option>GO</option><option>MA</option><option>MT</option><option>MS</option>
+                  <option>MG</option><option>PA</option><option>PB</option><option>PR</option>
+                  <option>PE</option><option>PI</option><option selected>RS</option><option>RJ</option>
+                  <option>RN</option><option>RO</option><option>RR</option><option>SC</option>
+                  <option>SP</option><option>SE</option><option>TO</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Observação <span style="font-weight:400;color:#bbb">(opcional)</span></label>
+              <textarea class="form-textarea" id="f-obs" placeholder="Cor, medida personalizada, prazo…"></textarea>
+            </div>
+            <div class="success-box" id="success-box">
+              <div class="success-icon">✅</div>
+              <div class="success-title">Pedido enviado!</div>
+              <div class="success-text">Nossa equipe vai entrar em contato pelo WhatsApp em breve para confirmar os detalhes.</div>
+            </div>
+            <button class="btn-pedir" id="btn-pedir" onclick="enviarPedido()">
+              📦 Solicitar este produto
+            </button>
+            <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.5">Sem pagamento antecipado · Cobrado na entrega</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lb-overlay" id="lb-overlay" onclick="lbBgClick(event)">
+  <div class="lb-header">
+    <div class="lb-title" id="lb-title"></div>
+    <button class="lb-close" onclick="closeLb()">✕</button>
+  </div>
+  <div class="lb-main">
+    <img class="lb-img" id="lb-img" src="" alt="">
+    <button class="lb-nav prev" id="lb-prev" onclick="lbNav(-1)">‹</button>
+    <button class="lb-nav next" id="lb-next" onclick="lbNav(1)">›</button>
+  </div>
+  <div class="lb-strip" id="lb-strip"></div>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+// ── ACN3D: visualizador 3D Aço Naval (Three.js) ──────────────────
+// Idêntico ao teste-3d.html: fundo branco, grid sutil, arestas,
+// marca d'água aconaval.com, auto-rotação, iluminação clara.
+var ACN3D = (function() {
+
+  function mount(container, url, opts) {
+    opts = opts || {};
+    container.innerHTML = '';
+    container.style.position = 'relative';
+
+    // Canvas
+    var canvas = document.createElement('canvas');
+    canvas.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
+    container.appendChild(canvas);
+
+    // Marca d'água central
+    var wm = document.createElement('div');
+    wm.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:10;display:flex;align-items:center;justify-content:center';
+    wm.innerHTML = '<span style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:22px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:rgba(0,0,0,0.18);user-select:none;white-space:nowrap;transform:rotate(-25deg)">aconaval.com</span>';
+    container.appendChild(wm);
+
+    // Overlay de loading
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:20';
+    overlay.innerHTML =
+      '<div style="width:40px;height:40px;border:4px solid rgba(0,0,0,.1);border-top:4px solid #1557a8;border-radius:50%;animation:acn3dspin 1s linear infinite"></div>' +
+      '<div class="acn3d-pct" style="font-size:20px;font-weight:700;color:#1557a8">0%</div>' +
+      '<div style="font-size:12px;color:#888">Carregando modelo 3D…</div>';
+    container.appendChild(overlay);
+    if (!document.getElementById('acn3d-style')) {
+      var st = document.createElement('style');
+      st.id = 'acn3d-style';
+      st.textContent = '@keyframes acn3dspin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(st);
+    }
+
+    // Renderer
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.LinearToneMapping;
+    renderer.toneMappingExposure = 1.8;
+
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    var camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
+    camera.position.set(0, 1, 3);
+
+    var controls = new THREE.OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.2;
+
+    // Iluminação (igual teste-3d)
+    scene.add(new THREE.AmbientLight(0xffffff, 1.4));
+    var d1 = new THREE.DirectionalLight(0xffffff, 0.8); d1.position.set(3, 6, 4);  scene.add(d1);
+    var d2 = new THREE.DirectionalLight(0xffffff, 0.6); d2.position.set(-4, 4, 3); scene.add(d2);
+    var d3 = new THREE.DirectionalLight(0xffffff, 0.5); d3.position.set(0, 2, 8);  scene.add(d3);
+
+    // Grid sutil
+    var grid = new THREE.GridHelper(20, 20, 0xdddddd, 0xeeeeee);
+    grid.material.opacity = 0.5;
+    grid.material.transparent = true;
+    scene.add(grid);
+
+    var destroyed = false;
+    var rafId = null;
+
+    function animate() {
+      if (destroyed) return;
+      rafId = requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    function resize() {
+      if (destroyed) return;
+      var w = container.clientWidth  || 300;
+      var h = container.clientHeight || 300;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Carrega o GLB
+    var loader = new THREE.GLTFLoader();
+    loader.load(
+      url,
+      function(gltf) {
+        if (destroyed) return;
+        var model = gltf.scene;
+
+        // Centraliza e escala
+        var box    = new THREE.Box3().setFromObject(model);
+        var center = box.getCenter(new THREE.Vector3());
+        var size   = box.getSize(new THREE.Vector3());
+        var maxDim = Math.max(size.x, size.y, size.z);
+        var scale  = 2.5 / maxDim;
+        model.position.sub(center.multiplyScalar(scale));
+        model.scale.setScalar(scale);
+        var box2 = new THREE.Box3().setFromObject(model);
+        model.position.y -= box2.min.y;
+        scene.add(model);
+
+        // Arestas sutis
+        model.traverse(function(n) {
+          if (n.isMesh && n.geometry) {
+            var edges = new THREE.EdgesGeometry(n.geometry, 18);
+            var line  = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
+              color: 0x000000, transparent: true, opacity: 0.18, depthTest: true
+            }));
+            n.add(line);
+          }
+        });
+
+        // Câmera próxima (igual teste-3d)
+        var camDist = maxDim * scale * 2;
+        camera.position.set(camDist * 0.52, camDist * 0.35, camDist * 0.52);
+        controls.target.set(0, (size.y * scale) / 2, 0);
+        controls.update();
+
+        overlay.style.display = 'none';
+        resize();
+      },
+      function(xhr) {
+        if (xhr.total) {
+          var pct = Math.round(xhr.loaded / xhr.total * 100);
+          var el = overlay.querySelector('.acn3d-pct');
+          if (el) el.textContent = pct + '%';
+        }
+      },
+      function(err) {
+        console.error('ACN3D:', err);
+        overlay.innerHTML = '<div style="font-size:13px;color:#a32d2d;padding:16px;text-align:center">❌ Não foi possível carregar o modelo 3D.</div>';
+      }
+    );
+
+    // Clique duplo centraliza
+    canvas.addEventListener('dblclick', function(e) {
+      var rect = canvas.getBoundingClientRect();
+      var mouse = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width)  * 2 - 1,
+       -((e.clientY - rect.top)  / rect.height) * 2 + 1
+      );
+      var ray = new THREE.Raycaster();
+      ray.setFromCamera(mouse, camera);
+      var hits = ray.intersectObjects(scene.children, true);
+      for (var i = 0; i < hits.length; i++) {
+        if (hits[i].object.isMesh) { controls.target.copy(hits[i].point); controls.update(); break; }
+      }
+    });
+
+    return {
+      destroy: function() {
+        destroyed = true;
+        if (rafId) cancelAnimationFrame(rafId);
+        window.removeEventListener('resize', resize);
+        controls.dispose();
+        scene.traverse(function(n) {
+          if (n.geometry) n.geometry.dispose();
+          if (n.material) {
+            (Array.isArray(n.material) ? n.material : [n.material]).forEach(function(m) {
+              if (m.map) m.map.dispose();
+              m.dispose();
+            });
+          }
+        });
+        renderer.dispose();
+        container.innerHTML = '';
+      }
+    };
+  }
+
+  return { mount: mount };
+})();
+
+</script>
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyCdmk31BghJWGxjWwqGwNuC_LwsDXgX4JY",
+  authDomain:"orcamentos-aco-naval.firebaseapp.com",
+  projectId:"orcamentos-aco-naval",
+  storageBucket:"orcamentos-aco-naval.firebasestorage.app",
+  messagingSenderId:"802823831509",
+  appId:"1:802823831509:web:b5e575d8d5b7b62d5dc75c"
+});
+const db = firebase.firestore();
+
+// ── STATE ──
+let produto = null;
+let allPhotos = [];   // [{src, label}] — foto principal + projeto + clientes
+let currentPhotoIdx = 0;
+let lbFotos  = [];
+let lbIdx    = 0;
+
+
+
+// Carrega fotos de clientes — suporta formato antigo e novo (docs separados)
+async function carregarFotosClientesDoc(prodId) {
+  try {
+    const snap = await db.collection('acn_prod_fotos').doc(String(prodId)).get().catch(() => null);
+    if (!snap || !snap.exists) return [];
+    const data = snap.data();
+    if (Array.isArray(data.fotosclientes) && data.fotosclientes.length) return data.fotosclientes;
+    const count = data.clienteCount || 0;
+    if (!count) return [];
+    const snaps = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        db.collection('acn_prod_fotos').doc(`${prodId}_c${i}`).get().catch(() => null)
+      )
+    );
+    return snaps.map(s => s && s.exists ? s.data().foto : null).filter(Boolean);
+  } catch { return []; }
+}
+
+// Carrega fotos de projeto — suporta formato antigo (array) e novo (docs separados)
+async function carregarFotosProjetoDoc(prodId) {
+  try {
+    const snap = await db.collection('acn_prod_fotos').doc(String(prodId)).get().catch(() => null);
+    if (!snap || !snap.exists) return [];
+    const data = snap.data();
+    // Formato antigo: array direto
+    if (Array.isArray(data.fotos) && data.fotos.length) return data.fotos;
+    // Formato novo: documentos separados
+    const count = data.fotoCount || 0;
+    if (!count) return [];
+    const snaps = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        db.collection('acn_prod_fotos').doc(`${prodId}_f${i}`).get().catch(() => null)
+      )
+    );
+    return snaps.map(s => s && s.exists ? s.data().foto : null).filter(Boolean);
+  } catch { return []; }
+}
+
+// ── INIT ──
+(async () => {
+  const prodId = new URLSearchParams(location.search).get('id');
+  if (!prodId) { showScreen('erro'); return; }
+  try {
+    const [prodSnap, fotosprojeto] = await Promise.all([
+      db.collection('acn_produtos').doc(String(prodId)).get(),
+      carregarFotosProjetoDoc(prodId)
+    ]);
+    if (!prodSnap.exists) { showScreen('erro'); return; }
+    produto = prodSnap.data();
+    produto.fotosprojeto  = fotosprojeto || [];
+    produto.fotosclientes = await carregarFotosClientesDoc(prodId);
+    renderProduto();
+    showScreen('prod');
+    // Abre sempre no 3D se o produto tiver modelo
+    if (produto.modelo3d) {
+      const idx3d = allPhotos.findIndex(f => f.tipo === '3d');
+      if (idx3d > -1) setTimeout(() => setMainPhoto(idx3d), 100);
+    }
+    // Update page title & meta
+    document.title = `${produto.nome} — Aço Naval`;
+    const desc = document.querySelector('meta[name="description"]');
+    if (desc) desc.content = produto.dim ? `${produto.nome} · ${produto.dim}` : produto.nome;
+  } catch(e) {
+    console.error(e);
+    showScreen('erro');
+  }
+})();
+
+function showScreen(name) {
+  document.getElementById('screen-loading').classList.remove('active');
+  document.getElementById('screen-erro').classList.remove('active');
+  document.getElementById('prod-page').style.display = 'none';
+  if (name === 'loading') document.getElementById('screen-loading').classList.add('active');
+  else if (name === 'erro') document.getElementById('screen-erro').classList.add('active');
+  else if (name === 'prod') document.getElementById('prod-page').style.display = 'block';
+}
+
+// ── RENDER ──
+function renderProduto() {
+  const p = produto;
+
+  // Category badge
+  if (p.cat) {
+    const catEl = document.getElementById('prod-cat');
+    catEl.textContent = p.cat;
+    catEl.style.display = 'inline-flex';
+  }
+
+  const prodNameEl = document.getElementById('prod-name');
+  if (p.codigo) {
+    prodNameEl.innerHTML = `<span style="font-size:55%;font-weight:700;color:#185FA5;letter-spacing:.8px;vertical-align:middle;margin-right:8px">${String(p.codigo)}</span>${p.nome}`;
+  } else {
+    prodNameEl.textContent = p.nome;
+  }
+
+  if (p.dim) {
+    document.getElementById('prod-dim').textContent = p.dim;
+    document.getElementById('info-dim').style.display = 'block';
+  }
+  if (p.obs) {
+    document.getElementById('prod-obs').textContent = p.obs;
+    document.getElementById('info-obs').style.display = 'block';
+  }
+
+  // Price
+  const preco = p.preco || 0;
+  const avista  = (preco * 0.9).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const parcela = (preco / 12).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const total   = preco.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('price-avista').textContent = `R$ ${avista}`;
+  document.getElementById('price-parc').textContent = `12x de R$ ${parcela}`;
+  document.getElementById('price-total').textContent = `R$ ${total}`;
+
+  // Build photo arrays — tudo junto na galeria pro cliente alternar
+  const mainFotos    = p.foto ? [{ src: p.foto, label: p.nome, tipo: 'main' }] : [];
+  const projFotos    = (p.fotosprojeto  || []).map((s,i) => ({ src: s, label: `Projeto ${i+1}`,  tipo: 'projeto' }));
+  const clienteFotos = (p.fotosclientes || []).map((s,i) => ({ src: s, label: `Cliente ${i+1}`,  tipo: 'cliente' }));
+  const fotos3d      = p.modelo3d ? [{ src: p.modelo3d, label: 'Ver em 3D', tipo: '3d' }] : [];
+  allPhotos = [...mainFotos, ...fotos3d, ...projFotos, ...clienteFotos];
+
+  renderGallery(allPhotos);
+
+}
+
+function renderGallery(photos) {
+  const main  = document.getElementById('gallery-main');
+  const strip = document.getElementById('gallery-strip');
+
+  if (!photos.length) {
+    main.innerHTML = '<div class="gallery-main-placeholder">⚙️</div>';
+    strip.innerHTML = '';
+    return;
+  }
+
+  // Monta a strip com separadores de seção (Projeto / Clientes)
+  let htmlStrip = '';
+  let tipoAnterior = '';
+  photos.forEach((ph, i) => {
+    if (ph.tipo !== tipoAnterior) {
+      if (ph.tipo === 'projeto') htmlStrip += `<div class="gal-section-label">Projeto</div>`;
+      else if (ph.tipo === 'cliente') htmlStrip += `<div class="gal-section-label">Clientes</div>`;
+      else if (ph.tipo === '3d') htmlStrip += `<div class="gal-section-label">3D</div>`;
+      tipoAnterior = ph.tipo;
+    }
+    if (ph.tipo === '3d') {
+      htmlStrip += `
+        <div class="gal-thumb gal-thumb-3d${i===0?' active':''}" onclick="setMainPhoto(${i})" id="thumb-${i}">
+          🧊<span>3D</span>
+        </div>`;
+    } else {
+      htmlStrip += `
+        <div class="gal-thumb${i===0?' active':''}" onclick="setMainPhoto(${i})" id="thumb-${i}">
+          <img src="${ph.src}" alt="${ph.label}">
+        </div>`;
+    }
+  });
+  strip.innerHTML = htmlStrip;
+  setMainPhoto(0);  // renderiza foto principal + setas + contador
+}
+
+function setMainPhoto(idx) {
+  if (!allPhotos[idx]) return;
+  currentPhotoIdx = idx;
+  const total = allPhotos.length;
+  const ph = allPhotos[idx];
+  const setas = total > 1 ? `
+    <button class="gal-arrow prev" onclick="event.stopPropagation();navPhoto(-1)" aria-label="Anterior">‹</button>
+    <button class="gal-arrow next" onclick="event.stopPropagation();navPhoto(1)" aria-label="Próxima">›</button>
+    <div class="gal-counter">${idx+1} / ${total}</div>` : '';
+  const mainEl = document.getElementById('gallery-main');
+  // Destrói viewer 3D anterior, se houver
+  if (window._acn3dViewer) { window._acn3dViewer.destroy(); window._acn3dViewer = null; }
+  if (ph.tipo === '3d') {
+    mainEl.classList.add('is-3d');
+    mainEl.innerHTML = '';
+    window._acn3dViewer = ACN3D.mount(mainEl, ph.src);
+    if (setas) mainEl.insertAdjacentHTML('beforeend', setas);
+    // Hint interativo — aparece e some
+    const hint = document.createElement('div');
+    hint.id = 'acn-3d-hint';
+    hint.innerHTML = '👆 Movimente com o dedo';
+    hint.style.cssText = 'position:absolute;bottom:54px;left:50%;transform:translateX(-50%);background:rgba(0,30,70,.72);color:#fff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:20px;pointer-events:none;z-index:30;white-space:nowrap;backdrop-filter:blur(6px);transition:opacity 1.2s ease;letter-spacing:.2px';
+    mainEl.style.position = 'relative';
+    mainEl.appendChild(hint);
+    clearTimeout(window._hintTimer);
+    window._hintTimer = setTimeout(() => { hint.style.opacity = '0'; setTimeout(() => hint.remove(), 1300); }, 2800);
+  } else {
+    mainEl.classList.remove('is-3d');
+    mainEl.innerHTML =
+      `<img src="${ph.src}" alt="${ph.label}" id="gallery-main-img" onclick="openLightbox(${idx})">${setas}`;
+  }
+  document.querySelectorAll('.gal-thumb').forEach((t,i) => t.classList.toggle('active', i===idx));
+  // Garante que o thumb ativo fique visível na faixa
+  const ativo = document.getElementById('thumb-'+idx);
+  if (ativo) ativo.scrollIntoView({ block:'nearest', inline:'nearest', behavior:'smooth' });
+}
+
+function navPhoto(dir) {
+  if (!allPhotos.length) return;
+  let n = currentPhotoIdx + dir;
+  if (n < 0) n = allPhotos.length - 1;
+  if (n >= allPhotos.length) n = 0;
+  setMainPhoto(n);
+}
+
+function renderClientPhotos(fotos) {
+  if (!fotos.length) return;
+  const section = document.getElementById('clientes-section');
+  const grid    = document.getElementById('clientes-grid');
+  document.getElementById('clientes-count').textContent = `${fotos.length} foto${fotos.length>1?'s':''}`;
+  grid.innerHTML = fotos.map((src, i) =>
+    `<img class="clientes-thumb" src="${src}" alt="Cliente ${i+1}" onclick="openLightboxClientes(${i})" title="Ampliar">`
+  ).join('');
+  section.style.display = 'block';
+}
+
+// ── LIGHTBOX ──
+function openLightbox(startIdx) {
+  // Filtra itens 3D — não abrir lightbox para eles
+  const fotosSomente = allPhotos.filter(p => p.tipo !== '3d');
+  if (!fotosSomente.length) return;
+  // Ajusta índice para o array filtrado
+  const ph = allPhotos[startIdx];
+  if (ph && ph.tipo === '3d') return;
+  lbFotos = fotosSomente.map(p => p.src);
+  lbIdx   = fotosSomente.findIndex(p => p.src === (ph ? ph.src : fotosSomente[0].src));
+  if (lbIdx < 0) lbIdx = 0;
+  renderLb();
+  document.getElementById('lb-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function openLightboxClientes(startIdx) {
+  lbFotos = produto.fotosclientes || [];
+  lbIdx   = startIdx || 0;
+  if (!lbFotos.length) return;
+  renderLb('Fotos de Clientes');
+  document.getElementById('lb-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function renderLb(overrideTitle) {
+  const titulo = overrideTitle || `${produto.nome} — Foto ${lbIdx+1} de ${lbFotos.length}`;
+  document.getElementById('lb-title').textContent = titulo;
+  document.getElementById('lb-img').src = lbFotos[lbIdx];
+  document.getElementById('lb-prev').style.display = lbFotos.length > 1 ? 'flex' : 'none';
+  document.getElementById('lb-next').style.display = lbFotos.length > 1 ? 'flex' : 'none';
+  document.getElementById('lb-strip').innerHTML = lbFotos.map((s,i) =>
+    `<img class="lb-strip-thumb${i===lbIdx?' active':''}" src="${s}" onclick="lbGo(${i})" alt="${i+1}">`
+  ).join('');
+  setTimeout(()=>{
+    const strip = document.getElementById('lb-strip');
+    const act = strip.querySelector('.active');
+    if(act) act.scrollIntoView({inline:'center',behavior:'smooth'});
+  },50);
+}
+function lbNav(d) { lbIdx = (lbIdx+d+lbFotos.length)%lbFotos.length; renderLb(); }
+function lbGo(i)  { lbIdx = i; renderLb(); }
+function closeLb() { document.getElementById('lb-overlay').classList.remove('open'); document.body.style.overflow=''; }
+function lbBgClick(e) { if(e.target===document.getElementById('lb-overlay')) closeLb(); }
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('lb-overlay').classList.contains('open')) return;
+  if(e.key==='ArrowLeft') lbNav(-1);
+  if(e.key==='ArrowRight') lbNav(1);
+  if(e.key==='Escape') closeLb();
+});
+
+// ── ENVIAR PEDIDO ──
+function compartilharProduto() {
+  if (!produto || !produto.id) return;
+  const workerUrl = 'https://loja.contato-aconaval.workers.dev/?id=' + produto.id;
+  const msg = 'Segue o link do produto 😄🔥\nÉ só entrar no site e, mais abaixo, preencher o formulário com seus dados.\nQualquer dúvida, é só me chamar que eu te ajudo!\n\n' + workerUrl;
+  navigator.clipboard.writeText(msg).then(() => {
+    showToast('✅ Mensagem copiada! Agora cola no WhatsApp');
+  }).catch(() => {
+    const el = document.createElement('textarea');
+    el.value = msg;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    showToast('✅ Mensagem copiada!');
+  });
+}
+
+async function enviarPedido() {
+  const nome   = document.getElementById('f-nome').value.trim();
+  const fone   = document.getElementById('f-fone').value.trim();
+  const rua    = document.getElementById('f-rua').value.trim();
+  const cidade = document.getElementById('f-cidade').value.trim();
+
+  let ok = true;
+  [['f-nome',nome],['f-fone',fone],['f-rua',rua],['f-cidade',cidade]].forEach(([id,val])=>{
+    const el = document.getElementById(id);
+    if(!val){ el.classList.add('err'); ok=false; } else el.classList.remove('err');
+  });
+  if(!ok){ showToast('⚠️ Preencha os campos obrigatórios'); return; }
+
+  const btn = document.getElementById('btn-pedir');
+  btn.disabled=true; btn.textContent='⏳ Enviando…';
+
+  try {
+    let nextNum = 1;
+    try {
+      const existSnap = await db.collection('acn_solicitacoes').orderBy('num','desc').limit(1).get();
+      if(!existSnap.empty) nextNum = (existSnap.docs[0].data().num||0)+1;
+    } catch(e){}
+
+    const id = String(Date.now());
+    await db.collection('acn_solicitacoes').doc(id).set({
+      id, num: nextNum,
+      nome,
+      email:  document.getElementById('f-email').value.trim(),
+      cpf:    document.getElementById('f-cpf').value.trim(),
+      fone,
+      rua,
+      numEnd: document.getElementById('f-num').value.trim(),
+      bairro: document.getElementById('f-bairro').value.trim(),
+      cep:    document.getElementById('f-cep').value.trim(),
+      cidade,
+      estado: document.getElementById('f-estado').value,
+      obs:    document.getElementById('f-obs').value.trim(),
+      status: 'aguardando',
+      criadoEm: new Date().toISOString(),
+      origem: 'pagina_produto',
+      itens: [{
+        prodId: produto.id,
+        nome:  produto.nome,
+        dim:   produto.dim || '',
+        preco: produto.preco || 0,
+        qty:   1,
+        total: produto.preco || 0
+      }],
+      totalPedido: produto.preco || 0,
+      totalAvista: (produto.preco||0) * 0.9
+    });
+
+    document.getElementById('success-box').classList.add('show');
+    btn.style.display = 'none';
+    document.querySelectorAll('#f-nome,#f-email,#f-cpf,#f-fone,#f-rua,#f-num,#f-bairro,#f-cep,#f-cidade,#f-obs').forEach(el=>el.disabled=true);
+    document.getElementById('f-estado').disabled=true;
+
+    // Notificação por email via Apps Script
+    try {
+      fetch('https://script.google.com/macros/s/AKfycbwtMVQWGhU3YpWDHrHGbz-B2eV0SH0wlFAWVLsUfbuuSR1lDHRX6OjG5nG8G89lQe8/exec', {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: 'formulario',
+          num:    nextNum,
+          nome,
+          email:  document.getElementById('f-email').value.trim(),
+          cpf:    document.getElementById('f-cpf').value.trim(),
+          fone,
+          rua,
+          numEnd: document.getElementById('f-num').value.trim(),
+          bairro: document.getElementById('f-bairro').value.trim(),
+          cep:    document.getElementById('f-cep').value.trim(),
+          cidade,
+          estado: document.getElementById('f-estado').value,
+          obs:    document.getElementById('f-obs').value.trim(),
+          itens: [{
+            nome:  produto.nome,
+            dim:   produto.dim || '',
+            preco: produto.preco || 0,
+          }],
+          totalPedido: produto.preco || 0,
+        })
+      });
+    } catch(e) { console.warn('Notificação email falhou:', e); }
+  } catch(e) {
+    console.error(e);
+    showToast('⚠️ Erro ao enviar. Tente novamente.');
+    btn.disabled=false;
+    btn.innerHTML='📦 Solicitar este produto';
+  }
+}
+
+// ── MASKS ──
+function maskFone(el){
+  let v=el.value.replace(/\D/g,'').slice(0,11);
+  if(v.length>10)      v=v.replace(/(\d{2})(\d{5})(\d{4})/,'($1) $2-$3');
+  else if(v.length>6)  v=v.replace(/(\d{2})(\d{4,5})(\d{0,4})/,'($1) $2-$3');
+  else if(v.length>2)  v=v.replace(/(\d{2})(\d{0,5})/,'($1) $2');
+  else if(v.length>0)  v=v.replace(/(\d{0,2})/,'($1');
+  el.value=v;
+}
+function maskDoc(el){
+  let v=el.value.replace(/\D/g,'');
+  if(v.length<=11){
+    v=v.slice(0,11);
+    if(v.length>9)      v=v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/,'$1.$2.$3-$4');
+    else if(v.length>6) v=v.replace(/(\d{3})(\d{3})(\d{0,3})/,'$1.$2.$3');
+    else if(v.length>3) v=v.replace(/(\d{3})(\d{0,3})/,'$1.$2');
+  } else {
+    v=v.slice(0,14);
+    if(v.length>12)      v=v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/,'$1.$2.$3/$4-$5');
+    else if(v.length>8)  v=v.replace(/(\d{2})(\d{3})(\d{3})(\d{0,4})/,'$1.$2.$3/$4');
+    else if(v.length>5)  v=v.replace(/(\d{2})(\d{3})(\d{0,3})/,'$1.$2.$3');
+    else if(v.length>2)  v=v.replace(/(\d{2})(\d{0,3})/,'$1.$2');
+  }
+  el.value=v;
+  el.maxLength=v.length>14?18:14;
+}
+function maskCEP(el){
+  let v=el.value.replace(/\D/g,'').slice(0,8);
+  v=v.replace(/(\d{5})(\d)/,'$1-$2');
+  el.value=v;
+}
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),2800);
+}
+</script>
+</body>
+</html>
