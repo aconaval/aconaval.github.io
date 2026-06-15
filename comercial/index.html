@@ -2936,7 +2936,8 @@ let pedidoEditandoId = null;
 // ── MASKS ────────────────────────────────────────────────────────
 let docTipo = 'cpf'; // 'cpf' ou 'cnpj'
 function enviarLinkAssinatura(id, num) {
-  const link = `https://aconaval.github.io/orcamentos/assinar.html?id=${id}`;
+  const base = location.href.replace(/\/[^\/]*$/, '/');
+  const link = `${base}assinar.html?id=${id}`;
   const ped = pedidos.find(p => String(p.id) === String(id));
   const primeiroNome = ped ? (ped.nome || '').split(' ')[0] : '';
   const msg = `Oii ${primeiroNome} tudo bem? 😄🔥
