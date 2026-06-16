@@ -45,6 +45,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .topbar-logo-text small{display:block;font-size:10px;color:rgba(255,255,255,.45);font-weight:400;font-family:'DM Sans',sans-serif;letter-spacing:.4px}
 .topbar-back{display:flex;align-items:center;gap:6px;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer;background:none;border:none;padding:6px 10px;border-radius:7px;transition:all .15s}
 .topbar-back:hover{background:rgba(255,255,255,.1);color:#fff}
+.cat-menu{
+  position:absolute;top:calc(100% + 6px);right:14px;z-index:200;
+  width:min(280px,calc(100vw - 28px));
+  background:#fff;border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 12px 34px rgba(0,20,60,.22);
+  overflow:hidden;display:none;
+}
+.cat-menu.open{display:block;animation:catMenuIn .16s ease}
+@keyframes catMenuIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.cat-menu-head{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:var(--muted);
+  letter-spacing:.5px;text-transform:uppercase;padding:12px 16px 8px}
+.cat-menu-list{max-height:min(60vh,360px);overflow-y:auto;padding-bottom:6px}
+.cat-menu-item{display:flex;align-items:center;gap:8px;padding:11px 16px;font-size:14px;
+  color:var(--navy);cursor:pointer;text-decoration:none;border-top:1px solid #f0f3f8;transition:background .12s}
+.cat-menu-item:hover{background:var(--blue-light)}
+.cat-menu-item.active{background:var(--blue-light);font-weight:600;color:var(--blue)}
+.cat-menu-loading{padding:14px 16px;font-size:13px;color:var(--muted)}
 
 /* ── LAYOUT ── */
 .page-wrap{max-width:960px;margin:0 auto;padding:28px 16px 60px}
@@ -265,6 +282,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .topbar{padding:0 14px;height:52px}
   .topbar-logo-text{font-size:15px}
   .topbar-logo-icon{width:30px;height:30px;font-size:15px}
+  .btn-cat-label{display:none}
+  .topbar-back{padding:6px 8px;font-size:12px}
 }
 </style>
 </head>
@@ -274,13 +293,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 <!-- TOPBAR -->
 <header class="topbar">
-  <a class="topbar-logo" href="loja.html">
+  <a class="topbar-logo" href="./">
     <div class="topbar-logo-icon">⚓</div>
     <div class="topbar-logo-text">AÇO NAVAL<small>Catálogo Online</small></div>
   </a>
   <div style="display:flex;align-items:center;gap:4px">
-    <button class="topbar-back" onclick="history.back()">← Catálogo</button>
+    <button class="topbar-back" id="btn-categorias" onclick="toggleCatMenu(event)" title="Categorias">☰ <span class="btn-cat-label">Categorias</span></button>
+    <button class="topbar-back" onclick="voltarCatalogo()">← Catálogo</button>
     <button class="topbar-back" onclick="compartilharProduto()" title="Compartilhar" style="font-size:16px;padding:6px 8px">🔗</button>
+  </div>
+
+  <!-- Menu de categorias (dropdown) -->
+  <div class="cat-menu" id="cat-menu">
+    <div class="cat-menu-head">Categorias</div>
+    <div class="cat-menu-list" id="cat-menu-list">
+      <div class="cat-menu-loading">Carregando…</div>
+    </div>
   </div>
 </header>
 
@@ -294,7 +322,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="screen-icon">🔍</div>
   <div class="screen-title">Produto não encontrado</div>
   <div class="screen-sub">O link pode estar desatualizado ou o produto foi removido do catálogo.</div>
-  <a href="loja.html" style="margin-top:8px;display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none">← Ver catálogo completo</a>
+  <a href="./" style="margin-top:8px;display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none">← Ver catálogo completo</a>
 </div>
 
 <div class="page-wrap" id="prod-page" style="display:none">
@@ -694,6 +722,79 @@ async function carregarFotosProjetoDoc(prodId) {
     return snaps.map(s => s && s.exists ? s.data().foto : null).filter(Boolean);
   } catch { return []; }
 }
+
+// ── MENU DE CATEGORIAS ──
+function voltarCatalogo() {
+  // Se veio de outra página do site, volta; senão vai pra loja
+  if (document.referrer && document.referrer.indexOf(location.host) > -1) history.back();
+  else location.href = './';
+}
+function toggleCatMenu(e) {
+  if (e) e.stopPropagation();
+  const m = document.getElementById('cat-menu');
+  m.classList.toggle('open');
+  if (m.classList.contains('open') && !m.dataset.carregado) carregarCategorias();
+}
+document.addEventListener('click', e => {
+  const m = document.getElementById('cat-menu');
+  if (m && m.classList.contains('open') && !m.contains(e.target) && e.target.id !== 'btn-categorias') {
+    m.classList.remove('open');
+  }
+});
+async function carregarCategorias() {
+  const lista = document.getElementById('cat-menu-list');
+  const m = document.getElementById('cat-menu');
+  try {
+    let cats = [];
+    const idxSnap = await db.collection('acn').doc('produtos_index').get();
+    if (idxSnap.exists) {
+      const ids = idxSnap.data().ids || [];
+      const snaps = await Promise.all(ids.map(id => db.collection('acn_produtos').doc(String(id)).get()));
+      cats = snaps.filter(s => s.exists).map(s => s.data())
+        .filter(p => p.nome && !(p.cat||'').toLowerCase().includes('cano'))
+        .map(p => p.cat).filter(Boolean);
+    }
+    cats = [...new Set(cats)];
+    const catAtual = produto && produto.cat ? produto.cat : '';
+    let h = `<a class="cat-menu-item" href="./">🏠 Ver todos os produtos</a>`;
+    h += cats.map(c =>
+      `<a class="cat-menu-item${c===catAtual?' active':''}" href="./?cat=${encodeURIComponent(c)}">📦 ${c}</a>`
+    ).join('');
+    lista.innerHTML = h || '<div class="cat-menu-loading">Nenhuma categoria.</div>';
+    m.dataset.carregado = '1';
+  } catch (err) {
+    lista.innerHTML = '<div class="cat-menu-loading">Erro ao carregar.</div>';
+  }
+}
+
+// ── SWIPE (galeria do produto + lightbox) ──
+function setupSwipe(el, onLeft, onRight, guard) {
+  if (!el) return;
+  let x0 = null, y0 = null;
+  el.addEventListener('touchstart', e => {
+    if (guard && guard()) { x0 = null; return; }
+    const t = e.changedTouches[0]; x0 = t.clientX; y0 = t.clientY;
+  }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+      if (dx < 0) onLeft(); else onRight();
+    }
+  }, { passive: true });
+}
+function setupGestures() {
+  // Galeria principal: só troca foto quando NÃO está no modo 3D (3D usa o toque pra girar)
+  const main = document.getElementById('gallery-main');
+  setupSwipe(main, () => navPhoto(1), () => navPhoto(-1),
+    () => main && main.classList.contains('is-3d'));
+  // Lightbox
+  const lb = document.getElementById('lb-overlay');
+  setupSwipe(lb, () => lbNav(1), () => lbNav(-1));
+}
+setupGestures();
 
 // ── INIT ──
 (async () => {

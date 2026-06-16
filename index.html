@@ -117,10 +117,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .search-icon{color:var(--muted);font-size:16px;flex-shrink:0}
 
 /* ── CATEGORY CHIPS ── */
-.cat-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px}
+.cat-bar{
+  position:sticky;top:64px;z-index:50;
+  background:var(--bg);
+  margin:0 -20px 18px;padding:12px 20px 10px;
+  border-bottom:1px solid var(--border);
+}
+.cat-row{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.cat-row::-webkit-scrollbar{display:none}
 .cat-chip{
-  padding:6px 16px;border-radius:999px;border:1.5px solid var(--border);
-  background:var(--white);font-size:13px;font-weight:600;cursor:pointer;
+  padding:7px 16px;border-radius:999px;border:1.5px solid var(--border);
+  background:var(--white);font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap;
   transition:all .15s;color:var(--muted);font-family:'DM Sans',sans-serif
 }
 .cat-chip:hover{border-color:var(--blue);color:var(--blue)}
@@ -517,6 +524,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .proj-thumb{width:52px;height:52px;flex-shrink:0;scroll-snap-align:start}
 
   /* Categorias: scroll horizontal */
+  .cat-bar{top:54px;margin:0 -12px 14px;padding:10px 12px 8px}
   .cat-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .cat-row::-webkit-scrollbar{display:none}
   .cat-chip{flex-shrink:0;font-size:12px;padding:6px 14px}
@@ -682,6 +690,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
   <!-- CATALOG VIEW -->
   <div class="catalog-view" id="catalog-view">
+
+    <!-- MENU DE CATEGORIAS (topo, fixo) -->
+    <div class="cat-bar" id="cat-bar">
+      <div class="cat-row" id="cat-row"></div>
+    </div>
+
     <div class="section-head">
       <div class="section-title">
         Catálogo de Produtos
@@ -693,8 +707,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <span class="search-icon">🔍</span>
       <input type="text" placeholder="Buscar produto por nome, categoria ou dimensão..." id="search-input" oninput="renderCatalog()">
     </div>
-
-    <div class="cat-row" id="cat-row"></div>
 
     <div class="product-grid" id="product-grid">
       <!-- Skeletons -->
@@ -982,8 +994,19 @@ async function loadProdutos() {
     showToast('⚠️ Erro ao carregar catálogo');
   }
   document.getElementById('loading').classList.remove('active');
+  // Aplica categoria vinda da URL (?cat=...), se válida
+  const catParam = new URLSearchParams(location.search).get('cat');
+  if (catParam) {
+    const dec = decodeURIComponent(catParam);
+    if (produtos.some(p => p.cat === dec)) filtroAtivo = dec;
+  }
   renderCategories();
   renderCatalog();
+  // Centraliza o chip ativo se não for "Todos"
+  if (filtroAtivo !== 'Todos') {
+    const ativo = document.querySelector('.cat-chip.active');
+    if (ativo) ativo.scrollIntoView({ inline:'center', block:'nearest' });
+  }
   if (produtos.length) document.getElementById('cart-btn').style.display = 'flex';
 }
 
@@ -999,8 +1022,14 @@ function renderCategories() {
 }
 function setCategoria(cat) {
   filtroAtivo = cat;
+  // Atualiza a URL pra permitir compartilhar o link da categoria
+  if (cat === 'Todos') history.replaceState({}, '', location.pathname);
+  else history.replaceState({}, '', '?cat=' + encodeURIComponent(cat));
   renderCategories();
   renderCatalog();
+  // Garante que o chip ativo fique visível na faixa
+  const ativo = document.querySelector('.cat-chip.active');
+  if (ativo) ativo.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' });
 }
 
 // ── CATALOG ──────────────────────────────────────────────────────
@@ -1039,7 +1068,7 @@ function renderCatalog() {
     cardFotosMap[p.id] = galeriaFotos;
     cardIdxMap[p.id] = 0;
     return `
-    <div class="prod-card prod-card-clickable" onclick="irParaProduto(${p.id})">
+    <div class="prod-card prod-card-clickable" data-pid="${p.id}" onclick="irParaProduto(${p.id})">
       <div class="prod-img">
         ${galeriaFotos.length
           ? `<img src="${galeriaFotos[0]}" alt="${p.nome}" loading="lazy" id="card-img-${p.id}">`
@@ -1515,6 +1544,33 @@ function cardNav(prodId, dir) {
   if (idx >= fotos.length) idx = 0;
   cardSetFoto(prodId, idx);
 }
+
+// ── SWIPE nos cards (trocar foto arrastando) ──
+(function setupCardSwipe() {
+  const grid = document.getElementById('product-grid');
+  if (!grid) return;
+  let x0 = null, y0 = null, pid = null, swiped = false;
+  grid.addEventListener('touchstart', e => {
+    const card = e.target.closest('.prod-card');
+    if (!card) { pid = null; return; }
+    pid = card.dataset.pid;
+    const t = e.changedTouches[0]; x0 = t.clientX; y0 = t.clientY; swiped = false;
+  }, { passive: true });
+  grid.addEventListener('touchend', e => {
+    if (x0 === null || !pid) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+      cardNav(pid, dx < 0 ? 1 : -1);
+      swiped = true;  // suprime o clique que abriria o produto
+    }
+    x0 = null;
+  }, { passive: true });
+  // Cancela o clique de abrir o produto logo após um swipe
+  grid.addEventListener('click', e => {
+    if (swiped) { e.stopPropagation(); e.preventDefault(); swiped = false; }
+  }, true);
+})();
 
 function openLightbox(prodId, startIdx) {
   const p = produtos.find(x => x.id == prodId); if(!p) return;
