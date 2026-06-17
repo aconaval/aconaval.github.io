@@ -652,10 +652,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <small>Catálogo Online</small>
     </div>
   </div>
-  <button class="cart-btn" onclick="openCart()" id="cart-btn" style="display:none">
-    🛒 <span class="label">Carrinho</span>
-    <span class="cart-count" id="cart-count">0</span>
-  </button>
+  <div style="display:flex;gap:10px;align-items:center">
+    <button class="cart-btn" id="dep-nav-btn" onclick="showDepoimentos()" style="display:none;background:rgba(255,255,255,.14)">
+      💬 <span class="label">Depoimentos</span>
+    </button>
+    <button class="cart-btn" onclick="openCart()" id="cart-btn" style="display:none">
+      🛒 <span class="label">Carrinho</span>
+      <span class="cart-count" id="cart-count">0</span>
+    </button>
+  </div>
 </header>
 
 <!-- BARRA DE DESTAQUE -->
@@ -721,6 +726,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         </div>
       </div>`).join('')}
     </div>
+  </div>
+
+  <!-- DEPOIMENTOS VIEW -->
+  <div id="dep-view" style="display:none">
+    <div style="margin:6px 0 16px">
+      <button class="btn btn-ghost" onclick="backToCatalogFromDep()" style="font-size:13px">← Voltar ao Catálogo</button>
+    </div>
+    <div class="section-head">
+      <div class="section-title">
+        Depoimentos de Clientes
+        <small id="dep-count-label"></small>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:14px;margin:-4px 0 16px">Prints reais de conversas no WhatsApp de quem já comprou com a gente.</p>
+    <div class="cat-bar"><div class="cat-row" id="dep-cat-row"></div></div>
+    <div id="dep-grid" style="columns:240px;column-gap:14px;margin-top:14px"></div>
+    <div id="dep-empty" style="display:none;text-align:center;color:var(--muted);padding:48px 0">Nenhum depoimento nesta categoria ainda.</div>
   </div>
 
   <!-- CHECKOUT VIEW -->
@@ -933,6 +955,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   </div>
   <div class="lightbox-dots" id="lb-dots"></div>
   <div class="lightbox-strip" id="lb-strip"></div>
+</div>
+
+<!-- DEPOIMENTOS LIGHTBOX -->
+<style>
+  .deplb{position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+  .deplb.open{display:flex}
+  .deplb-row{display:flex;align-items:center;gap:16px;max-width:100%}
+  .deplb-row img{max-width:88vw;max-height:82vh;object-fit:contain;border-radius:10px;background:#0b141a}
+  .deplb-close{position:absolute;top:16px;right:16px;width:42px;height:42px;border-radius:9px;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:20px;cursor:pointer}
+  .deplb-nav{flex:0 0 auto;background:rgba(255,255,255,.16);border:none;color:#fff;width:48px;height:48px;border-radius:50%;font-size:24px;line-height:1;cursor:pointer}
+  @media(max-width:640px){ .deplb-nav{width:42px;height:42px;font-size:20px} }
+</style>
+<div class="deplb" id="deplb" onclick="if(event.target===this)closeDepLb()">
+  <button class="deplb-close" onclick="closeDepLb()">✕</button>
+  <div class="deplb-row">
+    <button class="deplb-nav" id="deplb-prev" onclick="depLbNav(-1)">‹</button>
+    <img id="deplb-img" src="" alt="Depoimento">
+    <button class="deplb-nav" id="deplb-next" onclick="depLbNav(1)">›</button>
+  </div>
 </div>
 
 <!-- FOOTER -->
@@ -1802,7 +1843,87 @@ async function carregarFotosProjetoDoc(prodId) {
 }
 
 // ── INIT ─────────────────────────────────────────────────────────
+// ── DEPOIMENTOS ──────────────────────────────────────────────────
+let depoimentos = [];
+let depFiltro = 'Todos';
+let depLbList = [], depLbIdx = 0;
+
+async function loadDepoimentos(){
+  try{
+    const snap = await db.collection('acn_depoimentos').get();
+    depoimentos = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+  }catch(e){ console.error('depoimentos:', e); depoimentos = []; }
+  const btn = document.getElementById('dep-nav-btn');
+  if(btn) btn.style.display = depoimentos.some(d => d.ativo !== false) ? 'flex' : 'none';
+  if(document.getElementById('dep-view').style.display === 'block'){ renderDepCategories(); renderDepGrid(); }
+}
+
+function showDepoimentos(){
+  document.getElementById('catalog-view').classList.add('hidden');
+  document.getElementById('checkout-view').classList.remove('active');
+  const hero = document.getElementById('main-hero'); if(hero) hero.style.display = 'none';
+  document.getElementById('dep-view').style.display = 'block';
+  renderDepCategories();
+  renderDepGrid();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+function backToCatalogFromDep(){
+  document.getElementById('dep-view').style.display = 'none';
+  const hero = document.getElementById('main-hero'); if(hero) hero.style.display = '';
+  document.getElementById('catalog-view').classList.remove('hidden');
+}
+
+function renderDepCategories(){
+  const cats = ['Todos', ...new Set(depoimentos.filter(d=>d.ativo!==false).map(d=>d.cat).filter(Boolean))];
+  const row = document.getElementById('dep-cat-row');
+  if(row) row.innerHTML = cats.map(c =>
+    `<button class="cat-chip${c===depFiltro?' active':''}" onclick="setDepFiltro('${c}')">${c}</button>`
+  ).join('');
+}
+function setDepFiltro(c){
+  depFiltro = c;
+  renderDepCategories();
+  renderDepGrid();
+  const ativo = document.querySelector('#dep-cat-row .cat-chip.active');
+  if(ativo) ativo.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' });
+}
+
+function renderDepGrid(){
+  let list = depoimentos.filter(d => d.ativo !== false);
+  if(depFiltro !== 'Todos') list = list.filter(d => d.cat === depFiltro);
+  list.sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0));
+  depLbList = list.map(d => d.foto);
+  const grid  = document.getElementById('dep-grid');
+  const empty = document.getElementById('dep-empty');
+  const label = document.getElementById('dep-count-label');
+  if(label) label.textContent = list.length ? `${list.length} depoimento${list.length>1?'s':''}` : '';
+  if(!list.length){ grid.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  grid.innerHTML = list.map((d,i) =>
+    `<div style="break-inside:avoid;margin-bottom:14px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#0b141a;cursor:zoom-in;box-shadow:0 1px 6px rgba(0,0,0,.07)" onclick="openDepLb(${i})"><img src="${d.foto}" loading="lazy" style="width:100%;display:block" alt="Depoimento"></div>`
+  ).join('');
+}
+
+function openDepLb(i){
+  depLbIdx = i;
+  document.getElementById('deplb-img').src = depLbList[i];
+  const multi = depLbList.length > 1;
+  document.getElementById('deplb-prev').style.display = multi ? '' : 'none';
+  document.getElementById('deplb-next').style.display = multi ? '' : 'none';
+  document.getElementById('deplb').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function depLbNav(d){
+  depLbIdx = (depLbIdx + d + depLbList.length) % depLbList.length;
+  document.getElementById('deplb-img').src = depLbList[depLbIdx];
+}
+function closeDepLb(){
+  document.getElementById('deplb').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
 loadProdutos();
+loadDepoimentos();
 </script>
 </body>
 </html>

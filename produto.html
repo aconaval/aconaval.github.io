@@ -463,6 +463,56 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       </div>
     </div>
   </div>
+
+  <!-- DEPOIMENTOS -->
+  <style>
+    .dep-section{margin-top:36px;padding-top:28px;border-top:1px solid var(--border)}
+    .dep-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+    .dep-title{font-family:'Inter',sans-serif;font-size:20px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px}
+    .dep-sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+    .dep-viewport{position:relative}
+    .dep-track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 2px 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .dep-track::-webkit-scrollbar{display:none}
+    .dep-card{flex:0 0 auto;width:232px;scroll-snap-align:center;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#0b141a;cursor:zoom-in;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:transform .15s,box-shadow .15s}
+    .dep-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.13)}
+    .dep-card img{width:100%;display:block;max-height:410px;object-fit:contain}
+    .dep-arrow{position:absolute;top:42%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:none;background:#fff;color:var(--blue);box-shadow:0 3px 14px rgba(0,0,0,.2);font-size:22px;line-height:1;cursor:pointer;z-index:3;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+    .dep-arrow.prev{left:-8px}.dep-arrow.next{right:-8px}
+    .dep-arrow:disabled{opacity:0;pointer-events:none}
+    .dep-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--green);background:var(--green-light);border:1px solid #bfe6cf;padding:4px 10px;border-radius:20px;white-space:nowrap}
+    .deplb{position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+    .deplb.open{display:flex}
+    .deplb-row{display:flex;align-items:center;gap:16px;max-width:100%}
+    .deplb-row img{max-width:88vw;max-height:82vh;object-fit:contain;border-radius:10px;background:#0b141a}
+    .deplb-close{position:absolute;top:16px;right:16px;width:42px;height:42px;border-radius:9px;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:20px;cursor:pointer}
+    .deplb-nav{flex:0 0 auto;background:rgba(255,255,255,.16);border:none;color:#fff;width:48px;height:48px;border-radius:50%;font-size:24px;line-height:1;cursor:pointer}
+    @media(max-width:640px){ .dep-card{width:64vw;max-width:300px} .dep-arrow{display:none} .deplb-nav{width:42px;height:42px;font-size:20px} }
+  </style>
+
+  <div class="dep-section" id="dep-section" style="display:none">
+    <div class="dep-head">
+      <div>
+        <div class="dep-title">💬 Quem comprou, recomenda</div>
+        <div class="dep-sub" id="dep-sub">Conversas reais de clientes no WhatsApp</div>
+      </div>
+      <span class="dep-badge">✔️ Depoimentos reais</span>
+    </div>
+    <div class="dep-viewport">
+      <button class="dep-arrow prev" id="dep-prev" onclick="depScroll(-1)" aria-label="Anterior">‹</button>
+      <div class="dep-track" id="dep-track"></div>
+      <button class="dep-arrow next" id="dep-next" onclick="depScroll(1)" aria-label="Próximo">›</button>
+    </div>
+  </div>
+
+  <div class="deplb" id="deplb" onclick="if(event.target===this)closeDepLb()">
+    <button class="deplb-close" onclick="closeDepLb()">✕</button>
+    <div class="deplb-row">
+      <button class="deplb-nav" id="deplb-prev" onclick="depLbNav(-1)">‹</button>
+      <img id="deplb-img" src="" alt="Depoimento">
+      <button class="deplb-nav" id="deplb-next" onclick="depLbNav(1)">›</button>
+    </div>
+  </div>
+
 </div>
 
 <!-- LIGHTBOX -->
@@ -811,6 +861,7 @@ setupGestures();
     produto.fotosclientes = await carregarFotosClientesDoc(prodId);
     renderProduto();
     showScreen('prod');
+    carregarDepoimentos(produto.cat);
     // Abre sempre no 3D se o produto tiver modelo
     if (produto.modelo3d) {
       const idx3d = allPhotos.findIndex(f => f.tipo === '3d');
@@ -825,6 +876,81 @@ setupGestures();
     showScreen('erro');
   }
 })();
+
+// ── DEPOIMENTOS DA CATEGORIA ──────────────────────────────────────
+let depFotos = [], depLbIdx = 0, depAuto = null;
+
+async function carregarDepoimentos(cat){
+  const sec = document.getElementById('dep-section');
+  const track = document.getElementById('dep-track');
+  if(!cat || !sec || !track) return;
+  try{
+    const snap = await db.collection('acn_depoimentos').where('cat','==',cat).get();
+    depFotos = snap.docs.map(d=>d.data())
+                        .filter(d=>d.ativo!==false)
+                        .sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0))
+                        .map(d=>d.foto).filter(Boolean);
+  }catch(e){ console.error('depoimentos:', e); depFotos = []; }
+  if(!depFotos.length){ sec.style.display='none'; return; }
+  document.getElementById('dep-sub').textContent = 'Conversas reais de clientes que compraram em ' + cat;
+  track.innerHTML = depFotos.map((src,i)=>
+    `<div class="dep-card" onclick="openDepLb(${i})"><img src="${src}" loading="lazy" alt="Depoimento ${i+1}"></div>`
+  ).join('');
+  sec.style.display = 'block';
+  track.onscroll     = updateDepArrows;
+  track.onmouseenter = stopDepAuto;
+  track.onmouseleave = startDepAuto;
+  updateDepArrows();
+  startDepAuto();
+}
+
+function depCardW(){ const c = document.querySelector('.dep-card'); return c ? c.offsetWidth + 14 : 246; }
+
+function depScroll(dir){
+  const t = document.getElementById('dep-track'); if(!t) return;
+  t.scrollBy({ left: dir * depCardW(), behavior:'smooth' });
+  stopDepAuto(); setTimeout(startDepAuto, 6000);
+}
+
+function updateDepArrows(){
+  const t = document.getElementById('dep-track'); if(!t) return;
+  const max = t.scrollWidth - t.clientWidth - 2;
+  const p = document.getElementById('dep-prev'), n = document.getElementById('dep-next');
+  if(p) p.disabled = t.scrollLeft <= 2;
+  if(n) n.disabled = max <= 0 || t.scrollLeft >= max;
+}
+
+function startDepAuto(){
+  stopDepAuto();
+  if(depFotos.length <= 1) return;
+  depAuto = setInterval(()=>{
+    const t = document.getElementById('dep-track'); if(!t) return;
+    const max = t.scrollWidth - t.clientWidth - 2;
+    if(t.scrollLeft >= max) t.scrollTo({ left:0, behavior:'smooth' });
+    else t.scrollBy({ left: depCardW(), behavior:'smooth' });
+  }, 4500);
+}
+function stopDepAuto(){ if(depAuto){ clearInterval(depAuto); depAuto = null; } }
+
+function openDepLb(i){
+  depLbIdx = i;
+  document.getElementById('deplb-img').src = depFotos[i];
+  const multi = depFotos.length > 1;
+  document.getElementById('deplb-prev').style.display = multi ? '' : 'none';
+  document.getElementById('deplb-next').style.display = multi ? '' : 'none';
+  document.getElementById('deplb').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  stopDepAuto();
+}
+function depLbNav(d){
+  depLbIdx = (depLbIdx + d + depFotos.length) % depFotos.length;
+  document.getElementById('deplb-img').src = depFotos[depLbIdx];
+}
+function closeDepLb(){
+  document.getElementById('deplb').classList.remove('open');
+  document.body.style.overflow = '';
+  startDepAuto();
+}
 
 function showScreen(name) {
   document.getElementById('screen-loading').classList.remove('active');
