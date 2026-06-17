@@ -269,6 +269,7 @@ tbody tr:hover{background:#fafbfc}
     <button class="nav-tab" onclick="showPage('novo-pedido')">🛒 Novo Pedido</button>
     <button class="nav-tab" onclick="showPage('lista-pedidos')" id="nav-pedidos">📦 Pedidos <span class="badge" id="badge-pedidos">0</span></button>
     <button class="nav-tab" onclick="showPage('solicitacoes')" id="nav-solic">🔔 Solicitações <span class="badge" style="background:#e74c3c" id="badge-solic">0</span></button>
+    <button class="nav-tab" onclick="showPage('depoimentos')">💬 Depoimentos</button>
   </nav>
   <span id="fb-status" class="fb-status">⏳ Conectando…</span>
 </div>
@@ -538,6 +539,33 @@ tbody tr:hover{background:#fafbfc}
       </div>
       <button class="btn btn-success" id="btn-converter-pedido" onclick="converterEmPedido()">📦 Criar Pedido com estes dados</button>
     </div>
+  </div>
+</div>
+
+<!-- PAGE: DEPOIMENTOS -->
+<div class="page" id="page-depoimentos">
+  <div class="sec-header">
+    <div class="sec-title">Depoimentos <small>Prints de WhatsApp por categoria — aparecem na loja e na página do produto</small></div>
+    <button class="btn btn-ghost btn-sm" onclick="carregarDepoimentos()">🔄 Atualizar</button>
+  </div>
+
+  <div style="background:#f0f6ff;border:1px solid #B5D4F4;border-radius:10px;padding:14px 16px;margin-bottom:18px">
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <div style="flex:1;min-width:220px">
+        <label class="form-label" style="display:block;margin-bottom:5px">Categoria do depoimento</label>
+        <select id="dep-cat" style="width:100%;padding:9px 11px;border:1px solid #B5D4F4;border-radius:8px;font-size:14px;background:#fff;cursor:pointer"></select>
+      </div>
+      <div>
+        <input type="file" id="dep-file" accept="image/*" multiple style="display:none" onchange="onDepFiles(this)">
+        <button class="btn btn-success" onclick="if(document.getElementById('dep-cat').value){document.getElementById('dep-file').click()}else{alert('Escolha a categoria antes de adicionar prints.')}">➕ Adicionar prints</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#7a8aa0;margin-top:8px">Pode selecionar várias prints de uma vez. Elas são otimizadas automaticamente antes de salvar.</div>
+    <div id="dep-upload-status" style="font-size:12px;color:#185FA5;margin-top:8px;display:none;font-weight:600"></div>
+  </div>
+
+  <div id="dep-lista">
+    <div class="empty"><div class="empty-icon">💬</div><p>Nenhum depoimento cadastrado ainda.</p></div>
   </div>
 </div>
 
@@ -1101,17 +1129,120 @@ async function loadFromFirebase() {
   }
 }
 
+// ── DEPOIMENTOS (prints de WhatsApp por categoria) ─────────────────
+let depoimentos = [];
+
+function populateDepCatSelect(){
+  const sel = document.getElementById('dep-cat');
+  if(!sel) return;
+  const atual = sel.value;
+  sel.innerHTML = (categorias && categorias.length)
+    ? categorias.map(c => `<option value="${c}"${atual===c?' selected':''}>${c}</option>`).join('')
+    : '<option value="">Crie uma categoria primeiro</option>';
+}
+
+async function carregarDepoimentos(){
+  const wrap = document.getElementById('dep-lista');
+  if(!wrap) return;
+  if(typeof db === 'undefined' || !db){ wrap.innerHTML = '<div class="empty"><p>Sem conexão com o banco.</p></div>'; return; }
+  wrap.innerHTML = '<div style="padding:24px;color:#888;font-size:13px">Carregando depoimentos…</div>';
+  try{
+    const snap = await db.collection('acn_depoimentos').get();
+    depoimentos = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+                           .sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0));
+    renderDepoimentos();
+  }catch(e){
+    console.error('depoimentos:', e);
+    wrap.innerHTML = '<div class="empty"><p>Erro ao carregar depoimentos.</p></div>';
+  }
+}
+
+function renderDepoimentos(){
+  const wrap = document.getElementById('dep-lista');
+  if(!wrap) return;
+  if(!depoimentos.length){
+    wrap.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Nenhum depoimento cadastrado ainda. Escolha a categoria acima e adicione as prints.</p></div>';
+    return;
+  }
+  const grupos = {};
+  depoimentos.forEach(d => { const c = d.cat || '(sem categoria)'; (grupos[c] = grupos[c] || []).push(d); });
+  const cats = (categorias || []).filter(c => grupos[c]);
+  Object.keys(grupos).forEach(c => { if(!cats.includes(c)) cats.push(c); });
+  wrap.innerHTML = cats.map(cat => {
+    const itens = grupos[cat];
+    const cards = itens.map(d => `
+      <div style="border:1px solid #e0e4e8;border-radius:10px;overflow:hidden;background:#fff${d.ativo===false?';opacity:.55':''}">
+        <div style="background:#0b141a"><img src="${d.foto}" style="width:100%;display:block;max-height:330px;object-fit:contain" loading="lazy"></div>
+        <div style="display:flex;gap:6px;padding:7px 8px;border-top:1px solid #eee">
+          <button class="btn btn-ghost btn-sm" style="flex:1;color:#c0392b;border-color:#f0c4be" onclick="deleteDepoimento('${d.id}')">🗑️ Excluir</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toggleDepAtivo('${d.id}', ${d.ativo===false})">${d.ativo===false?'🚫 Oculto':'✅ Visível'}</button>
+        </div>
+      </div>`).join('');
+    return `<div style="margin-bottom:24px">
+      <div style="font-size:14px;font-weight:700;color:#003366;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+        ${cat} <span style="font-weight:400;color:#aaa;font-size:12px">${itens.length} ${itens.length===1?'print':'prints'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">${cards}</div>
+    </div>`;
+  }).join('');
+}
+
+function depReadFile(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function onDepFiles(input){
+  const cat = document.getElementById('dep-cat').value;
+  if(!cat){ alert('Escolha a categoria antes de adicionar prints.'); input.value=''; return; }
+  const files = Array.from(input.files || []);
+  if(!files.length) return;
+  const status = document.getElementById('dep-upload-status');
+  status.style.display = 'block';
+  let ok = 0;
+  for(let i=0;i<files.length;i++){
+    status.textContent = `Enviando ${i+1} de ${files.length}…`;
+    try{
+      const b64  = await depReadFile(files[i]);
+      const foto = await comprimirFoto(b64, 420, 1080); // legível e bem abaixo do limite de 1MB
+      const agora = Date.now();
+      await db.collection('acn_depoimentos').add({ cat, foto, ativo:true, ordem:agora, criadoEm:agora });
+      ok++;
+    }catch(e){ console.error('upload depoimento:', e); }
+  }
+  status.textContent = `✅ ${ok} print(s) adicionado(s) em "${cat}".`;
+  input.value = '';
+  await carregarDepoimentos();
+  setTimeout(() => { status.style.display = 'none'; }, 4000);
+}
+
+async function deleteDepoimento(id){
+  if(!confirm('Excluir este depoimento? Essa ação não pode ser desfeita.')) return;
+  try{ await db.collection('acn_depoimentos').doc(id).delete(); await carregarDepoimentos(); }
+  catch(e){ console.error(e); alert('Erro ao excluir.'); }
+}
+
+async function toggleDepAtivo(id, novoAtivo){
+  try{ await db.collection('acn_depoimentos').doc(id).update({ ativo: novoAtivo }); await carregarDepoimentos(); }
+  catch(e){ console.error(e); alert('Erro ao atualizar.'); }
+}
+
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  const tabs = ['produtos','novo','lista','novo-pedido','lista-pedidos','solicitacoes'];
+  const tabs = ['produtos','novo','lista','novo-pedido','lista-pedidos','solicitacoes','depoimentos'];
   const idx = tabs.indexOf(name);
   if (idx >= 0) document.querySelectorAll('.nav-tab')[idx].classList.add('active');
   if (name === 'lista') renderLista();
   if (name === 'novo') initNovoForm();
   if (name === 'lista-pedidos') renderListaPedidos();
   if (name === 'solicitacoes') carregarSolicitacoes();
+  if (name === 'depoimentos') { populateDepCatSelect(); carregarDepoimentos(); }
 }
 
 function toggleProdForm(open) {
