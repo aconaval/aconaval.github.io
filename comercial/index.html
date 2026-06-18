@@ -867,6 +867,7 @@ try {
 
 // ── DADOS ────────────────────────────────────────────────────────
 let produtos = [];
+let indexProdutosExistia = false; // true só quando o doc acn/produtos_index (ou o antigo acn/produtos) realmente existe no Firestore
 let orcamentos = [];
 let items = [];
 let currentOrcamento = null;
@@ -1055,6 +1056,7 @@ async function loadFromFirebase() {
     ]);
 
     if (idxSnap.exists) {
+      indexProdutosExistia = true;
       const ids = idxSnap.data().ids || [];
       const snaps = await Promise.all(
         ids.map(id => db.collection('acn_produtos').doc(String(id)).get())
@@ -1072,7 +1074,7 @@ async function loadFromFirebase() {
       });
     } else {
       const oldSnap = await db.collection('acn').doc('produtos').get();
-      if (oldSnap.exists) produtos = (oldSnap.data().lista || []);
+      if (oldSnap.exists) { produtos = (oldSnap.data().lista || []); indexProdutosExistia = true; }
     }
 
     if (orcSnap.exists) orcamentos = orcSnap.data().lista || [];
@@ -2843,7 +2845,15 @@ function fmtDate(iso) { if(!iso) return '—'; const [y,m,d]=iso.split('-'); ret
 
   await loadFromFirebase();
 
-  if (!produtos.length) {
+  // Bug fix (jun/2026): antes, "produtos.length === 0" era tratado sempre como
+  // "primeira vez usando o sistema" e disparava save() na hora — sobrescrevendo
+  // produtos_index e orcamentos no Firestore. Se o carregamento falhasse ou
+  // voltasse vazio por instabilidade (sem lançar erro), isso apagava o índice
+  // real e gravava só os 4 produtos de demonstração por cima. Agora só faz o
+  // seed de demonstração quando o índice de produtos NUNCA existiu de fato
+  // (indexProdutosExistia === false), e nunca chama save() automaticamente
+  // quando o índice existe mas veio vazio — nesse caso só avisa, sem regravar.
+  if (!produtos.length && !indexProdutosExistia) {
     produtos = [
       {id:1,nome:'Fogão a Lenha Industrial',dim:'70x50cm — Inox 430',preco:1800,cat:'Fogão',obs:'',foto:'',codigo:1},
       {id:2,nome:'Fogão a Lenha Residencial',dim:'60x40cm — Inox 430',preco:1400,cat:'Fogão',obs:'',foto:'',codigo:2},
@@ -2851,6 +2861,9 @@ function fmtDate(iso) { if(!iso) return '—'; const [y,m,d]=iso.split('-'); ret
       {id:4,nome:'Churrasqueira de Embutir',dim:'80x50cm — Inox 304',preco:2200,cat:'Churrasqueira',obs:'',foto:'',codigo:4},
     ];
     await save();
+  } else if (!produtos.length && indexProdutosExistia) {
+    console.warn('⚠️ Índice de produtos existe mas carregou vazio — NÃO vou regravar. Recarregue a página.');
+    setStatus('⚠️ Falha ao carregar produtos — recarregue a página (F5)', 'erro');
   } else {
     // Migração: atribui código apenas a produtos que ainda não têm nenhum
     let maxCod = Math.max(0, ...produtos.map(p=>parseInt(p.codigo)||0));
