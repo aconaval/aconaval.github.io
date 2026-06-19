@@ -1,30 +1,15 @@
 {
-  "name": "Aço Naval — Gestão",
-  "short_name": "Gestão",
-  "description": "Sistema de Gestão de Comissões e Vendas",
-  "start_url": "/adm/",
-  "scope": "/adm/",
+  "name": "Aço Naval — Comercial",
+  "short_name": "Comercial",
+  "description": "Sistema Comercial de Orçamentos e Pedidos",
+  "start_url": "/comercial/",
+  "scope": "/comercial/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#003366",
   "theme_color": "#003366",
   "lang": "pt-BR",
   "icons": [
-    {
-      "src": "icon-16.png",
-      "sizes": "16x16",
-      "type": "image/png"
-    },
-    {
-      "src": "icon-32.png",
-      "sizes": "32x32",
-      "type": "image/png"
-    },
-    {
-      "src": "icon-180.png",
-      "sizes": "180x180",
-      "type": "image/png"
-    },
     {
       "src": "icon-192.png",
       "sizes": "192x192",
