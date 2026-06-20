@@ -535,6 +535,7 @@ const fmtDate = iso => { if(!iso) return '—'; const [y,m,d]=iso.split('-'); re
 let pedidoAtual = null;
 const prodFotos = {}; // mapa prodId -> foto carregado do acn_produtos
 const prodModelos = {}; // mapa prodId -> URL do modelo 3D (GLB)
+const prodCategorias = {}; // mapa prodId -> categoria (campo 'cat') carregado do acn_produtos
 
 // ── CARREGA PEDIDO ────────────────────────────────────────────────
 async function carregarPedido() {
@@ -552,7 +553,7 @@ async function carregarPedido() {
         ids.map(pid => db.collection('acn_produtos').doc(String(pid)).get())
       );
       prodSnaps.forEach(s => {
-        if (s.exists) { const d = s.data(); if (d.id && d.foto) prodFotos[String(d.id)] = d.foto; if (d.id && d.modelo3d) prodModelos[String(d.id)] = d.modelo3d; }
+        if (s.exists) { const d = s.data(); if (d.id && d.foto) prodFotos[String(d.id)] = d.foto; if (d.id && d.modelo3d) prodModelos[String(d.id)] = d.modelo3d; if (d.id && d.cat) prodCategorias[String(d.id)] = d.cat; }
       });
     }
 
@@ -707,14 +708,32 @@ async function enviarParaGestao(pedido, nomeAssinante) {
     const mes   = agora.getMonth() + 1;
     const ano   = agora.getFullYear();
     const gid   = Date.now();
-    const val   = pedido.subtotal || 0;
+
+    // Valor à vista (não o de cartão) — mesma lógica usada na exibição do pedido
+    const totalPag = (pedido.total != null ? pedido.total : pedido.subtotal) || 0;
+    const valAvista = pedido.avistaVal != null ? pedido.avistaVal : totalPag * 0.90;
+    const val = Math.round(valAvista * 100) / 100;
+
+    // Categoria do primeiro produto do pedido, casada com a lista de produtos da Gestão
+    const primeiroItem = (pedido.items || [])[0];
+    const catNome = primeiroItem && primeiroItem.prodId
+      ? prodCategorias[String(primeiroItem.prodId)]
+      : null;
+    const produtosGestao = dados.prods || [];
+    const prodMatch = catNome
+      ? produtosGestao.find(pr => (pr.nome || '').trim().toLowerCase() === catNome.trim().toLowerCase())
+      : null;
+    if (catNome && !prodMatch) {
+      console.warn('Gestão: categoria "' + catNome + '" não encontrada na lista de produtos da Gestão.');
+    }
+    const prodId = prodMatch ? prodMatch.id : null;
 
     // Cria uma entrada por vendedor (todos por padrão)
     const novosPedidos = vs.map((v, i) => ({
       id:   gid + i,
       gid,
       num:  String(pedido.num).padStart(3, '0'),
-      prod: null,
+      prod: prodId,
       cid:  pedido.cidade || '',
       uf:   pedido.estado || '',
       val,
