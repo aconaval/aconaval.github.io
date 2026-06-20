@@ -588,7 +588,8 @@ function renderPedido(p) {
     document.getElementById('p-cpf-row').style.display = 'flex';
   }
 
-  const end = [p.rua,p.numEnd,p.bairro,[p.cidade,p.estado].filter(Boolean).join(' — ')].filter(Boolean).join(', ');
+  const cidadeUpper = (p.cidade||'').toUpperCase();
+  const end = [p.rua,p.numEnd,p.bairro,[cidadeUpper,p.estado].filter(Boolean).join(' — ')].filter(Boolean).join(', ');
   document.getElementById('p-end').textContent = end||'—';
 
   // Itens
@@ -734,7 +735,7 @@ async function enviarParaGestao(pedido, nomeAssinante) {
       gid,
       num:  String(pedido.num).padStart(3, '0'),
       prod: prodId,
-      cid:  pedido.cidade || '',
+      cid:  (pedido.cidade || '').toUpperCase(),
       uf:   pedido.estado || '',
       val,
       vid:  v.id,
