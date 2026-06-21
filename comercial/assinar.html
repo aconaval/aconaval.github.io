@@ -565,6 +565,7 @@ async function carregarPedido() {
     pedidoAtual = p;
     renderPedido(p);
     showScreen('pedido');
+    resizeCanvas();
   } catch(e) {
     console.error(e);
     showScreen('erro');
@@ -656,10 +657,14 @@ const ctx = canvas.getContext('2d');
 let drawing = false;
 let hasSignature = false;
 
+let lastCanvasW = 0;
 function resizeCanvas() {
   const w = canvas.offsetWidth;
+  if (!w || w === lastCanvasW) return; // ignora se ainda está escondido (largura 0) ou se não mudou (ex: teclado abrindo no celular)
+  lastCanvasW = w;
   canvas.width = w * window.devicePixelRatio;
   canvas.height = 160 * window.devicePixelRatio;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // reseta a escala antes de aplicar de novo, evita acumular a cada resize
   ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
   ctx.strokeStyle = '#003366';
   ctx.lineWidth = 2.5;
