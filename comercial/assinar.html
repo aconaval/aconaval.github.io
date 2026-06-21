@@ -38,12 +38,13 @@
   .info-value{font-weight:600;color:#111}
 
   /* TABELA ITENS */
-  .item-row{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f0f0f0}
-  .item-row:last-child{border-bottom:none}
+  .item-card{padding:10px 0;border-bottom:1px solid #f0f0f0}
+  .item-card:last-child{border-bottom:none}
+  .item-row{display:flex;gap:12px;align-items:flex-start}
   .item-foto{width:64px;height:64px;object-fit:contain;border-radius:4px;background:#f5f5f5;flex-shrink:0}
   .item-foto-ph{width:64px;height:64px;border-radius:4px;background:#f0f4f8;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px}
-  .item-galeria-grande{display:flex;gap:8px;overflow-x:auto;margin:4px 0 14px;padding-bottom:2px;scroll-snap-type:x proximity}
-  .item-foto-grande{height:220px;width:auto;max-width:88%;flex-shrink:0;border-radius:8px;object-fit:cover;cursor:pointer;scroll-snap-align:start;background:#f5f5f5}
+  .item-projeto-preview{width:96px;height:96px;object-fit:cover;border-radius:8px;flex-shrink:0;cursor:pointer;background:#f5f5f5;border:1px solid #e0e8f0}
+  .btn-abrir-projeto{width:100%;margin-top:10px;padding:10px;background:#f0f6ff;color:#1557a8;border:1px solid #1557a8;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
   .item-num{font-size:11px;font-weight:700;color:#003366;margin-bottom:2px}
   .item-nome{font-size:13px;font-weight:700;color:#111}
   .item-dim{font-size:12px;color:#666;margin-top:2px;line-height:1.4}
@@ -474,17 +475,19 @@ function renderPedido(p) {
     const temGaleria = fotosProj.length > 0;
     // Miniatura usa a foto do próprio item/produto (não a do projeto)
     const fotoSrc = item.foto || (item.prodId ? prodFotos[String(item.prodId)] : '') || '';
-    return `<div class="item-row">
-      ${fotoSrc ? `<img src="${fotoSrc}" class="item-foto"/>` : `<div class="item-foto-ph">📦</div>`}
-      <div style="flex:1">
-        <div class="item-num">Item ${String(i+1).padStart(2,'0')}</div>
-        <div class="item-nome">${nome}</div>
-        ${dims?`<div class="item-dim">${dims}</div>`:''}
-        ${item.preco>0?`<div class="item-preco">${fmtBRL(item.preco)}</div>`:''}
+    return `<div class="item-card">
+      <div class="item-row">
+        ${fotoSrc ? `<img src="${fotoSrc}" class="item-foto"/>` : `<div class="item-foto-ph">📦</div>`}
+        <div style="flex:1">
+          <div class="item-num">Item ${String(i+1).padStart(2,'0')}</div>
+          <div class="item-nome">${nome}</div>
+          ${dims?`<div class="item-dim">${dims}</div>`:''}
+          ${item.preco>0?`<div class="item-preco">${fmtBRL(item.preco)}</div>`:''}
+        </div>
+        ${temGaleria?`<img class="item-projeto-preview" src="${fotosProj[0]}" onclick="abrirGaleria(${i},0)"/>`:''}
       </div>
-    </div>${temGaleria?`<div class="item-galeria-grande">
-      ${fotosProj.map((foto,fi) => `<img src="${foto}" class="item-foto-grande" onclick="abrirGaleria(${i},${fi})"/>`).join('')}
-    </div>`:''}`;
+      ${temGaleria?`<button class="btn-abrir-projeto" onclick="abrirGaleria(${i},0)">📐 Abrir projeto</button>`:''}
+    </div>`;
   }).join('');
 
   // Financeiro — usa p.total (já com desconto) se existir
