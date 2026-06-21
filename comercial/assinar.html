@@ -662,10 +662,11 @@ function resizeCanvas() {
   const w = canvas.offsetWidth;
   if (!w || w === lastCanvasW) return; // ignora se ainda está escondido (largura 0) ou se não mudou (ex: teclado abrindo no celular)
   lastCanvasW = w;
-  canvas.width = w * window.devicePixelRatio;
-  canvas.height = 160 * window.devicePixelRatio;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2); // limita a 2x: em celulares o devicePixelRatio costuma ser 2.5~4, o que deixava o PNG da assinatura gigante e estourava o limite de 1MB do documento no Firestore
+  canvas.width = w * dpr;
+  canvas.height = 160 * dpr;
   ctx.setTransform(1, 0, 0, 1, 0, 0); // reseta a escala antes de aplicar de novo, evita acumular a cada resize
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  ctx.scale(dpr, dpr);
   ctx.strokeStyle = '#003366';
   ctx.lineWidth = 2.5;
   ctx.lineCap = 'round';
@@ -824,7 +825,8 @@ async function confirmarPedido() {
   } catch(e) {
     console.error(e);
     btn.disabled=false; btn.innerHTML='✅ Confirmar e Assinar Pedido';
-    statusEl.textContent='❌ Erro ao salvar. Tente novamente.'; statusEl.className='status-msg erro';
+    statusEl.textContent='❌ Erro ao salvar: ' + (e && e.message ? e.message : 'tente novamente.');
+    statusEl.className='status-msg erro';
   }
 }
 
