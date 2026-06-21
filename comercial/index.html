@@ -71,8 +71,8 @@ body{background:#f5f7fa;color:#222;min-height:100vh}
 .form-textarea{resize:vertical;min-height:70px}
 
 /* ── SLIDE PANEL ── */
-.slide-panel{overflow:hidden;max-height:0;transition:max-height .5s ease;visibility:hidden}
-.slide-panel.open{max-height:3000px;visibility:visible}
+.slide-panel{overflow:hidden;max-height:0;padding-top:0!important;padding-bottom:0!important;margin-bottom:0!important;border-width:0!important;transition:max-height .5s ease,padding .3s ease,margin .3s ease;visibility:hidden}
+.slide-panel.open{max-height:3000px;visibility:visible;padding-top:16px!important;padding-bottom:16px!important;margin-bottom:12px!important;border-width:1px!important}
 /* ── PHOTO UPLOAD ── */
 .photo-upload-area{border:2px dashed #d0d4d8;border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;background:#fafbfc}
 .photo-upload-area:hover{border-color:#185FA5;background:#f0f6ff}
@@ -238,10 +238,9 @@ tbody tr:hover{background:#fafbfc}
   .admin-link{font-size:11px;padding:5px 11px}
   .solic-pill{font-size:11px;padding:5px 10px}
   .fb-status{font-size:10px;padding:2px 7px;order:3}
-  /* Nav scroll horizontal ocupando a largura toda */
-  .nav{order:5;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-wrap:nowrap;width:100%;border-top:1px solid #e0e4e8}
-  .nav::-webkit-scrollbar{display:none}
-  .nav-tab{font-size:12px;padding:0 11px;white-space:nowrap;height:44px;flex-shrink:0;border-bottom-width:3px}
+  /* Nav: todas as abas visíveis na tela, quebrando linha se precisar */
+  .nav{order:5;flex-wrap:wrap;width:100%;border-top:1px solid #e0e4e8;overflow-x:visible}
+  .nav-tab{font-size:12px;padding:0 11px;white-space:nowrap;height:40px;flex-shrink:0;border-bottom-width:3px}
   /* Pages */
   .page{padding:12px 10px}
   .sec-header{flex-direction:column;align-items:stretch;gap:10px}
@@ -258,9 +257,8 @@ tbody tr:hover{background:#fafbfc}
   .item-row{grid-template-columns:1fr;gap:6px}
   /* Cards */
   .card{padding:12px}
-  /* Filtros de categoria roláveis */
-  .cat-filters{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px}
-  .cat-filters::-webkit-scrollbar{display:none}
+  /* Filtros de categoria: todos visíveis, quebrando linha à vontade */
+  .cat-filters{flex-wrap:wrap}
   .cat-chip{flex-shrink:0}
   /* Outras tabelas: rolagem horizontal em vez de cortar */
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -371,7 +369,7 @@ tbody tr:hover{background:#fafbfc}
     <button class="nav-tab active" onclick="showPage('produtos')" data-page="produtos">🔩 Produtos</button>
     <button class="nav-tab" onclick="showPage('novo')" data-page="novo">📄 Novo Orçamento</button>
     <button class="nav-tab" onclick="showPage('lista')" id="nav-lista" data-page="lista">📋 Orçamentos <span class="badge" id="badge-count">0</span></button>
-    <button class="nav-tab" onclick="showPage('novo-pedido')" data-page="novo-pedido">🛒 Novo Pedido</button>
+    <button class="nav-tab" onclick="irNovoPedido()" data-page="novo-pedido">🛒 Novo Pedido</button>
     <button class="nav-tab" onclick="showPage('lista-pedidos')" id="nav-pedidos" data-page="lista-pedidos">📦 Pedidos <span class="badge" id="badge-pedidos">0</span></button>
     <button class="nav-tab" onclick="showPage('depoimentos')" data-page="depoimentos">💬 Depoimentos</button>
   </nav>
@@ -407,12 +405,6 @@ tbody tr:hover{background:#fafbfc}
         <span style="font-size:11px;color:#aaa">Reatribui os códigos de todos os produtos usando o prefixo da categoria.</span>
       </div>
     </div>
-  </div>
-
-  <div class="grid3">
-    <div class="stat-card"><div class="stat-label">Total de Produtos</div><div class="stat-value" id="stat-prod">0</div></div>
-    <div class="stat-card"><div class="stat-label">Menor Preço</div><div class="stat-value" id="stat-min">R$ 0</div></div>
-    <div class="stat-card"><div class="stat-label">Maior Preço</div><div class="stat-value" id="stat-max">R$ 0</div></div>
   </div>
 
   <div class="card slide-panel" id="prod-form-panel">
@@ -535,6 +527,12 @@ tbody tr:hover{background:#fafbfc}
           </div>
         </div>
         <input type="file" id="inp-glb" accept=".glb,.gltf" style="display:none" onchange="onGlbChange(event)"/>
+      </div>
+      <div id="prod-acoes-extra" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f0f2f5;padding-top:12px;margin-top:4px;margin-bottom:12px">
+        <span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.4px;width:100%">Outras ações para este produto</span>
+        <button class="btn btn-ghost btn-sm" id="btn-prod-variacao" style="color:#6B3FA0" onclick="novaVariacaoDe(parseInt(document.getElementById('edit-prod-id').value))" title="Adicionar variação deste produto">🔀 + Variação</button>
+        <button class="btn btn-ghost btn-sm" style="color:#185FA5" onclick="copiarLinkProduto(document.getElementById('edit-prod-id').value, this)" title="Copiar link do produto para enviar ao cliente">🔗 Copiar Link</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProduto(document.getElementById('edit-prod-id').value)">🗑️ Excluir Produto</button>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary" onclick="saveProduto()">💾 Salvar Produto</button>
@@ -1406,6 +1404,8 @@ function clearProdForm() {
   Object.values(filtrosDef).flat().forEach(f => { const el=document.getElementById('inp-f-'+slugify(f)); if(el) el.value=''; });
   document.getElementById('edit-prod-id').value = '';
   document.getElementById('prod-form-title').textContent = 'Novo Produto';
+  const acoesExtra = document.getElementById('prod-acoes-extra');
+  if (acoesExtra) acoesExtra.style.display = 'none';
   renderFiltrosExtrasForm();
   currentFotoBase64 = null;
   resetFotoUI();
@@ -1755,6 +1755,10 @@ function editProduto(id) {
   if (p.ehVariacao) renderVarPaiSelected();
   document.getElementById('edit-prod-id').value = p.id;
   document.getElementById('prod-form-title').textContent = 'Editar Produto';
+  const acoesExtra = document.getElementById('prod-acoes-extra');
+  if (acoesExtra) acoesExtra.style.display = 'flex';
+  const btnVarExtra = document.getElementById('btn-prod-variacao');
+  if (btnVarExtra) btnVarExtra.style.display = (p.tipoProd === 'conjunto') ? 'none' : '';
   currentFotoBase64 = null; // preserve existing unless changed
   if (p.foto) { applyFotoUI(p.foto); }
   else resetFotoUI();
@@ -1781,6 +1785,28 @@ function editProduto(id) {
   }
   toggleProdForm(true);
   document.getElementById('prod-form-panel').scrollIntoView({behavior:'smooth'});
+}
+
+// Copia o link do produto (via Cloudflare Worker, que gera o preview correto
+// no WhatsApp) para a área de transferência, pronto para colar na conversa
+// com o cliente. btnEl é opcional — só usado para dar feedback visual.
+function copiarLinkProduto(id, btnEl) {
+  const link = 'https://loja.contato-aconaval.workers.dev/?id=' + id;
+  const textoOriginal = btnEl ? btnEl.innerHTML : '';
+  function avisar(ok) {
+    if (!btnEl) { if(!ok) alert('Link: ' + link); return; }
+    btnEl.innerHTML = ok ? '✅ Copiado!' : '⚠️ Copie manualmente';
+    setTimeout(() => { btnEl.innerHTML = textoOriginal; }, 1600);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(() => avisar(true)).catch(() => {
+      prompt('Copie o link abaixo (Ctrl+C):', link);
+      avisar(false);
+    });
+  } else {
+    prompt('Copie o link abaixo (Ctrl+C):', link);
+    avisar(false);
+  }
 }
 // Retorna o MENOR código inteiro positivo ainda não usado. Preenche lacunas
 // deixadas por exclusões, então o número para de "subir" sem parar.
@@ -1900,6 +1926,11 @@ function deleteProduto(id) {
     'Tem certeza que deseja excluir este produto?' +
       (cod != null ? ' O código ' + cod + ' ficará livre para reuso.' : '') + msgVar,
     async () => {
+      // Se o produto excluído (ou uma de suas variações) estiver aberto no
+      // painel de edição, fecha o painel para não deixá-lo "editando" algo
+      // que não existe mais.
+      const idEmEdicao = document.getElementById('edit-prod-id')?.value;
+      if (idEmEdicao && idsExcluir.some(x => x == idEmEdicao)) cancelProdForm();
       // 1) tira da memória (produto + variações) e atualiza a tela na hora
       produtos = produtos.filter(p => !idsExcluir.some(x => x == p.id));
       renderProdutos();
@@ -2229,15 +2260,10 @@ function renderProdutos() {
         <td data-label="Valor" style="text-align:right"><span class="price-tag">${fmtBRL(p.preco)}</span></td>
         <td data-cell="acoes"><div class="td-actions">
           <button class="btn btn-ghost btn-sm" onclick="editProduto(${p.id})">✏️ Editar</button>
-          ${!isConj?`<button class="btn btn-ghost btn-sm" style="color:#6B3FA0" onclick="novaVariacaoDe(${p.id})" title="Adicionar variação deste produto">🔀 + variação</button>`:''}
-          <button class="btn btn-danger btn-sm" onclick="deleteProduto(${p.id})">🗑️</button>
+          <button class="btn btn-ghost btn-sm" style="color:#185FA5" onclick="copiarLinkProduto(${p.id}, this)" title="Copiar link do produto para enviar ao cliente">🔗 Link</button>
         </div></td>
       </tr>`;}).join('');
   }
-  document.getElementById('stat-prod').textContent = produtos.filter(p=>!p.ehVariacao).length;
-  const precos = produtos.map(p => p.preco);
-  document.getElementById('stat-min').textContent = precos.length ? fmtBRL(Math.min(...precos)) : 'R$ 0';
-  document.getElementById('stat-max').textContent = precos.length ? fmtBRL(Math.max(...precos)) : 'R$ 0';
 }
 
 
@@ -3314,10 +3340,13 @@ function closeModalSolic() {
   document.getElementById('modal-solic').style.display = 'none';
 }
 
-function converterEmPedido() {
+async function converterEmPedido() {
   const s = solicitacaoAtual; if(!s) return;
   closeModalSolic();
   showPage('novo-pedido');
+  // Garante formulário limpo (sem resíduo de uma edição anterior) e número
+  // de pedido correto antes de preencher com os dados desta solicitação.
+  await resetPedidoForm();
 
   // Preenche o formulário de pedido com os dados da solicitação
   setTimeout(() => {
@@ -3332,8 +3361,24 @@ function converterEmPedido() {
     document.getElementById('pd-estado').value = s.estado||'';
     document.getElementById('pd-obs').value    = s.obs||'';
 
-    // Se a solicitação veio de um orçamento, pré-carrega os itens
-    if (s.orcId) {
+    let origemLabel = '';
+    // Prioridade 1: itens da própria solicitação — é o caso do pedido feito
+    // direto pela loja (o cliente escolhe os produtos no site e a solicitação
+    // já chega com a lista de produtos pedidos em s.itens).
+    if (s.itens && s.itens.length) {
+      itemsPedido = s.itens.map(it => ({
+        id:         Date.now() + Math.random(),
+        prodId:     it.prodId || it.id || '',
+        desc:       (it.nome || it.desc || 'Produto') + (it.dim ? '\nDimensões: ' + it.dim : ''),
+        searchText: it.nome || it.desc || '',
+        preco:      Number(it.preco || it.total || 0),
+        foto:       it.foto || '',
+      }));
+      origemLabel = s.itens.length + ' item(ns) da Solicitação';
+    }
+    // Prioridade 2 (fluxo antigo): se não há itens na própria solicitação,
+    // mas ela está vinculada a um orçamento, pré-carrega os itens do orçamento.
+    else if (s.orcId) {
       const orc = orcamentos.find(x => String(x.id) === String(s.orcId));
       if (orc && orc.items && orc.items.length) {
         itemsPedido = orc.items.map(it => ({
@@ -3343,17 +3388,18 @@ function converterEmPedido() {
           preco:  it.preco  || 0,
           foto:   it.foto   || '',
         }));
-        renderItemsPedido();
-        updatePreviewPd();
-
-        // Avisa que os itens vieram do orçamento
-        const orcNum = String(orc.num).padStart(3,'0');
-        const container = document.getElementById('pd-items-container');
-        const banner = document.createElement('div');
-        banner.style.cssText = 'background:#e8f4e8;border:1px solid #a8d5a8;border-radius:6px;padding:8px 12px;font-size:12px;color:#2a6b3a;margin-bottom:10px';
-        banner.innerHTML = '\u2705 <strong>' + orc.items.length + ' item(ns) do Or\u00e7amento #' + orcNum + '</strong> carregados automaticamente. Voc\u00ea pode editar antes de gerar o pedido.';
-        container.parentNode.insertBefore(banner, container);
+        origemLabel = orc.items.length + ' item(ns) do Orçamento #' + String(orc.num).padStart(3,'0');
       }
+    }
+
+    if (origemLabel) {
+      renderItemsPedido();
+      updatePreviewPd();
+      const container = document.getElementById('pd-items-container');
+      const banner = document.createElement('div');
+      banner.style.cssText = 'background:#e8f4e8;border:1px solid #a8d5a8;border-radius:6px;padding:8px 12px;font-size:12px;color:#2a6b3a;margin-bottom:10px';
+      banner.innerHTML = '\u2705 <strong>' + origemLabel + '</strong> carregados automaticamente. Voc\u00ea pode editar antes de gerar o pedido.';
+      container.parentNode.insertBefore(banner, container);
     }
 
     // Marca solicitação como convertida
@@ -3635,13 +3681,35 @@ function restorePrazoEntrega(val) {
   else { const h=document.getElementById('pd-prazo'); if(h) h.value=val; }
 }
 
-function resetPedidoForm(){
+// Busca a versão mais recente da lista de pedidos no Firestore e mescla com
+// a versão local em memória (a do servidor tem prioridade). Isso evita duas
+// situações: sugerir um número de pedido já usado por outra sessão/aba, e
+// perder pedidos criados em outra sessão quando savePedidos() grava a lista
+// inteira de uma vez (sobrescrevendo o documento).
+async function refreshPedidosFresh() {
+  try {
+    const snap = await db.collection('acn').doc('pedidos').get();
+    const remota = (snap.exists && snap.data().lista) ? snap.data().lista : [];
+    const mapa = {};
+    pedidos.forEach(p => { mapa[p.id] = p; });
+    remota.forEach(p => { mapa[p.id] = p; }); // versão do servidor é a mais confiável
+    pedidos = Object.values(mapa);
+  } catch(e) {
+    console.warn('Não foi possível verificar a lista de pedidos mais recente:', e);
+  }
+  return pedidos;
+}
+
+async function resetPedidoForm(){
   pedidoEditandoId = null;
   ['pd-nome','pd-doc','pd-fone','pd-rua','pd-num','pd-bairro','pd-cep','pd-cidade','pd-estado','pd-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   resetPrazoEntrega();
   const hoje=new Date(); document.getElementById('pd-data').value=hoje.toISOString().split('T')[0];
+  const numEl = document.getElementById('pd-numero');
+  if (numEl) numEl.value = '…'; // placeholder enquanto verifica o último número usado
+  await refreshPedidosFresh();
   const proxNum=pedidos.length?Math.max(...pedidos.map(p=>p.num||0))+1:1;
-  document.getElementById('pd-numero').value=proxNum;
+  if (numEl) numEl.value=proxNum;
   itemsPedido=[{id:Date.now(),prodId:'',desc:'',preco:0}];
   const rpPct=document.getElementById('pd-inp-desc-pct'); if(rpPct) rpPct.value='';
   const rpVal=document.getElementById('pd-inp-desc-val'); if(rpVal) rpVal.value='';
@@ -3653,6 +3721,14 @@ function resetPedidoForm(){
   if (btn) { btn.textContent = '📦 Gerar Pedido'; btn.style.background = ''; }
   const title = document.querySelector('#page-novo-pedido .sec-title');
   if (title) title.firstChild.textContent = 'Novo Pedido ';
+}
+
+// Usada pelo menu "Novo Pedido": garante que o formulário comece sempre limpo,
+// mesmo que tenha sido deixado no meio de uma edição de outro pedido (evita
+// que o pedido novo seja salvo por engano dentro de um pedido já existente).
+async function irNovoPedido(){
+  showPage('novo-pedido');
+  await resetPedidoForm();
 }
 
 // ── WHATSAPP SHARE ────────────────────────────────────────────────
@@ -3847,7 +3923,7 @@ function editarPedido(id) {
 }
 
 // ── GERAR PEDIDO ─────────────────────────────────────────────────
-function gerarPedido() {
+async function gerarPedido() {
   const nome = document.getElementById('pd-nome').value.trim();
   if (!nome) return alert('Informe o nome do cliente.');
   const numVal = parseInt(document.getElementById('pd-numero').value);
@@ -3857,17 +3933,39 @@ function gerarPedido() {
   const prazoVal = document.getElementById('pd-prazo').value.trim();
   if (!prazoVal) return alert('Selecione o prazo de entrega (verde ou vermelho).');
 
-  // Bloqueia número duplicado (exceto quando editando o próprio pedido)
+  // ── Barreira de segurança ──────────────────────────────────────────
+  // Antes de gravar, busca no Firestore a lista de pedidos mais atual
+  // (evita decidir com base em dados antigos guardados na memória, o que
+  // poderia sobrescrever um pedido real criado em outra sessão/aba).
+  const btnGerar = document.querySelector('#page-novo-pedido .btn-success');
+  const txtBtnOriginal = btnGerar ? btnGerar.textContent : '';
+  if (btnGerar) { btnGerar.disabled = true; btnGerar.textContent = '🔎 Verificando…'; }
+  await refreshPedidosFresh();
+  if (btnGerar) { btnGerar.disabled = false; btnGerar.textContent = txtBtnOriginal; }
+
+  // Se estamos editando um pedido, confirma que ele ainda existe de fato
+  // (pode ter sido removido/alterado em outra sessão entre a abertura da
+  // edição e o clique em salvar).
+  if (pedidoEditandoId && !pedidos.find(p => p.id == pedidoEditandoId)) {
+    alert('⚠️ Este pedido não foi encontrado (pode ter sido removido em outra sessão). Recarregue a página antes de continuar.');
+    return;
+  }
+
+  // Bloqueia número duplicado (exceto quando editando o próprio pedido).
+  // Em vez de um confirm() ambíguo que permitia seguir e sobrescrever o
+  // pedido existente, o número é corrigido automaticamente e a gravação é
+  // interrompida — o usuário precisa conferir e clicar em "Gerar Pedido"
+  // de novo para confirmar o novo número.
   const numExistente = pedidos.find(p => p.num == numVal && p.id != pedidoEditandoId);
   if (numExistente) {
-    const nomeExist = numExistente.nome || 'sem nome';
-    const conf = confirm(
-      '⚠️ Número ' + String(numVal).padStart(3,'0') + ' já existe!\n\n' +
-      'Cliente: ' + nomeExist + '\n' +
-      'Data: ' + (numExistente.data ? new Date(numExistente.data).toLocaleDateString('pt-BR') : '—') + '\n\n' +
-      'Deseja usar outro número? (OK = cancelar e corrigir)'
+    const proxLivre = Math.max(numVal, ...pedidos.map(p => p.num || 0)) + 1;
+    document.getElementById('pd-numero').value = proxLivre;
+    alert(
+      '⚠️ O número ' + String(numVal).padStart(3,'0') + ' já pertence ao pedido de "' + (numExistente.nome || 'sem nome') + '".\n\n' +
+      'Para não sobrescrever esse pedido, o número foi atualizado automaticamente para ' + String(proxLivre).padStart(3,'0') + '.\n' +
+      'Confira e clique em "Gerar Pedido" novamente para confirmar.'
     );
-    if (conf) return;
+    return;
   }
 
   const dadosPedido = {
@@ -3900,9 +3998,13 @@ function gerarPedido() {
       pedidos[idx] = { ...pedidos[idx], ...dadosPedido };
       const id = pedidos[idx].id;
       pedidoEditandoId = null;
-      resetPedidoForm();
       updateBadgePedidos();
-      savePedidos().catch(e => console.warn('Save:', e));
+      // Salva antes de resetar o formulário: resetPedidoForm() busca a lista
+      // mais recente no Firestore, então precisa rodar DEPOIS que a edição
+      // já foi gravada — caso contrário a busca traria a versão antiga e
+      // desfaria a edição que ainda não tinha sido salva.
+      await savePedidos().catch(e => console.warn('Save:', e));
+      await resetPedidoForm();
       showPedido(id);
     }
   } else {
