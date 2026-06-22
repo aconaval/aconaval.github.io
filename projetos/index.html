@@ -476,58 +476,61 @@ $('exportBtn').addEventListener('click',()=>{
 
 // ===== DETECÇÃO DE PERSPECTIVA (OpenCV.js) =====
 let cvReady=false;
+let CV=null;   // referência própria ao OpenCV pronto (independe de como a build nomeia o global)
 const OPENCV_URLS=[
-  'https://docs.opencv.org/4.x/opencv.js',
   'https://unpkg.com/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',
   'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',
+  'https://docs.opencv.org/4.x/opencv.js',
 ];
 function loadOpenCV(){
-  if(cvReady) return Promise.resolve();
-  return new Promise((res,rej)=>{
-    // Edge Tracking Prevention bloqueia CDNs — avisa o usuário
-    const isEdge = navigator.userAgent.includes('Edg/');
-    if(isEdge){
-      const ok=confirm('Detectei o Microsoft Edge.\n\nO "Tracking Prevention" do Edge pode bloquear o motor de visão.\n\nSe travar, vá em:\nConfigurações → Privacidade → Prevenção de rastreamento → Básico\n\nOu use o Google Chrome para esta ferramenta.\n\nContinuar assim mesmo?');
-      if(!ok){ rej(new Error('Cancelado. Tente no Chrome ou ajuste o Edge.')); return; }
-    }
+  if(CV) return Promise.resolve();
+  return new Promise((resolve,reject)=>{
+    let settled=false;
+    const finish=(obj)=>{
+      if(settled||!obj) return;
+      settled=true; CV=obj; cvReady=true;
+      console.log('[opencv] runtime PRONTO');
+      resolve();
+    };
+    const fail=(msg)=>{ if(settled) return; settled=true; reject(new Error(msg)); };
+
+    // caso Emscripten clássico: Module.onRuntimeInitialized
+    window.Module = window.Module || {};
+    const prev = window.Module.onRuntimeInitialized;
+    window.Module.onRuntimeInitialized = ()=>{
+      if(prev) try{prev();}catch(e){}
+      console.log('[opencv] Module.onRuntimeInitialized disparou');
+      finish(window.cv && window.cv.Mat ? window.cv : window.Module);
+    };
+
     let idx=0;
     function tryNext(){
-      if(idx>=OPENCV_URLS.length){ rej(new Error('Nenhuma fonte respondeu')); return; }
+      if(idx>=OPENCV_URLS.length){ fail('Nenhuma fonte do OpenCV respondeu'); return; }
       const url=OPENCV_URLS[idx++];
       console.log('[opencv] tentando', url);
       const s=document.createElement('script');
       s.async=true;
       s.onload=()=>{
-        console.log('[opencv] script carregado, aguardando runtime...');
+        console.log('[opencv] script baixado, aguardando WASM...');
         const t0=Date.now();
         const poll=setInterval(()=>{
-          try{
-            if(typeof cv!=='undefined' && cv){
-              // builds novas (4.8+) expõem cv como Promise; antigas como objeto
-              if(typeof cv.then==='function'){
-                clearInterval(poll);
-                console.log('[opencv] cv é Promise, resolvendo...');
-                Promise.resolve(cv).then(real=>{
-                  window.cv = real;
-                  cvReady=true;
-                  console.log('[opencv] runtime pronto (Promise) em', Date.now()-t0, 'ms');
-                  res();
-                }).catch(err=>rej(err));
-                return;
-              }
-              if(cv.Mat){
-                clearInterval(poll);
-                cvReady=true;
-                console.log('[opencv] runtime pronto em', Date.now()-t0, 'ms');
-                res();
-                return;
-              }
+          if(settled){ clearInterval(poll); return; }
+          const g=window.cv;
+          if(g){
+            // build moderna: cv é Promise
+            if(typeof g.then==='function'){
+              clearInterval(poll);
+              console.log('[opencv] cv é Promise, resolvendo...');
+              Promise.resolve(g).then(real=>finish(real)).catch(err=>fail(String(err)));
+              return;
             }
-          }catch(e){ /* cv ainda não pronto */ }
-          if(Date.now()-t0>45000){ clearInterval(poll); rej(new Error('Timeout WASM (45s)')); }
+            // build clássica: cv já tem Mat
+            if(g.Mat){ clearInterval(poll); finish(g); return; }
+          }
+          if(Date.now()-t0>60000){ clearInterval(poll); fail('Timeout de 60s ao inicializar o WASM'); }
         },200);
       };
-      s.onerror=()=>{ console.warn('[opencv] falhou',url); tryNext(); };
+      s.onerror=()=>{ console.warn('[opencv] falhou baixar',url); tryNext(); };
       s.src=url;
       document.head.appendChild(s);
     }
@@ -593,12 +596,12 @@ async function detectPerspective(){
   const c=document.createElement('canvas'); c.width=W; c.height=H;
   c.getContext('2d').drawImage(bgImg,0,0);
 
-  const src=cv.imread(c);
-  const gray=new cv.Mat(), edges=new cv.Mat(), lines=new cv.Mat();
-  cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
-  cv.Canny(gray,edges,50,150,3,false);
+  const src=CV.imread(c);
+  const gray=new CV.Mat(), edges=new CV.Mat(), lines=new CV.Mat();
+  CV.cvtColor(src,gray,CV.COLOR_RGBA2GRAY);
+  CV.Canny(gray,edges,50,150,3,false);
   const minLen=Math.max(40, W*0.06);
-  cv.HoughLinesP(edges,lines,1,Math.PI/180,70,minLen,12);
+  CV.HoughLinesP(edges,lines,1,Math.PI/180,70,minLen,12);
 
   const all=[], diag=[];
   for(let i=0;i<lines.rows;i++){
