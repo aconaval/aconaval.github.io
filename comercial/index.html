@@ -2256,7 +2256,7 @@ function renderProdutos() {
           </div>` : ''}
           ${p.obs ? `<div style="font-size:11px;color:#bbb;margin-top:2px">${p.obs}</div>` : ''}
         </td>
-        <td data-label="Categoria">${p.cat ? `<span class="badge-cat">${p.cat}</span>` : '<span style="color:#ccc">—</span>'}</td>
+        <td data-label="Categoria">${p.cat ? `<span class="badge-cat" style="cursor:pointer" title="Filtrar por ${p.cat}" data-cat="${p.cat}" onclick="setFiltroCategoria(this.dataset.cat)">${p.cat}</span>` : '<span style="color:#ccc">—</span>'}</td>
         <td data-label="Valor" style="text-align:right"><span class="price-tag">${fmtBRL(p.preco)}</span></td>
         <td data-cell="acoes"><div class="td-actions">
           <button class="btn btn-ghost btn-sm" onclick="editProduto(${p.id})">✏️ Editar</button>
@@ -3129,7 +3129,8 @@ function gerarLinkOrc(btn) {
   // Monta a mensagem pronta para WhatsApp
   const num  = String(o.num).padStart(3, '0');
   const nome = o.cliente.toUpperCase();
-  const msg  = `🔥 *ORÇAMENTO ${num} — ${nome}*\n\nAcesse seu orçamento pelo link abaixo:\n${url}\n\nQualquer dúvida é só me perguntar. 😊`;
+  const primeiroNome = (o.cliente || '').trim().split(/\s+/)[0];
+  const msg  = `Olá ${primeiroNome}, segue o link do seu orçamento, entra no link confere as informações, preenche o formulário e clica em enviar solicitação para fechar sua encomenda. Clica aqui: ${url}\n\nPode ter certeza ${primeiroNome} que vai valer cada centavo, vamos caprichar e depois vc vai nos enviar uma foto bem bonita pra gente postar tá?\n\nQualquer dúvida que tiver, só me perguntar.`;
 
   navigator.clipboard.writeText(msg).then(() => {
     const orig = btn.textContent;
@@ -3147,7 +3148,8 @@ function gerarLinkOrc(btn) {
     // Fallback: abre em janela pequena para copiar manualmente
     const num2 = String(o.num).padStart(3,'0');
     const url2 = `${base}visualizar.html?id=${o.id}`;
-    const msg2 = `🔥 *ORÇAMENTO ${num2} — ${o.cliente.toUpperCase()}*\n\nAcesse seu orçamento pelo link abaixo:\n${url2}\n\nQualquer dúvida é só me perguntar. 😊`;
+    const primeiroNome2 = (o.cliente || '').trim().split(/\s+/)[0];
+    const msg2 = `Olá ${primeiroNome2}, segue o link do seu orçamento, entra no link confere as informações, preenche o formulário e clica em enviar solicitação para fechar sua encomenda. Clica aqui: ${url2}\n\nPode ter certeza ${primeiroNome2} que vai valer cada centavo, vamos caprichar e depois vc vai nos enviar uma foto bem bonita pra gente postar tá?\n\nQualquer dúvida que tiver, só me perguntar.`;
     prompt('Copie a mensagem abaixo:', msg2);
   });
 }
@@ -4724,7 +4726,7 @@ async function baixarPDF(tipo, btn) {
         '.print-btn,.no-print{display:none!important}' +
         'body{margin:0;padding:0}' +
         '</style></head>');
-      const lW = 1122; // A4 landscape ~297mm @ 96dpi
+      const lW = tipo === 'ped' ? 1122 : 850; // ped=landscape 297mm, orc=retrato 210mm
       const lFrame = document.createElement('iframe');
       lFrame.style.cssText = `position:fixed;left:-9999px;top:0;width:${lW}px;height:1px;border:none;opacity:0;pointer-events:none`;
       document.body.appendChild(lFrame);
@@ -4767,14 +4769,23 @@ async function baixarPDF(tipo, btn) {
             lSlice.getContext('2d').drawImage(lCanvas, 0, srcY, lCanvas.width, srcH, 0, 0, lCanvas.width, Math.ceil(srcH));
 
             if (tipo === 'orc') {
-              // Orçamento: página paisagem real (não imprimimos, visualização no PC)
-              pdf.addPage([297, 210], 'landscape');
-              const lAvailW = 297 - lMargin*2, lAvailH = 210 - lMargin*2;
-              const natH = (srcH / lCanvas.width) * lAvailW;
-              let rW = lAvailW, rH = natH;
-              if (natH > lAvailH) { rH = lAvailH; rW = lAvailW * (lAvailH / natH); }
+              // Orçamento: igual ao pedido — rotaciona 90° e coloca em página retrato
+              const rotatedOrc = document.createElement('canvas');
+              rotatedOrc.width  = Math.ceil(srcH);
+              rotatedOrc.height = lCanvas.width;
+              const rCtxOrc = rotatedOrc.getContext('2d');
+              rCtxOrc.translate(rotatedOrc.width, 0);
+              rCtxOrc.rotate(Math.PI / 2);
+              rCtxOrc.drawImage(lSlice, 0, 0);
+              pdf.addPage();
+              const pW = 210, pH = 297;
+              const lAvailW = pW - lMargin*2, lAvailH = pH - lMargin*2;
+              const natH2 = (rotatedOrc.height / rotatedOrc.width) * lAvailW;
+              let rW = lAvailW, rH = natH2;
+              if (natH2 > lAvailH) { rH = lAvailH; rW = lAvailW * (lAvailH / natH2); }
               const ox = lMargin + (lAvailW - rW) / 2;
-              pdf.addImage(lSlice.toDataURL('image/jpeg', 0.92), 'JPEG', ox, lMargin, rW, rH);
+              const oy = lMargin + (lAvailH - rH) / 2;
+              pdf.addImage(rotatedOrc.toDataURL('image/jpeg', 0.92), 'JPEG', ox, oy, rW, rH);
             } else {
               // Pedido: gira 90° → página retrato (impressora não buga)
               const rotated = document.createElement('canvas');
@@ -4834,7 +4845,7 @@ async function baixarProjeto(tipo, btn) {
     'body{margin:0;padding:0}' +
     '</style></head>');
 
-  const lW = 1122;
+  const lW = 850; // Retrato — mesma largura do PDF principal do orçamento
   const lFrame = document.createElement('iframe');
   lFrame.style.cssText = `position:fixed;left:-9999px;top:0;width:${lW}px;height:1px;border:none;opacity:0;pointer-events:none`;
   document.body.appendChild(lFrame);
@@ -4871,7 +4882,7 @@ async function baixarProjeto(tipo, btn) {
     });
 
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const lMargin = 6;
     const lCScale = lCanvas.width / lW;
     let firstPage = true;
@@ -4880,7 +4891,7 @@ async function baixarProjeto(tipo, btn) {
       const srcY = el.offsetTop * lCScale;
       const srcH = el.offsetHeight * lCScale;
       if (srcH < 10) continue;
-      if (!firstPage) pdf.addPage([297, 210], 'landscape');
+      if (!firstPage) pdf.addPage();
       firstPage = false;
 
       const lSlice = document.createElement('canvas');
@@ -4888,12 +4899,21 @@ async function baixarProjeto(tipo, btn) {
       lSlice.height = Math.ceil(srcH);
       lSlice.getContext('2d').drawImage(lCanvas, 0, srcY, lCanvas.width, srcH, 0, 0, lCanvas.width, Math.ceil(srcH));
 
-      const lAvailW = 297 - lMargin * 2, lAvailH = 210 - lMargin * 2;
-      const natH = (srcH / lCanvas.width) * lAvailW;
+      const rotatedB2 = document.createElement('canvas');
+      rotatedB2.width  = Math.ceil(srcH);
+      rotatedB2.height = lCanvas.width;
+      const rCtxB2 = rotatedB2.getContext('2d');
+      rCtxB2.translate(rotatedB2.width, 0);
+      rCtxB2.rotate(Math.PI / 2);
+      rCtxB2.drawImage(lSlice, 0, 0);
+      const pW = 210, pH = 297;
+      const lAvailW = pW - lMargin * 2, lAvailH = pH - lMargin * 2;
+      const natH = (rotatedB2.height / rotatedB2.width) * lAvailW;
       let rW = lAvailW, rH = natH;
       if (natH > lAvailH) { rH = lAvailH; rW = lAvailW * (lAvailH / natH); }
       const ox = lMargin + (lAvailW - rW) / 2;
-      pdf.addImage(lSlice.toDataURL('image/jpeg', 0.92), 'JPEG', ox, lMargin, rW, rH);
+      const oy = lMargin + (lAvailH - rH) / 2;
+      pdf.addImage(rotatedB2.toDataURL('image/jpeg', 0.92), 'JPEG', ox, oy, rW, rH);
     }
 
     pdf.save(filename);
