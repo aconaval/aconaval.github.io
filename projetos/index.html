@@ -477,12 +477,19 @@ $('exportBtn').addEventListener('click',()=>{
 // ===== DETECÇÃO DE PERSPECTIVA (OpenCV.js) =====
 let cvReady=false;
 const OPENCV_URLS=[
-  'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',
   'https://docs.opencv.org/4.x/opencv.js',
+  'https://unpkg.com/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',
+  'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',
 ];
 function loadOpenCV(){
   if(cvReady) return Promise.resolve();
   return new Promise((res,rej)=>{
+    // Edge Tracking Prevention bloqueia CDNs — avisa o usuário
+    const isEdge = navigator.userAgent.includes('Edg/');
+    if(isEdge){
+      const ok=confirm('Detectei o Microsoft Edge.\n\nO "Tracking Prevention" do Edge pode bloquear o motor de visão.\n\nSe travar, vá em:\nConfigurações → Privacidade → Prevenção de rastreamento → Básico\n\nOu use o Google Chrome para esta ferramenta.\n\nContinuar assim mesmo?');
+      if(!ok){ rej(new Error('Cancelado. Tente no Chrome ou ajuste o Edge.')); return; }
+    }
     let idx=0;
     function tryNext(){
       if(idx>=OPENCV_URLS.length){ rej(new Error('Nenhuma fonte respondeu')); return; }
