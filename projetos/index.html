@@ -474,68 +474,124 @@ $('exportBtn').addEventListener('click',()=>{
   toast('Composição exportada');
 });
 
-// ===== DETECÇÃO DE PERSPECTIVA (OpenCV.js) =====
-let cvReady=false;
-let CV=null;   // referência própria ao OpenCV pronto (independe de como a build nomeia o global)
-const OPENCV_URLS=[
-  'https://unpkg.com/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',
-  'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',
-  'https://docs.opencv.org/4.x/opencv.js',
-];
-function loadOpenCV(){
-  if(CV) return Promise.resolve();
-  return new Promise((resolve,reject)=>{
-    let settled=false;
-    const finish=(obj)=>{
-      if(settled||!obj) return;
-      settled=true; CV=obj; cvReady=true;
-      console.log('[opencv] runtime PRONTO');
-      resolve();
-    };
-    const fail=(msg)=>{ if(settled) return; settled=true; reject(new Error(msg)); };
+// ===== DETECÇÃO DE PERSPECTIVA (Worker puro JS — sem dependências) =====
+let CV=null; // não usamos mais, mas mantemos a variável pra não quebrar refs
 
-    // caso Emscripten clássico: Module.onRuntimeInitialized
-    window.Module = window.Module || {};
-    const prev = window.Module.onRuntimeInitialized;
-    window.Module.onRuntimeInitialized = ()=>{
-      if(prev) try{prev();}catch(e){}
-      console.log('[opencv] Module.onRuntimeInitialized disparou');
-      finish(window.cv && window.cv.Mat ? window.cv : window.Module);
-    };
+// Worker inline — roda em thread separada, não trava a UI
+const WORKER_CODE = `
+self.onmessage = function(e){
+  const {pixels, W, H} = e.data;
 
-    let idx=0;
-    function tryNext(){
-      if(idx>=OPENCV_URLS.length){ fail('Nenhuma fonte do OpenCV respondeu'); return; }
-      const url=OPENCV_URLS[idx++];
-      console.log('[opencv] tentando', url);
-      const s=document.createElement('script');
-      s.async=true;
-      s.onload=()=>{
-        console.log('[opencv] script baixado, aguardando WASM...');
-        const t0=Date.now();
-        const poll=setInterval(()=>{
-          if(settled){ clearInterval(poll); return; }
-          const g=window.cv;
-          if(g){
-            // build moderna: cv é Promise
-            if(typeof g.then==='function'){
-              clearInterval(poll);
-              console.log('[opencv] cv é Promise, resolvendo...');
-              Promise.resolve(g).then(real=>finish(real)).catch(err=>fail(String(err)));
-              return;
-            }
-            // build clássica: cv já tem Mat
-            if(g.Mat){ clearInterval(poll); finish(g); return; }
-          }
-          if(Date.now()-t0>60000){ clearInterval(poll); fail('Timeout de 60s ao inicializar o WASM'); }
-        },200);
-      };
-      s.onerror=()=>{ console.warn('[opencv] falhou baixar',url); tryNext(); };
-      s.src=url;
-      document.head.appendChild(s);
+  // --- Grayscale ---
+  const gray = new Float32Array(W*H);
+  for(let i=0;i<W*H;i++) gray[i] = 0.299*pixels[i*4] + 0.587*pixels[i*4+1] + 0.114*pixels[i*4+2];
+
+  // --- Sobel edge ---
+  const edge = new Float32Array(W*H);
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    const g=(r,c)=>gray[(y+r)*W+(x+c)];
+    const gx = -g(-1,-1)+g(-1,1) - 2*g(0,-1)+2*g(0,1) - g(1,-1)+g(1,1);
+    const gy = -g(-1,-1)-2*g(-1,0)-g(-1,1) + g(1,-1)+2*g(1,0)+g(1,1);
+    edge[y*W+x] = Math.sqrt(gx*gx+gy*gy);
+  }
+
+  // threshold adaptivo: top 8% dos pixels de borda
+  const sorted = Float32Array.from(edge).sort();
+  const thresh = sorted[Math.floor(sorted.length*0.92)] || 30;
+
+  // --- Hough probabilístico simplificado ---
+  const lines = [];
+  const used = new Uint8Array(W*H);
+  const pts = [];
+  for(let y=2;y<H-2;y++) for(let x=2;x<W-2;x++){
+    if(edge[y*W+x]>thresh) pts.push([x,y]);
+  }
+  // embaralha
+  for(let i=pts.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [pts[i],pts[j]]=[pts[j],pts[i]]; }
+
+  const minLen = Math.max(40, Math.min(W,H)*0.06);
+  const maxGap = 14;
+  const maxLines = 300;
+
+  for(let k=0;k<Math.min(pts.length,4000)&&lines.length<maxLines;k++){
+    const [x0,y0]=pts[k];
+    if(used[y0*W+x0]) continue;
+    // sorteia 2o ponto vizinho na direção do gradiente
+    for(let tries=0;tries<6;tries++){
+      const dx=(Math.random()*2-1), dy=(Math.random()*2-1);
+      const len2=dx*dx+dy*dy; if(len2<0.01) continue;
+      // escaneia ao longo da direção
+      let ex=x0,ey=y0,gapCount=0;
+      const seg=[[x0,y0]];
+      for(let s=1;s<Math.min(W,H)*0.5;s++){
+        const nx=Math.round(x0+dx/Math.sqrt(len2)*s), ny=Math.round(y0+dy/Math.sqrt(len2)*s);
+        if(nx<0||nx>=W||ny<0||ny>=H) break;
+        if(edge[ny*W+nx]>thresh){ seg.push([nx,ny]); ex=nx; ey=ny; gapCount=0; }
+        else if(++gapCount>maxGap) break;
+      }
+      const segLen=Math.hypot(ex-x0,ey-y0);
+      if(segLen>=minLen){
+        lines.push({x1:x0,y1:y0,x2:ex,y2:ey});
+        for(const [px,py] of seg) used[py*W+px]=1;
+        break;
+      }
     }
-    tryNext();
+  }
+
+  // --- filtra diagonais de perspectiva (8° < ângulo < 82°) ---
+  const diag = lines.filter(l=>{
+    let ang=Math.abs(Math.atan2(l.y2-l.y1,l.x2-l.x1)*180/Math.PI);
+    if(ang>90) ang=180-ang;
+    return ang>8 && ang<82;
   });
+
+  // --- interseção de 2 linhas ---
+  function intersect(a,b){
+    const A=[a.y1-a.y2, a.x2-a.x1, a.x1*a.y2-a.x2*a.y1];
+    const B=[b.y1-b.y2, b.x2-b.x1, b.x1*b.y2-b.x2*b.y1];
+    const x=A[1]*B[2]-A[2]*B[1], y=A[2]*B[0]-A[0]*B[2], w=A[0]*B[1]-A[1]*B[0];
+    if(Math.abs(w)<1e-6) return null;
+    return {x:x/w, y:y/w};
+  }
+  function distToLine(p,l){
+    const dx=l.x2-l.x1, dy=l.y2-l.y1, len=Math.hypot(dx,dy)||1;
+    return Math.abs(dx*(l.y1-p.y)-dy*(l.x1-p.x))/len;
+  }
+
+  // --- RANSAC ponto de fuga ---
+  const tol = Math.max(8, Math.min(W,H)*0.015);
+  let best=null, bestCount=0;
+  const iters = Math.min(600, diag.length*(diag.length-1)/2);
+  for(let it=0;it<iters;it++){
+    const a=diag[(Math.random()*diag.length)|0], b=diag[(Math.random()*diag.length)|0];
+    if(a===b) continue;
+    const vp=intersect(a,b); if(!vp||!isFinite(vp.x)||!isFinite(vp.y)) continue;
+    if(Math.abs(vp.y)>H*4) continue;
+    let cnt=0; for(const l of diag) if(distToLine(vp,l)<tol) cnt++;
+    if(cnt>bestCount){ bestCount=cnt; best=vp; }
+  }
+
+  if(!best||bestCount<3){ self.postMessage({ok:false,msg:'Poucas linhas de perspectiva',lines,diag}); return; }
+
+  // refina: média das interseções inliers
+  const inl=diag.filter(l=>distToLine(best,l)<tol);
+  let sx=0,sy=0,n=0;
+  for(let i=0;i<inl.length;i++) for(let j=i+1;j<inl.length;j++){
+    const vp=intersect(inl[i],inl[j]);
+    if(vp&&isFinite(vp.x)&&isFinite(vp.y)&&Math.abs(vp.y)<H*4){ sx+=vp.x; sy+=vp.y; n++; }
+  }
+  if(n>0) best={x:sx/n, y:sy/n};
+
+  self.postMessage({ok:true, vp:best, inl, allLines:lines, count:inl.length});
+};
+`;
+
+let _worker=null;
+function getWorker(){
+  if(_worker) return _worker;
+  const blob=new Blob([WORKER_CODE],{type:'application/javascript'});
+  _worker=new Worker(URL.createObjectURL(blob));
+  return _worker;
 }
 
 // projeta um ponto no infinito horizontal e retorna seu Y em NDC (-1..1)
@@ -561,99 +617,49 @@ function aimHorizonAtNDC(targetY){
   orbit.target.y=(lo+hi)/2; orbit.update();
 }
 
-function intersect(l1,l2){
-  // linhas como pontos (x1,y1,x2,y2) -> forma homogênea via cross
-  const a=[l1.y1-l1.y2, l1.x2-l1.x1, l1.x1*l1.y2 - l1.x2*l1.y1];
-  const b=[l2.y1-l2.y2, l2.x2-l2.x1, l2.x1*l2.y2 - l2.x2*l2.y1];
-  const x = a[1]*b[2]-a[2]*b[1];
-  const y = a[2]*b[0]-a[0]*b[2];
-  const w = a[0]*b[1]-a[1]*b[0];
-  if(Math.abs(w)<1e-6) return null;
-  return {x:x/w, y:y/w};
-}
-function distToLine(p,l){
-  const dx=l.x2-l.x1, dy=l.y2-l.y1;
-  const len=Math.hypot(dx,dy)||1;
-  return Math.abs(dx*(l.y1-p.y) - dy*(l.x1-p.x))/len;
-}
-
 async function detectPerspective(){
   if(!bgImg.naturalWidth){ toast('Carregue a foto primeiro'); return; }
   const btn=$('autoBtn');
-  btn.textContent='⏳ Carregando motor de visão...'; btn.disabled=true;
-  try{
-    await loadOpenCV();
-  }catch(e){
-    console.error('[opencv] erro:',e);
-    toast('Falhou: '+e.message);
-    btn.textContent='🔍 Detectar perspectiva da foto'; btn.disabled=false;
-    return;
-  }
+  btn.textContent='⏳ Analisando foto...'; btn.disabled=true;
+
+  // extrai pixels da foto num canvas (reduzido pra velocidade)
+  const MAX=900;
+  const scale=Math.min(1, MAX/Math.max(bgImg.naturalWidth,bgImg.naturalHeight));
+  const W=Math.round(bgImg.naturalWidth*scale), H=Math.round(bgImg.naturalHeight*scale);
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  c.getContext('2d').drawImage(bgImg,0,0,W,H);
+  const pixels=c.getContext('2d').getImageData(0,0,W,H).data;
+
+  const result = await new Promise(res=>{
+    const w=getWorker();
+    w.onmessage=e=>res(e.data);
+    w.onerror=e=>res({ok:false,msg:'Erro no worker: '+e.message});
+    w.postMessage({pixels:pixels.buffer, W, H},[pixels.buffer]);
+  });
+
   btn.textContent='🔍 Detectar perspectiva da foto'; btn.disabled=false;
 
-  const W=bgImg.naturalWidth, H=bgImg.naturalHeight;
-  // desenha a foto num canvas pra ler pixels
-  const c=document.createElement('canvas'); c.width=W; c.height=H;
-  c.getContext('2d').drawImage(bgImg,0,0);
-
-  const src=CV.imread(c);
-  const gray=new CV.Mat(), edges=new CV.Mat(), lines=new CV.Mat();
-  CV.cvtColor(src,gray,CV.COLOR_RGBA2GRAY);
-  CV.Canny(gray,edges,50,150,3,false);
-  const minLen=Math.max(40, W*0.06);
-  CV.HoughLinesP(edges,lines,1,Math.PI/180,70,minLen,12);
-
-  const all=[], diag=[];
-  for(let i=0;i<lines.rows;i++){
-    const x1=lines.data32S[i*4],y1=lines.data32S[i*4+1],x2=lines.data32S[i*4+2],y2=lines.data32S[i*4+3];
-    const L={x1,y1,x2,y2};
-    all.push(L);
-    let ang=Math.abs(Math.atan2(y2-y1,x2-x1)*180/Math.PI);
-    if(ang>90) ang=180-ang;            // 0..90
-    // diagonais de perspectiva: nem horizontais puras (<8) nem verticais (>82)
-    if(ang>8 && ang<82) diag.push(L);
+  if(!result.ok){
+    toast(result.msg||'Não detectei perspectiva — ajuste manual');
+    if(result.allLines) drawDetected(result.allLines, null, scale);
+    return;
   }
-  src.delete(); gray.delete(); edges.delete(); lines.delete();
 
-  if(diag.length<4){ toast('Poucas linhas de perspectiva detectadas — ajuste manual'); drawDetected(all,null); return; }
+  // ajusta vp de volta pra coordenadas originais
+  const vp={x:result.vp.x/scale, y:result.vp.y/scale};
+  const inl=result.inl.map(l=>({x1:l.x1/scale,y1:l.y1/scale,x2:l.x2/scale,y2:l.y2/scale}));
 
-  // RANSAC: ponto de fuga onde mais diagonais convergem
-  let best=null, bestCount=-1;
-  const tol=Math.max(6, W*0.012);
-  for(let it=0; it<400; it++){
-    const a=diag[(Math.random()*diag.length)|0], b=diag[(Math.random()*diag.length)|0];
-    if(a===b) continue;
-    const vp=intersect(a,b); if(!vp) continue;
-    if(!isFinite(vp.x)||!isFinite(vp.y)) continue;
-    if(Math.abs(vp.y)>H*4) continue;   // descarta VPs absurdos
-    let count=0;
-    for(const l of diag) if(distToLine(vp,l)<tol) count++;
-    if(count>bestCount){ bestCount=count; best=vp; }
-  }
-  if(!best || bestCount<3){ toast('Não achei convergência clara — ajuste manual'); drawDetected(all,null); return; }
-
-  // refina: média das interseções consistentes (mínimos quadrados simples)
-  const inl=diag.filter(l=>distToLine(best,l)<tol);
-  let sx=0,sy=0,n=0;
-  for(let i=0;i<inl.length;i++) for(let j=i+1;j<inl.length;j++){
-    const vp=intersect(inl[i],inl[j]);
-    if(vp&&isFinite(vp.x)&&isFinite(vp.y)&&Math.abs(vp.y)<H*4){ sx+=vp.x; sy+=vp.y; n++; }
-  }
-  if(n>0) best={x:sx/n, y:sy/n};
-
-  // Y do ponto de fuga = altura do horizonte na imagem
-  const yHorizonPx = Math.max(-H, Math.min(2*H, best.y));
-  const ndcY = 1 - 2*(yHorizonPx/H);    // topo=+1, base=-1
+  const yHorizonPx = Math.max(-bgImg.naturalHeight, Math.min(2*bgImg.naturalHeight, vp.y));
+  const ndcY = 1 - 2*(yHorizonPx/bgImg.naturalHeight);
   aimHorizonAtNDC(ndcY);
-
-  drawDetected(inl, best);
-  const pct=Math.round((yHorizonPx/H)*100);
-  toast('Perspectiva aplicada · horizonte ≈ '+pct+'% da altura ('+inl.length+' linhas)');
+  drawDetected(inl, vp, 1);
+  const pct=Math.round((yHorizonPx/bgImg.naturalHeight)*100);
+  toast('Perspectiva detectada · horizonte ≈ '+pct+'% ('+result.count+' linhas)');
 }
 
 // feedback visual: linhas detectadas (verde) + horizonte (laranja)
 let detectTimer=null;
-function drawDetected(usedLines, vp){
+function drawDetected(usedLines, vp, _scale=1){
   const r=frame.getBoundingClientRect();
   overlayCV.width=r.width; overlayCV.height=r.height;
   const sx=r.width/bgImg.naturalWidth, sy=r.height/bgImg.naturalHeight;
