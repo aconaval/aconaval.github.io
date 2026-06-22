@@ -477,43 +477,40 @@ $('exportBtn').addEventListener('click',()=>{
 // ===== DETECÇÃO DE PERSPECTIVA (OpenCV.js) =====
 let cvReady=false;
 const OPENCV_URLS=[
-  'https://docs.opencv.org/4.x/opencv.js',
   'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js',
-  'https://docs.opencv.org/4.10.0/opencv.js'
+  'https://docs.opencv.org/4.x/opencv.js',
 ];
-function loadScript(src){
+function loadOpenCV(){
+  if(cvReady) return Promise.resolve();
   return new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src=src; s.async=true;
-    s.onload=()=>res(src);
-    s.onerror=()=>rej(new Error('falha: '+src));
-    document.head.appendChild(s);
-  });
-}
-async function loadOpenCV(){
-  if(window.cv && cv.Mat){ cvReady=true; return; }
-  if(location.protocol==='file:'){
-    throw new Error('Abra a página por um servidor (http), não por file://. Veja as instruções.');
-  }
-  // tenta cada CDN em sequência até um carregar
-  let ok=false, lastErr;
-  for(const url of OPENCV_URLS){
-    try{ await loadScript(url); console.log('[opencv] carregado de',url); ok=true; break; }
-    catch(e){ console.warn('[opencv]',e.message); lastErr=e; }
-  }
-  if(!ok) throw (lastErr||new Error('nenhuma fonte respondeu'));
-  // espera o runtime WASM ficar pronto (cv.Mat disponível)
-  await new Promise((res,rej)=>{
-    const t0=Date.now();
-    (function check(){
-      if(window.cv && cv.Mat){ cvReady=true; return res(); }
-      if(window.cv instanceof Promise){ cv.then(c=>{ window.cv=c; cvReady=true; res(); }).catch(rej); return; }
-      if(window.cv && typeof cv==='object' && 'onRuntimeInitialized' in cv){
-        cv.onRuntimeInitialized=()=>{ cvReady=true; res(); }; return;
-      }
-      if(Date.now()-t0>40000) return rej(new Error('timeout ao inicializar o runtime'));
-      setTimeout(check,120);
-    })();
+    let idx=0;
+    function tryNext(){
+      if(idx>=OPENCV_URLS.length){ rej(new Error('Nenhuma fonte respondeu')); return; }
+      const url=OPENCV_URLS[idx++];
+      console.log('[opencv] tentando', url);
+      const s=document.createElement('script');
+      s.async=true;
+      s.onload=()=>{
+        // polling: espera cv.Mat ficar disponível (opencv pode demorar pra compilar WASM)
+        console.log('[opencv] script carregado, aguardando runtime...');
+        const t0=Date.now();
+        const poll=setInterval(()=>{
+          try{
+            if(typeof cv!=='undefined' && cv.Mat){
+              clearInterval(poll);
+              cvReady=true;
+              console.log('[opencv] runtime pronto em', Date.now()-t0, 'ms');
+              res();
+            }
+          }catch(e){ /* cv ainda não pronto */ }
+          if(Date.now()-t0>45000){ clearInterval(poll); rej(new Error('Timeout WASM')); }
+        },200);
+      };
+      s.onerror=()=>{ console.warn('[opencv] falhou',url); tryNext(); };
+      s.src=url;
+      document.head.appendChild(s);
+    }
+    tryNext();
   });
 }
 
