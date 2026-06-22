@@ -498,19 +498,33 @@ function loadOpenCV(){
       const s=document.createElement('script');
       s.async=true;
       s.onload=()=>{
-        // polling: espera cv.Mat ficar disponível (opencv pode demorar pra compilar WASM)
         console.log('[opencv] script carregado, aguardando runtime...');
         const t0=Date.now();
         const poll=setInterval(()=>{
           try{
-            if(typeof cv!=='undefined' && cv.Mat){
-              clearInterval(poll);
-              cvReady=true;
-              console.log('[opencv] runtime pronto em', Date.now()-t0, 'ms');
-              res();
+            if(typeof cv!=='undefined' && cv){
+              // builds novas (4.8+) expõem cv como Promise; antigas como objeto
+              if(typeof cv.then==='function'){
+                clearInterval(poll);
+                console.log('[opencv] cv é Promise, resolvendo...');
+                Promise.resolve(cv).then(real=>{
+                  window.cv = real;
+                  cvReady=true;
+                  console.log('[opencv] runtime pronto (Promise) em', Date.now()-t0, 'ms');
+                  res();
+                }).catch(err=>rej(err));
+                return;
+              }
+              if(cv.Mat){
+                clearInterval(poll);
+                cvReady=true;
+                console.log('[opencv] runtime pronto em', Date.now()-t0, 'ms');
+                res();
+                return;
+              }
             }
           }catch(e){ /* cv ainda não pronto */ }
-          if(Date.now()-t0>45000){ clearInterval(poll); rej(new Error('Timeout WASM')); }
+          if(Date.now()-t0>45000){ clearInterval(poll); rej(new Error('Timeout WASM (45s)')); }
         },200);
       };
       s.onerror=()=>{ console.warn('[opencv] falhou',url); tryNext(); };
