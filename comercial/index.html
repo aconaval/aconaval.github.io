@@ -1792,19 +1792,24 @@ function editProduto(id) {
 // com o cliente. btnEl é opcional — só usado para dar feedback visual.
 function copiarLinkProduto(id, btnEl) {
   const link = 'https://loja.contato-aconaval.workers.dev/?id=' + id;
+  const prod = produtos.find(p => p.id == id);
+  let texto = link + '\n\nClica na foto para abrir mais detalhes e verificar os valores.';
+  if (prod && prod.modelo3d) {
+    texto += '\n\n*Clique na foto e veja o projeto em 3d interativo, você pode mover, dar zoom, girar*';
+  }
   const textoOriginal = btnEl ? btnEl.innerHTML : '';
   function avisar(ok) {
-    if (!btnEl) { if(!ok) alert('Link: ' + link); return; }
+    if (!btnEl) { if(!ok) alert(texto); return; }
     btnEl.innerHTML = ok ? '✅ Copiado!' : '⚠️ Copie manualmente';
     setTimeout(() => { btnEl.innerHTML = textoOriginal; }, 1600);
   }
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(link).then(() => avisar(true)).catch(() => {
-      prompt('Copie o link abaixo (Ctrl+C):', link);
+    navigator.clipboard.writeText(texto).then(() => avisar(true)).catch(() => {
+      prompt('Copie o texto abaixo (Ctrl+C):', texto);
       avisar(false);
     });
   } else {
-    prompt('Copie o link abaixo (Ctrl+C):', link);
+    prompt('Copie o texto abaixo (Ctrl+C):', texto);
     avisar(false);
   }
 }
