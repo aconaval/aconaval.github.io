@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Compositor 3D — Aço Naval</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <style>
   :root{
     --bg:#0e1012; --panel:#16191c; --panel2:#1d2125; --line:#2a2f35;
@@ -141,8 +144,13 @@
 
       <div class="sec">
         <h2>2 · Modelo 3D (.glb)</h2>
+        <div class="urlrow" style="margin-top:0;margin-bottom:9px">
+          <input id="prodCodigo" placeholder="Código do produto (ex: FOG01)" style="text-transform:uppercase">
+          <button id="prodBtn" class="go" style="flex:none">Puxar</button>
+        </div>
+        <div id="prodInfo" style="display:none;font-size:11px;color:var(--ok);background:#16241a;border:1px solid #2f4636;border-radius:6px;padding:7px 9px;margin-bottom:9px"></div>
         <label class="file" id="glbLabel">
-          <b>Escolher arquivo</b>GLB / GLTF do produto
+          <b>Escolher arquivo</b>ou carregue um GLB do computador
           <input type="file" id="glbFile" accept=".glb,.gltf,model/gltf-binary">
         </label>
         <div class="urlrow">
@@ -356,6 +364,72 @@ $('glbFile').addEventListener('change', e=>{
 $('glbUrlBtn').addEventListener('click', ()=>{
   const u=$('glbUrl').value.trim(); if(u) loadGLB(u,false);
 });
+
+// ---- INTEGRAÇÃO COM PRODUTOS (Firebase) ----
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCdmk31BghJWGxjWwqGwNuC_LwsDXgX4JY",
+  authDomain: "orcamentos-aco-naval.firebaseapp.com",
+  projectId: "orcamentos-aco-naval",
+  storageBucket: "orcamentos-aco-naval.firebasestorage.app",
+  messagingSenderId: "802823831509",
+  appId: "1:802823831509:web:b5e575d8d5b7b62d5dc75c"
+};
+let fdb=null, _produtosCache=null;
+function initFirebase(){
+  if(fdb) return fdb;
+  try{
+    if(!window.firebase){ toast('Firebase não carregou'); return null; }
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fdb = firebase.firestore();
+    return fdb;
+  }catch(e){ console.warn('Firebase init:',e); toast('Erro ao iniciar Firebase'); return null; }
+}
+
+// carrega todos os produtos (uma vez, via índice acn/index)
+async function carregarProdutos(){
+  if(_produtosCache) return _produtosCache;
+  const db=initFirebase(); if(!db) return [];
+  const idxSnap = await db.collection('acn').doc('produtos_index').get();
+  let prods=[];
+  if(idxSnap.exists){
+    const ids = idxSnap.data().ids || [];
+    const snaps = await Promise.all(ids.map(id=>db.collection('acn_produtos').doc(String(id)).get()));
+    prods = snaps.filter(s=>s.exists).map(s=>s.data());
+  }
+  _produtosCache = prods;
+  return prods;
+}
+
+async function puxarProdutoPorCodigo(){
+  const cod = $('prodCodigo').value.trim().toUpperCase();
+  if(!cod){ toast('Digite o código do produto'); return; }
+  const info=$('prodInfo');
+  const btn=$('prodBtn');
+  btn.textContent='...'; btn.disabled=true;
+  info.style.display='block'; info.style.color='var(--mut)'; info.textContent='Buscando '+cod+'...';
+  try{
+    const prods = await carregarProdutos();
+    const p = prods.find(x=> String(x.codigo||'').toUpperCase()===cod);
+    if(!p){
+      info.style.color='#e8743b'; info.textContent='Produto '+cod+' não encontrado.';
+      btn.textContent='Puxar'; btn.disabled=false; return;
+    }
+    if(!p.modelo3d){
+      info.style.color='#e8743b'; info.textContent='"'+(p.nome||cod)+'" não tem modelo 3D cadastrado (🧊).';
+      btn.textContent='Puxar'; btn.disabled=false; return;
+    }
+    info.style.color='var(--ok)'; info.textContent='✓ '+(p.nome||cod)+' — carregando 3D...';
+    loadGLB(p.modelo3d, false);
+    $('glbLabel').querySelector('b').textContent = (p.nome||cod);
+    btn.textContent='Puxar'; btn.disabled=false;
+  }catch(e){
+    console.error(e);
+    info.style.color='#e8743b'; info.textContent='Erro ao buscar: '+e.message;
+    btn.textContent='Puxar'; btn.disabled=false;
+  }
+}
+$('prodBtn').addEventListener('click', puxarProdutoPorCodigo);
+$('prodCodigo').addEventListener('keydown', e=>{ if(e.key==='Enter') puxarProdutoPorCodigo(); });
 
 // ---- foto de fundo ----
 $('bgFile').addEventListener('change', e=>{
