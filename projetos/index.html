@@ -14,10 +14,10 @@
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
     font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     -webkit-font-smoothing:antialiased;overflow:hidden}
-  #app{display:flex;height:100vh;width:100vw}
+  #app{display:flex;height:100vh;width:100vw;overflow:hidden}
 
   /* Palco */
-  #stage{flex:1;position:relative;min-width:0;background:
+  #stage{flex:1;position:relative;min-width:0;max-width:calc(100vw - 300px);background:
     repeating-conic-gradient(#191c1f 0% 25%, #15181b 0% 50%) 50%/28px 28px;
     display:flex;align-items:center;justify-content:center;overflow:hidden}
   #frame{position:relative;box-shadow:0 0 0 1px var(--line);
@@ -600,7 +600,30 @@ self.onmessage = function(e){
     if(cnt>bestCount){ bestCount=cnt; best=vp; }
   }
 
-  if(!best||bestCount<2){ self.postMessage({ok:false,msg:'Não encontrei perspectiva clara ('+diag.length+' linhas diagonais detectadas)',lines,diag}); return; }
+  if(!best||bestCount<2){
+    // FALLBACK: sem diagonais suficientes — tenta estimar horizonte pelas linhas horizontais
+    // A junta chão-parede é a linha horizontal mais baixa e forte da cena
+    // O horizonte da câmera fica aproximadamente em 40-60% do topo até essa junta
+    const horiz = lines.filter(l=>{
+      let ang=Math.abs(Math.atan2(l.y2-l.y1,l.x2-l.x1)*180/Math.PI);
+      if(ang>90) ang=180-ang;
+      const len=Math.hypot(l.x2-l.x1,l.y2-l.y1);
+      return ang<10 && len>W*0.12;   // linhas quase horizontais e longas
+    });
+    if(horiz.length>=2){
+      // pega a linha horizontal mais baixa (junta chão-parede) e a mais alta (teto-parede)
+      horiz.sort((a,b)=>Math.max(a.y1,a.y2)-Math.max(b.y1,b.y2));
+      const floor_y = (horiz[horiz.length-1].y1 + horiz[horiz.length-1].y2)/2;
+      horiz.sort((a,b)=>Math.min(a.y1,a.y2)-Math.min(b.y1,b.y2));
+      const ceil_y  = (horiz[0].y1 + horiz[0].y2)/2;
+      // câmera a ~40% da altura do quarto → horizonte fica a 40% entre teto e chão
+      const est_y = ceil_y + (floor_y - ceil_y) * 0.42;
+      self.postMessage({ok:true, vp:{x:W/2, y:est_y}, inl:horiz, allLines:lines, count:horiz.length, fallback:true});
+    } else {
+      self.postMessage({ok:false, msg:'0 linhas de perspectiva — ajuste manual pelo slider Altura cam.', lines, diag});
+    }
+    return;
+  }
 
   // refina: média das interseções inliers
   const inl=diag.filter(l=>distToLine(best,l)<tol);
@@ -683,7 +706,10 @@ async function detectPerspective(){
   aimHorizonAtNDC(ndcY);
   drawDetected(inl, vp, 1);
   const pct=Math.round((yHorizonPx/bgImg.naturalHeight)*100);
-  toast('Perspectiva detectada · horizonte ≈ '+pct+'% ('+result.count+' linhas)');
+  const msg = result.fallback
+    ? 'Estimado por linhas horizontais · horizonte ≈ '+pct+'% — ajuste fino com Altura cam.'
+    : 'Perspectiva detectada · horizonte ≈ '+pct+'% ('+result.count+' linhas)';
+  toast(msg);
 }
 
 // feedback visual: linhas detectadas (verde) + horizonte (laranja)
