@@ -653,15 +653,45 @@ textarea{font-family:inherit}
 const MS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const CORES=['c0','c1','c2','c3','c4','c5'];
 
-/* Normaliza o campo mes: se vier como número (bug de integração com assinar.html), converte para nome */
+/* Normaliza pedidos vindos de qualquer origem (manual ou integração assinar.html).
+   Corrige mes(número->nome), ano/val/gid (string->número), meia(bool),
+   vid (string->número ou NOME->id do vendedor) e recalcula com quando ausente.
+   É isso que garante que NOVAS VENDAS apareçam para os vendedores. */
+function nomeParaVid(x){
+  const s=String(x).toLowerCase().trim();
+  const v=vs.find(v=>v.nome&&v.nome.toLowerCase().trim()===s);
+  return v?v.id:null;
+}
 function normalizarPedidos(lista){
   return (lista||[]).map(p=>{
-    if(typeof p.mes==='number'){return Object.assign({},p,{mes:MS[p.mes-1]||String(p.mes)});}
-    return p;
+    const q=Object.assign({},p);
+    // mes: número ou string-numérica -> nome em português
+    if(typeof q.mes==='number'){q.mes=MS[q.mes-1]||String(q.mes);}
+    else if(typeof q.mes==='string'&&/^\d{1,2}$/.test(q.mes.trim())){q.mes=MS[parseInt(q.mes,10)-1]||q.mes;}
+    // ano -> número
+    if(typeof q.ano==='string'&&/^\d+$/.test(q.ano.trim())){q.ano=parseInt(q.ano,10);}
+    // val -> número
+    if(typeof q.val==='string'){const n=parseFloat(q.val.replace(',','.'));if(!isNaN(n))q.val=n;}
+    // meia -> boolean
+    q.meia=(q.meia===true||q.meia==='true'||q.meia===1||q.meia==='1');
+    // gid -> número quando possível
+    if(typeof q.gid==='string'&&/^\d+$/.test(q.gid.trim())){q.gid=parseInt(q.gid,10);}
+    // vid -> id numérico do vendedor (aceita id-string ou nome do vendedor)
+    if(q.vid!=null&&typeof q.vid==='string'){
+      const t=q.vid.trim();
+      if(/^\d+$/.test(t)){q.vid=parseInt(t,10);}
+      else{const v2=nomeParaVid(t);if(v2!=null)q.vid=v2;}
+    }
+    // com: recalcula se ausente/ inválido (integração pode não enviar)
+    const v=vs.find(x=>x.id===q.vid);
+    if(v&&(q.com==null||isNaN(Number(q.com)))){
+      q.com=parseFloat((Number(q.val)*v.perc/100*(q.meia?0.5:1)).toFixed(2));
+    }
+    return q;
   });
 }
 const HEXCORES=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75'];
-let vs=[],ps=[],ads=[],prods=[],anus=[],sts={},bonus=[],ta=null;
+let vs=[],ps=[],ads=[],prods=[],anus=[],sts={},bonus=[],transfs=[],ta=null;
 
 // ===== FIREBASE CONFIG =====
 const firebaseConfig = {
@@ -695,7 +725,7 @@ db.ref('.info/connected').on('value', snap => {
 });
 
 function salvar() {
-  const dados = {vs, ps, ads, prods, anus, sts, bonus};
+  const dados = {vs, ps, ads, prods, anus, sts, bonus, transfs};
   REF.set(dados)
     .then(() => {
       const si = document.getElementById('save-info');
@@ -735,6 +765,7 @@ function carregar() {
         anus = d.anus || [];
         sts = d.sts || {};
         bonus = d.bonus || [];
+        transfs = d.transfs || [];
       } else {
         // Tenta recuperar do localStorage se Firebase estiver vazio
         try {
@@ -780,6 +811,7 @@ function carregar() {
     anus = d.anus || [];
     sts = d.sts || {};
     bonus = d.bonus || [];
+    transfs = d.transfs || [];
     renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
     if (document.getElementById('page-entregas').classList.contains('active')) renderEntregas();
     if (document.getElementById('page-pedidos').classList.contains('active')) renderPedidos();
@@ -1150,6 +1182,113 @@ function renderTabs(){
 }
 function setTab(id){ta=id;renderTabs();}
 
+/* ========== SALDO / TRANSFERÊNCIA ENTRE MESES ========== */
+function proximoMes(mes,ano){
+  const i=MS.indexOf(mes);
+  if(i<0)return {mes,ano};
+  return i===11?{mes:MS[0],ano:ano+1}:{mes:MS[i+1],ano};
+}
+function mesAnterior(mes,ano){
+  const i=MS.indexOf(mes);
+  if(i<0)return {mes,ano};
+  return i===0?{mes:MS[11],ano:ano-1}:{mes:MS[i-1],ano};
+}
+/* Soma de saldos que ENTRAM neste mês (transferidos de meses anteriores) */
+function saldoTransferidoEntra(vid,mes,ano){
+  return transfs.filter(t=>t.vid===vid&&t.dMes===mes&&t.dAno===ano).reduce((s,t)=>s+t.val,0);
+}
+/* Registro de saldo que SAI deste mês (foi transferido p/ o seguinte), ou null */
+function transferenciaSaida(vid,mes,ano){
+  return transfs.find(t=>t.vid===vid&&t.oMes===mes&&t.oAno===ano)||null;
+}
+/* Saldo líquido do mês = comissão + bônus − adiantamentos + saldo que entrou */
+function calcSaldoMes(vid,mes,ano){
+  const cm=ps.filter(p=>p.vid===vid&&p.mes===mes&&p.ano===ano).reduce((s,p)=>s+(Number(p.com)||0),0);
+  const bm=bonus.filter(b=>b.vid===vid&&b.mes===mes&&b.ano===ano).reduce((s,b)=>s+(Number(b.val)||0),0);
+  const am=ads.filter(a=>a.vid===vid&&a.mes===mes&&a.ano===ano).reduce((s,a)=>s+(Number(a.val)||0),0);
+  return cm+bm-am+saldoTransferidoEntra(vid,mes,ano);
+}
+function transferirSaldo(vid){
+  const f=document.getElementById('f-mes').value;
+  if(!f){alert('Selecione um MÊS específico no filtro para transferir o saldo.');return;}
+  const fMes=f.split('_')[0],fAno=parseInt(f.split('_')[1]);
+  if(transferenciaSaida(vid,fMes,fAno)){alert('O saldo deste mês já foi transferido.');return;}
+  const net=calcSaldoMes(vid,fMes,fAno);
+  if(Math.abs(net)<0.005){alert('O saldo deste mês já está zerado. Nada a transferir.');return;}
+  const prox=proximoMes(fMes,fAno);
+  const tipo=net>=0?('crédito de '+fmt(net)+' a receber'):('débito de '+fmt(Math.abs(net))+' (vendedor deve)');
+  if(!confirm('Transferir o '+tipo+'\nde '+fMes+'/'+fAno+' para '+prox.mes+'/'+prox.ano+'?\n\nO saldo de '+fMes+' ficará ZERADO e aparecerá como extrato em '+prox.mes+'.'))return;
+  transfs.push({id:Date.now(),vid,oMes:fMes,oAno:fAno,dMes:prox.mes,dAno:prox.ano,val:parseFloat(net.toFixed(2)),ts:new Date().toISOString()});
+  salvar();renderRel();
+}
+function desfazerTransferencia(vid){
+  const f=document.getElementById('f-mes').value;
+  const fMes=f.split('_')[0],fAno=parseInt(f.split('_')[1]);
+  const t=transferenciaSaida(vid,fMes,fAno);
+  if(!t)return;
+  if(!confirm('Desfazer a transferência de saldo de '+fMes+'/'+fAno+' p/ '+t.dMes+'/'+t.dAno+'?'))return;
+  transfs=transfs.filter(x=>x.id!==t.id);
+  salvar();renderRel();
+}
+/* Linha do quadro de saldo (rótulo já carrega o sinal; valor sempre em módulo) */
+function linhaSaldo(label,val,cor,italic){
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'+(italic?';font-style:italic':'')+'">'
+    +'<span style="font-size:13px;color:'+cor+'">'+label+'</span>'
+    +'<span style="font-weight:600;color:'+cor+'">'+fmt(Math.abs(val))+'</span></div>';
+}
+/* Monta o quadro de saldo (com botão transferir quando um mês está filtrado) */
+function buildSaldoBox(v,f,tc,tb,ta2){
+  const baseLiq=tc+tb-ta2;
+  if(!f){
+    if(tb<=0&&ta2<=0)return '';
+    let h='<div style="background:#EAF3DE;border-radius:8px;padding:14px 18px;margin-top:14px">';
+    h+=linhaSaldo('Comissão pedidos',tc,'#666');
+    if(tb>0)h+=linhaSaldo('+ Bônus números',tb,'#534AB7');
+    if(ta2>0)h+=linhaSaldo('− Adiantamentos',ta2,'#854F0B');
+    h+='<div style="border-top:1px solid #c5e0ab;padding-top:10px;display:flex;justify-content:space-between;align-items:center">';
+    h+='<span style="font-size:14px;color:#3B6D11;font-weight:700">💰 A PAGAR (LÍQUIDO)</span>';
+    h+='<span style="font-size:22px;font-weight:700;color:#3B6D11">'+fmt(baseLiq)+'</span></div></div>';
+    return h;
+  }
+  const fMes=f.split('_')[0],fAno=parseInt(f.split('_')[1]);
+  const entra=saldoTransferidoEntra(v.id,fMes,fAno);
+  const saida=transferenciaSaida(v.id,fMes,fAno);
+  const net=baseLiq+entra;
+  const ant=mesAnterior(fMes,fAno),prox=proximoMes(fMes,fAno);
+  const saldoFinal=saida?(net-saida.val):net;
+  const pos=net>=0;
+  const cor=saida?'#888':(pos?'#3B6D11':'#A32D2D');
+  const bg=saida?'#f5f7fa':(pos?'#EAF3DE':'#FCEBEB');
+  const bd=saida?'#e0e4e8':(pos?'#c5e0ab':'#f0b4b4');
+  let h='<div style="background:'+bg+';border:1px solid '+bd+';border-radius:8px;padding:14px 18px;margin-top:14px">';
+  h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+cor+';margin-bottom:10px">Saldo de '+fMes+' '+fAno+'</div>';
+  h+=linhaSaldo('Comissão pedidos',tc,'#666');
+  if(tb>0)h+=linhaSaldo('+ Bônus números',tb,'#534AB7');
+  if(ta2>0)h+=linhaSaldo('− Adiantamentos',ta2,'#854F0B');
+  if(Math.abs(entra)>0.005)h+=linhaSaldo((entra>=0?'+ ':'− ')+'Saldo transferido de '+ant.mes+' '+ant.ano,entra,entra>=0?'#1D7A53':'#A32D2D',true);
+  if(saida)h+=linhaSaldo('→ Transferido p/ '+saida.dMes+' '+saida.dAno,saida.val,'#185FA5',true);
+  h+='<div style="border-top:1px solid '+bd+';padding-top:10px;margin-top:4px;display:flex;justify-content:space-between;align-items:center">';
+  if(saida){
+    h+='<span style="font-size:13px;color:#888;font-weight:700">SALDO DO MÊS</span>';
+    h+='<span style="font-size:20px;font-weight:800;color:#888">'+fmt(saldoFinal)+'</span></div>';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap">';
+    h+='<span style="font-size:12px;color:#185FA5;font-weight:600">✓ Saldo transferido p/ '+saida.dMes+' '+saida.dAno+'</span>';
+    h+='<button class="btn" style="font-size:11px;padding:5px 12px" onclick="desfazerTransferencia('+v.id+')">↩︎ Desfazer</button></div>';
+  }else{
+    const lbl=pos?'💰 A PAGAR (saldo positivo)':'⚠️ VENDEDOR DEVE (saldo negativo)';
+    h+='<span style="font-size:14px;color:'+cor+';font-weight:700">'+lbl+'</span>';
+    h+='<span style="font-size:22px;font-weight:800;color:'+cor+'">'+fmt(Math.abs(net))+'</span></div>';
+    if(Math.abs(net)>0.005){
+      h+='<div style="margin-top:12px;text-align:right">';
+      h+='<button class="btn btn-primary" style="font-size:12px;padding:7px 14px" onclick="transferirSaldo('+v.id+')">↪︎ Transferir saldo p/ '+prox.mes+' '+prox.ano+'</button></div>';
+    }else{
+      h+='<div style="margin-top:8px;font-size:11px;color:#888">Saldo zerado — nada a transferir.</div>';
+    }
+  }
+  h+='</div>';
+  return h;
+}
+
 /* ========== RELATÓRIO VENDEDOR ========== */
 function renderRel(){
   const el=document.getElementById('rel');
@@ -1179,7 +1318,16 @@ function renderRel(){
   h+='<div class="metric azul"><div class="val">'+fmt(tc)+'</div><div class="lbl">Comissão pedidos</div></div>';
   if(tb>0){h+='<div class="metric roxo"><div class="val">'+fmt(tb)+'</div><div class="lbl">Bônus números</div></div>';}
   if(ta2>0){h+='<div class="metric laranja"><div class="val">'+fmt(ta2)+'</div><div class="lbl">Adiantamentos</div></div>';}
-  if(tb>0||ta2>0){h+='<div class="metric verde"><div class="val">'+fmt(tl)+'</div><div class="lbl">A pagar (líquido)</div></div>';}
+  if(f){
+    const _fm=f.split('_')[0],_fa=parseInt(f.split('_')[1]);
+    const _entra=saldoTransferidoEntra(v.id,_fm,_fa);
+    const _saida=transferenciaSaida(v.id,_fm,_fa);
+    let _net=tl+_entra; if(_saida)_net=_net-_saida.val;
+    const _neg=_net<-0.005;
+    h+='<div class="metric'+(_neg?'':' verde')+'"'+(_neg?' style="border-left:3px solid #A32D2D"':'')+'><div class="val"'+(_neg?' style="color:#A32D2D"':'')+'>'+fmt(_net)+'</div><div class="lbl">Saldo do mês</div></div>';
+  } else if(tb>0||ta2>0){
+    h+='<div class="metric verde"><div class="val">'+fmt(tl)+'</div><div class="lbl">A pagar (líquido)</div></div>';
+  }
   h+='</div>';
 
   if(!unique.length){h+='<p class="empty">Nenhum pedido neste filtro.</p>';}
@@ -1233,18 +1381,7 @@ function renderRel(){
     h+='</tbody></table>';
   }
 
-  if(tb>0||ta2>0){
-    h+='<div style="background:#EAF3DE;border-radius:8px;padding:14px 18px;margin-top:14px">';
-    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-    h+='<span style="font-size:13px;color:#666">Comissão pedidos</span><span style="font-weight:600">'+fmt(tc)+'</span></div>';
-    if(tb>0){h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-    h+='<span style="font-size:13px;color:#666">+ Bônus números</span><span style="font-weight:600;color:#534AB7">'+fmt(tb)+'</span></div>';}
-    if(ta2>0){h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-    h+='<span style="font-size:13px;color:#666">− Adiantamentos</span><span style="font-weight:600;color:#854F0B">'+fmt(ta2)+'</span></div>';}
-    h+='<div style="border-top:1px solid #c5e0ab;padding-top:10px;display:flex;justify-content:space-between;align-items:center">';
-    h+='<span style="font-size:14px;color:#3B6D11;font-weight:700">💰 A PAGAR (LÍQUIDO)</span>';
-    h+='<span style="font-size:22px;font-weight:700;color:#3B6D11">'+fmt(tl)+'</span></div></div>';
-  }
+  h+=buildSaldoBox(v,f,tc,tb,ta2);
   el.innerHTML=h+'</div>';
   applyCardLabels('rel');
 }
@@ -1299,14 +1436,24 @@ function pdfVendedor(vid){
     adtR+='</tbody></table>';
   }
 
-  const resumoLiquido=(tb>0||ta2>0)?
-    '<div style="background:#EAF3DE;border-radius:8px;padding:14px 18px;margin-top:20px">'
+  // Saldo + transferências (quando um mês específico está filtrado)
+  const _fmP=f?f.split('_')[0]:null,_faP=f?parseInt(f.split('_')[1]):null;
+  const _entraP=f?saldoTransferidoEntra(vid,_fmP,_faP):0;
+  const _saidaP=f?transferenciaSaida(vid,_fmP,_faP):null;
+  const _netP=tl+_entraP;
+  const _saldoFinalP=_saidaP?(_netP-_saidaP.val):_netP;
+  const _temTransf=f&&(Math.abs(_entraP)>0.005||_saidaP);
+  const _antP=f?mesAnterior(_fmP,_faP):null;
+  const resumoLiquido=(tb>0||ta2>0||_temTransf)?
+    '<div style="background:'+(_saldoFinalP>=0?'#EAF3DE':'#FCEBEB')+';border-radius:8px;padding:14px 18px;margin-top:20px">'
     +'<table style="margin:0"><tbody>'
     +'<tr><td style="color:#666;border:none;padding:4px 0">Comissão pedidos</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600">'+fmt(tc)+'</td></tr>'
     +(tb>0?'<tr><td style="color:#534AB7;border:none;padding:4px 0">+ Bônus números</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600;color:#534AB7">'+fmt(tb)+'</td></tr>':'')
     +(ta2>0?'<tr><td style="color:#854F0B;border:none;padding:4px 0">− Adiantamentos</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600;color:#854F0B">'+fmt(ta2)+'</td></tr>':'')
-    +'<tr style="border-top:1px solid #c5e0ab"><td style="font-weight:700;color:#3B6D11;font-size:14px;border:none;padding:10px 0 4px">💰 A PAGAR (LÍQUIDO)</td>'
-    +'<td style="text-align:right;font-weight:700;color:#3B6D11;font-size:18px;border:none;padding:10px 0 4px">'+fmt(tl)+'</td></tr>'
+    +(Math.abs(_entraP)>0.005?'<tr><td style="color:'+(_entraP>=0?'#1D7A53':'#A32D2D')+';border:none;padding:4px 0">'+(_entraP>=0?'+':'−')+' Saldo transferido de '+_antP.mes+' '+_antP.ano+'</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600;color:'+(_entraP>=0?'#1D7A53':'#A32D2D')+'">'+fmt(Math.abs(_entraP))+'</td></tr>':'')
+    +(_saidaP?'<tr><td style="color:#185FA5;border:none;padding:4px 0">→ Transferido p/ '+_saidaP.dMes+' '+_saidaP.dAno+'</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600;color:#185FA5">'+fmt(Math.abs(_saidaP.val))+'</td></tr>':'')
+    +'<tr style="border-top:1px solid #c5e0ab"><td style="font-weight:700;color:'+(_saldoFinalP>=0?'#3B6D11':'#A32D2D')+';font-size:14px;border:none;padding:10px 0 4px">'+(_saidaP?'SALDO DO MÊS':(_saldoFinalP>=0?'💰 A PAGAR (LÍQUIDO)':'⚠️ VENDEDOR DEVE'))+'</td>'
+    +'<td style="text-align:right;font-weight:700;color:'+(_saldoFinalP>=0?'#3B6D11':'#A32D2D')+';font-size:18px;border:none;padding:10px 0 4px">'+fmt(Math.abs(_saldoFinalP))+'</td></tr>'
     +'</tbody></table></div>':'';
 
   const w=window.open('','_blank');
@@ -1510,7 +1657,7 @@ function pdfEntregas(){
 
 /* ========== BACKUP ========== */
 function exportarBackup(){
-  const d={vs,ps,ads,prods,anus,sts,data:new Date().toISOString()};
+  const d={vs,ps,ads,prods,anus,sts,bonus,transfs,data:new Date().toISOString()};
   const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);
   a.download='backup_aco_naval_'+new Date().toISOString().split('T')[0]+'.json';a.click();
@@ -1523,7 +1670,7 @@ function importarBackup(e){
     if(!confirm('Substituir dados atuais?'))return;
     vs=d.vs||d.vendedores||[];ps=normalizarPedidos(d.ps||d.pedidos);
     ads=d.ads||d.adiantamentos||[];prods=d.prods||d.produtos||[];
-    anus=d.anus||d.anuncios||[];sts=d.sts||{};bonus=d.bonus||[];
+    anus=d.anus||d.anuncios||[];sts=d.sts||{};bonus=d.bonus||[];transfs=d.transfs||[];
     salvar();renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();
     alert('Backup importado!');
   }catch(err){alert('Erro: '+err.message);}};
@@ -1532,7 +1679,7 @@ function importarBackup(e){
 function limparTudo(){
   if(!confirm('Apagar TODOS os dados?'))return;
   if(!confirm('Confirma? Não pode ser desfeito.'))return;
-  vs=[];ps=[];ads=[];prods=[];anus=[];sts={};ta=null;
+  vs=[];ps=[];ads=[];prods=[];anus=[];sts={};bonus=[];transfs=[];ta=null;
   ['vs','ps','ads','prods','anus','sts'].forEach(k=>localStorage.removeItem('an_'+k));
   renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();
   alert('Dados apagados.');
