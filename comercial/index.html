@@ -4148,8 +4148,23 @@ function updateBadgePedidos(){
 }
 
 // ── SHOW PEDIDO (preview modal) ───────────────────────────────────
-function showPedido(id){
+// A imagem da assinatura não fica mais embutida no doc 'pedidos' (estourava o
+// limite de 1MB do Firestore) — ela vive na coleção acn_assinaturas, com id do
+// doc = id do pedido. Antes de gerar qualquer HTML/PDF, reidrata p.assinatura.imagem.
+// Idempotente: só busca se houver assinatura e a imagem ainda não estiver em memória.
+async function hidratarAssinaturaPedido(p){
+  if (!p || !p.assinatura || p.assinatura.imagem) return;
+  try {
+    const snap = await db.collection('acn_assinaturas').doc(String(p.id)).get();
+    if (snap.exists && snap.data().imagem) p.assinatura.imagem = snap.data().imagem;
+  } catch(e){
+    console.warn('Não foi possível carregar a imagem da assinatura do pedido', p.id, e);
+  }
+}
+
+async function showPedido(id){
   const p=pedidos.find(x=>x.id==id); if(!p) return;
+  await hidratarAssinaturaPedido(p);
   currentPedido=p;
   // Renderiza o MESMO HTML do PDF dentro do modal via iframe
   const printHTML = getHTMLPed(p);
@@ -4608,6 +4623,7 @@ function verBackupLocal() {
 async function baixarPDF(tipo, btn) {
   const o = tipo === 'orc' ? currentOrcamento : currentPedido;
   if (!o) return;
+  if (tipo !== 'orc') await hidratarAssinaturaPedido(o);
   const origText = btn.innerHTML;
   btn.innerHTML = '⏳ Gerando...'; btn.disabled = true;
 
@@ -4833,6 +4849,7 @@ async function baixarPDF(tipo, btn) {
 async function baixarProjeto(tipo, btn) {
   const o = tipo === 'orc' ? currentOrcamento : currentPedido;
   if (!o) return;
+  if (tipo !== 'orc') await hidratarAssinaturaPedido(o);
   const origText = btn.innerHTML;
   btn.innerHTML = '⏳ Gerando...'; btn.disabled = true;
 
