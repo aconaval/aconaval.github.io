@@ -1178,10 +1178,10 @@ async function save() {
 async function loadFromFirebase() {
   setStatus('⏳ Carregando…');
   try {
-    const [idxSnap, orcSnap, pedSnap, cfgSnap] = await Promise.all([
+    const [idxSnap, orcSnap, pedColSnap, cfgSnap] = await Promise.all([
       db.collection('acn').doc('produtos_index').get(),
       db.collection('acn').doc('orcamentos').get(),
-      db.collection('acn').doc('pedidos').get(),
+      db.collection('acn_pedidos').get(),
       db.collection('acn').doc('config').get()
     ]);
 
@@ -1220,7 +1220,28 @@ async function loadFromFirebase() {
       console.log(`🧹 ${antes - orcamentos.length} orçamento(s) expirado(s) removido(s).`);
       await db.collection('acn').doc('orcamentos').set({ lista: orcamentos });
     }
-    if (pedSnap.exists) pedidos = pedSnap.data().lista || [];
+    // Carrega pedidos de acn_pedidos/{id} (formato novo — doc individual por pedido).
+    // Se a coleção estiver vazia, tenta migrar do formato antigo acn/pedidos.
+    if (!pedColSnap.empty) {
+      pedidos = pedColSnap.docs.map(d => d.data());
+    } else {
+      const oldPedSnap = await db.collection('acn').doc('pedidos').get();
+      if (oldPedSnap.exists && (oldPedSnap.data().lista || []).length) {
+        pedidos = oldPedSnap.data().lista || [];
+        console.log(`📦 Migrando ${pedidos.length} pedido(s) para documentos individuais (acn_pedidos)…`);
+        // Migra cada pedido para acn_pedidos/{id} em lotes de 500
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < pedidos.length; i += BATCH_SIZE) {
+          const batch = db.batch();
+          pedidos.slice(i, i + BATCH_SIZE).forEach(p => {
+            const doc = { ...p, items: (p.items||[]).map(it=>{const x={...it};delete x.foto;return x;}) };
+            batch.set(db.collection('acn_pedidos').doc(String(p.id)), doc);
+          });
+          await batch.commit();
+        }
+        console.log('✅ Migração de pedidos concluída.');
+      }
+    }
     if (cfgSnap.exists) {
       filtrosDef = cfgSnap.data().filtrosDef || {};
       if (Array.isArray(filtrosDef)) filtrosDef = {}; // migração do formato antigo
@@ -3716,8 +3737,8 @@ function restorePrazoEntrega(val) {
 // inteira de uma vez (sobrescrevendo o documento).
 async function refreshPedidosFresh() {
   try {
-    const snap = await db.collection('acn').doc('pedidos').get();
-    const remota = (snap.exists && snap.data().lista) ? snap.data().lista : [];
+    const snap = await db.collection('acn_pedidos').get();
+    const remota = snap.docs.map(d => d.data());
     const mapa = {};
     pedidos.forEach(p => { mapa[p.id] = p; });
     remota.forEach(p => { mapa[p.id] = p; }); // versão do servidor é a mais confiável
@@ -4039,7 +4060,9 @@ async function gerarPedido() {
     const pedido = { id: Date.now(), ...dadosPedido, criadoEm: new Date().toISOString() };
     pedidos.push(pedido);
     updateBadgePedidos();
-    savePedidos().catch(e => console.warn('Save:', e));
+    if (btnGerar) { btnGerar.disabled = true; btnGerar.textContent = '💾 Salvando…'; }
+    await savePedidos().catch(e => console.warn('Save:', e));
+    if (btnGerar) { btnGerar.disabled = false; btnGerar.textContent = txtBtnOriginal; }
     showPedido(pedido.id);
   }
 }
@@ -4056,14 +4079,19 @@ async function savePedidos() {
   }
   try {
     setPS('💾 Salvando pedido…');
-    // Remove fotos dos itens antes de salvar (evita estouro de 1MB no Firestore)
-    const pedidosSemFoto = pedidos.map(p => ({
-      ...p,
-      items: (p.items || []).map(it => { const i = {...it}; delete i.foto; return i; })
-    }));
-    await db.collection('acn').doc('pedidos').set({lista: pedidosSemFoto});
+    // Salva cada pedido como documento individual em acn_pedidos/{id}.
+    // Isso elimina o limite de 1MB do formato antigo (lista única em acn/pedidos).
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < pedidos.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      pedidos.slice(i, i + BATCH_SIZE).forEach(p => {
+        const doc = { ...p, items: (p.items||[]).map(it=>{const x={...it};delete x.foto;return x;}) };
+        batch.set(db.collection('acn_pedidos').doc(String(p.id)), doc);
+      });
+      await batch.commit();
+    }
     // Backup local sempre que salvar com sucesso
-    try { localStorage.setItem('acn_pedidos_backup', JSON.stringify({ts: Date.now(), lista: pedidosSemFoto})); } catch(e){}
+    try { localStorage.setItem('acn_pedidos_backup', JSON.stringify({ts: Date.now(), lista: pedidos})); } catch(e){}
     setPS('✅ Pedido salvo!', 'ok');
   } catch(e) {
     console.error('Erro ao salvar pedido:', e);
@@ -4138,10 +4166,12 @@ function renderListaPedidos(){
   ).join('');
 }
 function deletePedido(id){
-  showConfirm('Excluir Pedido','Deseja excluir este pedido permanentemente?', () => {
+  showConfirm('Excluir Pedido','Deseja excluir este pedido permanentemente?', async () => {
     pedidos = pedidos.filter(p => String(p.id) !== String(id));
     renderListaPedidos();
     updateBadgePedidos();
+    // Apaga o documento individual (novo formato) e atualiza os demais
+    try { await db.collection('acn_pedidos').doc(String(id)).delete(); } catch(e) { console.warn('Delete doc pedido:', e); }
     savePedidos().catch(e => console.warn('Save error:', e));
   });
 }
