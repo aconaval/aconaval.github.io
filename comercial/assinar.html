@@ -236,6 +236,7 @@
           <div class="pay-cell">
             <div class="pay-type">💰 À Vista PIX</div>
             <div class="pay-value green" id="p-pix">—</div>
+            <div class="pay-sub" id="p-avista-parc" style="display:none"></div>
             <div class="pay-sub">contato.aconaval@gmail.com</div>
           </div>
         </div>
@@ -422,11 +423,10 @@ async function carregarPedido() {
       });
     }
 
-    const snap = await db.collection('acn').doc('pedidos').get();
-    if (!snap.exists) { showScreen('erro'); return; }
-    const lista = snap.data().lista || [];
-    const p = lista.find(x => String(x.id) === String(pedidoId) || String(x.num) === String(pedidoId));
-    if (!p) { showScreen('erro'); return; }
+    // Lê o pedido diretamente do doc individual (novo formato acn_pedidos/{id}).
+    const pedSnap = await db.collection('acn_pedidos').doc(String(pedidoId)).get();
+    if (!pedSnap.exists) { showScreen('erro'); return; }
+    const p = pedSnap.data();
     pedidoAtual = p;
 
     // Carrega as fotos REAIS do projeto (acn_prod_fotos) de cada item, não a foto genérica do produto
@@ -493,13 +493,26 @@ function renderPedido(p) {
   // Financeiro — usa p.total (já com desconto) se existir
   const totalPag = (p.total != null ? p.total : p.subtotal) || 0;
   const avista = p.avistaVal != null ? p.avistaVal : totalPag * 0.90;
-  const parc = Math.ceil(totalPag/12*100)/100;
+  const _parcN = p.parcelas || 12;
+  const parc = Math.ceil(totalPag / _parcN * 100) / 100;
   document.getElementById('p-subtotal').textContent = fmtBRL(p.subtotal||0);
   document.getElementById('p-total').textContent = fmtBRL(totalPag);
   document.getElementById('p-avista').textContent = `À vista: ${fmtBRL(avista)}`;
   document.getElementById('p-cartao').textContent = fmtBRL(totalPag);
-  document.getElementById('p-parcela').textContent = `Até 12x de ${fmtBRL(parc)}`;
+  document.getElementById('p-parcela').textContent = `Até ${_parcN}x de ${fmtBRL(parc)}`;
   document.getElementById('p-pix').textContent = fmtBRL(avista);
+  // Opção parcelada do à vista (avistaparc)
+  const _avistaParc = parseInt(p.avistaparc) || 0;
+  const elAvistaParc = document.getElementById('p-avista-parc');
+  if (elAvistaParc) {
+    if (_avistaParc > 0) {
+      const parcAvistaVal = Math.ceil(avista / _avistaParc * 100) / 100;
+      elAvistaParc.textContent = `ou em ${_avistaParc}x de ${fmtBRL(parcAvistaVal)} sem juros`;
+      elAvistaParc.style.display = '';
+    } else {
+      elAvistaParc.style.display = 'none';
+    }
+  }
 
   if (p.prazo) {
     document.getElementById('p-prazo').textContent = p.prazo;
@@ -644,15 +657,7 @@ async function confirmarPedido() {
     const signImg = canvas.toDataURL('image/png');
     const dataAssinatura = new Date().toISOString();
 
-    const snap = await db.collection('acn').doc('pedidos').get();
-    if (!snap.exists) throw new Error('Pedido não encontrado');
-
-    const lista = snap.data().lista||[];
-    const idx = lista.findIndex(x => String(x.id) === String(pedidoAtual.id));
-    if (idx < 0) throw new Error('Pedido não encontrado');
-
-    // Imagem fica em coleção separada (1 doc por pedido) — não embutir no doc 'pedidos',
-    // que acumula TODOS os pedidos num só documento e estoura o limite de 1MB do Firestore
+    // Salva imagem da assinatura em coleção separada (não embutir no doc do pedido)
     await db.collection('acn_assinaturas').doc(String(pedidoAtual.id)).set({
       pedidoId: pedidoAtual.id,
       nome,
@@ -660,15 +665,11 @@ async function confirmarPedido() {
       data: dataAssinatura
     });
 
-    lista[idx].assinatura = {
-      nome,
-      data: dataAssinatura,
-      ip: 'cliente'
-      // imagem NÃO fica mais aqui — ver coleção acn_assinaturas (doc id = id do pedido)
-    };
-    lista[idx].status = 'assinado';
-
-    await db.collection('acn').doc('pedidos').set({lista});
+    // Atualiza o documento individual do pedido (novo formato acn_pedidos/{id})
+    await db.collection('acn_pedidos').doc(String(pedidoAtual.id)).update({
+      assinatura: { nome, data: dataAssinatura, ip: 'cliente' },
+      status: 'assinado'
+    });
 
     // Envia automaticamente para o sistema de gestão
     await enviarParaGestao(pedidoAtual, nome);
