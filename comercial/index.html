@@ -1967,6 +1967,27 @@ let filtroCategoria = '';
 function setFiltroCategoria(cat) { filtroCategoria = cat; filtrosAtivos={}; renderProdutos(); }
 function setFiltroAtivo(nome, val) { filtrosAtivos[nome] = val; renderProdutos(); }
 
+// Copia o link público da categoria (catálogo do site) para a área de transferência.
+// "Todos" / categoria vazia copia o catálogo completo (sem ?cat=).
+// Usa encodeURIComponent para categorias com espaço/acento (ex.: ÁREA GOURMET SOB MEDIDA),
+// que o site decodifica de volta ao nome exato via URLSearchParams.
+function copiarLinkCategoria(cat) {
+  const base = 'https://www.aconaval.com/';
+  const link = cat ? base + '?cat=' + encodeURIComponent(cat) : base;
+  const ok = () => setStatus(cat ? `✅ Link de "${cat}" copiado!` : '✅ Link do catálogo copiado!', 'ok');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(ok).catch(() => prompt('Copie o link (Ctrl+C):', link));
+  } else {
+    prompt('Copie o link (Ctrl+C):', link);
+  }
+}
+
+// Clique no chip de categoria: filtra a lista (comportamento atual) E já copia o link público.
+function selecionarCategoria(cat) {
+  copiarLinkCategoria(cat);
+  setFiltroCategoria(cat);
+}
+
 // Utilitário: slug para IDs de input
 function slugify(s){ return s.toLowerCase().replace(/[^a-z0-9]/g,'-'); }
 
@@ -2173,8 +2194,8 @@ function renderProdutos() {
   /* ── Chips de categoria ── */
   const cats = [...new Set(produtos.map(p=>p.cat).filter(Boolean))];
   const cf = document.getElementById('cat-filters');
-  cf.innerHTML = `<button class="cat-chip${!filtroCategoria?' active':''}" onclick="setFiltroCategoria('')">Todos</button>`
-    + cats.map(c=>`<button class="cat-chip${filtroCategoria===c?' active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${c}</button>`).join('');
+  cf.innerHTML = `<button class="cat-chip${!filtroCategoria?' active':''}" onclick="selecionarCategoria('')" title="Clique para filtrar e copiar o link do catálogo">Todos</button>`
+    + cats.map(c=>`<button class="cat-chip${filtroCategoria===c?' active':''}" onclick="selecionarCategoria('${c.replace(/'/g,"\\'")}')" title="Clique para filtrar e copiar o link desta categoria">${c}</button>`).join('');
 
   /* ── Lista filtrada por categoria (variações ficam aninhadas, fora do topo) ── */
   const busca = (document.getElementById('prod-search')?.value||'').toLowerCase();
