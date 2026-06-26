@@ -577,78 +577,141 @@ $('exportBtn').addEventListener('click',()=>{
   toast('Composição exportada');
 });
 
-// ===== DETECÇÃO DE PERSPECTIVA (Worker puro JS — sem dependências) =====
-let CV=null; // não usamos mais, mas mantemos a variável pra não quebrar refs
+// ===== DETECÇÃO DE PERSPECTIVA (Worker puro JS — Hough orientado pelo gradiente) =====
+let CV=null; // legado — não usado mais
 
 // Worker inline — roda em thread separada, não trava a UI
 const WORKER_CODE = `
 self.onmessage = function(e){
-  const {pixels, W, H} = e.data;
+  // pixels chega como ArrayBuffer transferível — precisa envelopar num typed array!
+  const px = new Uint8ClampedArray(e.data.pixels);
+  const W = e.data.W, H = e.data.H, N = W*H;
 
   // --- Grayscale ---
-  const gray = new Float32Array(W*H);
-  for(let i=0;i<W*H;i++) gray[i] = 0.299*pixels[i*4] + 0.587*pixels[i*4+1] + 0.114*pixels[i*4+2];
+  const gray = new Float32Array(N);
+  for(let i=0;i<N;i++) gray[i] = 0.299*px[i*4] + 0.587*px[i*4+1] + 0.114*px[i*4+2];
 
-  // --- Sobel edge ---
-  const edge = new Float32Array(W*H);
+  // --- Blur 3x3 (reduz ruído, melhora linhas) ---
+  const blur = Float32Array.from(gray);
   for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
-    const g=(r,c)=>gray[(y+r)*W+(x+c)];
-    const gx = -g(-1,-1)+g(-1,1) - 2*g(0,-1)+2*g(0,1) - g(1,-1)+g(1,1);
-    const gy = -g(-1,-1)-2*g(-1,0)-g(-1,1) + g(1,-1)+2*g(1,0)+g(1,1);
-    edge[y*W+x] = Math.sqrt(gx*gx+gy*gy);
+    let s=0; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) s+=gray[(y+dy)*W+(x+dx)];
+    blur[y*W+x]=s/9;
   }
 
-  // threshold adaptivo: top 15% dos pixels de borda (mais permissivo)
-  const sorted = Float32Array.from(edge).sort();
-  const thresh = sorted[Math.floor(sorted.length*0.85)] || 15;
-
-  // --- Hough probabilístico simplificado ---
-  const lines = [];
-  const used = new Uint8Array(W*H);
-  const pts = [];
-  for(let y=2;y<H-2;y++) for(let x=2;x<W-2;x++){
-    if(edge[y*W+x]>thresh) pts.push([x,y]);
+  // --- Sobel: gx, gy, magnitude ---
+  const gx=new Float32Array(N), gy=new Float32Array(N), mag=new Float32Array(N);
+  let mMax=0;
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    const g=(r,c)=>blur[(y+r)*W+(x+c)];
+    const sx = -g(-1,-1)+g(-1,1) -2*g(0,-1)+2*g(0,1) -g(1,-1)+g(1,1);
+    const sy = -g(-1,-1)-2*g(-1,0)-g(-1,1) + g(1,-1)+2*g(1,0)+g(1,1);
+    const i=y*W+x; gx[i]=sx; gy[i]=sy; const m=Math.hypot(sx,sy); mag[i]=m; if(m>mMax)mMax=m;
   }
-  // embaralha
-  for(let i=pts.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [pts[i],pts[j]]=[pts[j],pts[i]]; }
 
-  const minLen = Math.max(20, Math.min(W,H)*0.03);   // segmentos menores aceitáveis
-  const maxGap = 20;
-  const maxLines = 500;
+  // --- threshold adaptivo (percentil ~80 via amostragem) ---
+  const sample=[]; const stepS=Math.max(1,(N/40000)|0);
+  for(let i=0;i<N;i+=stepS) sample.push(mag[i]);
+  sample.sort((a,b)=>a-b);
+  const thresh = Math.max(14, sample[(sample.length*0.80)|0] || 20);
 
-  for(let k=0;k<Math.min(pts.length,8000)&&lines.length<maxLines;k++){
-    const [x0,y0]=pts[k];
-    if(used[y0*W+x0]) continue;
-    // sorteia 2o ponto vizinho na direção do gradiente
-    for(let tries=0;tries<6;tries++){
-      const dx=(Math.random()*2-1), dy=(Math.random()*2-1);
-      const len2=dx*dx+dy*dy; if(len2<0.01) continue;
-      // escaneia ao longo da direção
-      let ex=x0,ey=y0,gapCount=0;
-      const seg=[[x0,y0]];
-      for(let s=1;s<Math.min(W,H)*0.5;s++){
-        const nx=Math.round(x0+dx/Math.sqrt(len2)*s), ny=Math.round(y0+dy/Math.sqrt(len2)*s);
-        if(nx<0||nx>=W||ny<0||ny>=H) break;
-        if(edge[ny*W+nx]>thresh){ seg.push([nx,ny]); ex=nx; ey=ny; gapCount=0; }
-        else if(++gapCount>maxGap) break;
-      }
-      const segLen=Math.hypot(ex-x0,ey-y0);
-      if(segLen>=minLen){
-        lines.push({x1:x0,y1:y0,x2:ex,y2:ey});
-        for(const [px,py] of seg) used[py*W+px]=1;
-        break;
-      }
+  // --- Hough orientado pelo gradiente ---
+  // Cada borda vota só num leque estreito de ângulos (perpendicular ao gradiente).
+  const D=Math.ceil(Math.hypot(W,H)), NT=180, NR=2*D+1;
+  const acc=new Float32Array(NT*NR);
+  const COS=new Float32Array(NT), SIN=new Float32Array(NT);
+  for(let t=0;t<NT;t++){ const a=t*Math.PI/180; COS[t]=Math.cos(a); SIN[t]=Math.sin(a); }
+  let gMax=0;
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    const i=y*W+x; const m=mag[i]; if(m<=thresh) continue;
+    let t0=Math.round(Math.atan2(gy[i],gx[i])*180/Math.PI); t0=((t0%180)+180)%180;
+    for(let dt=-2;dt<=2;dt++){
+      const t=((t0+dt)%180+180)%180;
+      const rho=Math.round(x*COS[t]+y*SIN[t])+D;
+      if(rho>=0&&rho<NR){ const idx=t*NR+rho; acc[idx]+=m; if(acc[idx]>gMax)gMax=acc[idx]; }
     }
   }
 
-  // --- filtra diagonais de perspectiva (5° < ângulo < 85°) ---
-  const diag = lines.filter(l=>{
-    let ang=Math.abs(Math.atan2(l.y2-l.y1,l.x2-l.x1)*180/Math.PI);
-    if(ang>90) ang=180-ang;
-    return ang>5 && ang<85;
-  });
+  // --- picos do acumulador (com supressão de não-máximos) ---
+  const peakThr=thresh*Math.max(28,Math.min(W,H)*0.07)*0.8;
+  const cands=[];
+  for(let t=0;t<NT;t++) for(let r=0;r<NR;r++){ const v=acc[t*NR+r]; if(v>=peakThr) cands.push([v,t,r]); }
+  cands.sort((a,b)=>b[0]-a[0]);
+  const peaks=[];
+  for(const [v,t,r] of cands){
+    if(peaks.length>=180) break;
+    let near=false;
+    for(const p of peaks){ let dt=Math.abs(p[1]-t); dt=Math.min(dt,180-dt); if(dt<=3 && Math.abs(p[2]-r)<=16){ near=true; break; } }
+    if(!near) peaks.push([v,t,r]);
+  }
 
-  // --- interseção de 2 linhas ---
+  const minLen=Math.max(28, Math.min(W,H)*0.07);
+
+  // recorta a reta (t,rho) ao retângulo da imagem
+  function clip(c,s,rho){
+    const pts=[]; const add=(x,y)=>{ if(x>=-1&&x<=W+1&&y>=-1&&y<=H+1) pts.push([x,y]); };
+    if(Math.abs(s)>1e-6){ add(0,rho/s); add(W-1,(rho-(W-1)*c)/s); }
+    if(Math.abs(c)>1e-6){ add(rho/c,0); add((rho-(H-1)*s)/c,H-1); }
+    if(pts.length<2) return null;
+    let best=null,bd=-1;
+    for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
+      const d=Math.hypot(pts[i][0]-pts[j][0],pts[i][1]-pts[j][1]);
+      if(d>bd){ bd=d; best=[pts[i],pts[j]]; }
+    }
+    return best;
+  }
+  // apara o segmento ao trecho realmente apoiado por bordas
+  function trim(seg){
+    const a=seg[0], b=seg[1];
+    const L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<2) return null;
+    const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, pxn=-uy, pyn=ux;
+    let first=-1,last=-1,sup=0; const steps=Math.ceil(L);
+    for(let k=0;k<=steps;k++){
+      const x=a[0]+ux*k, y=a[1]+uy*k; let ok=false;
+      for(let p=-2;p<=2&&!ok;p++){
+        const xx=Math.round(x+pxn*p), yy=Math.round(y+pyn*p);
+        if(xx<0||xx>=W||yy<0||yy>=H) continue;
+        if(mag[yy*W+xx]>thresh) ok=true;
+      }
+      if(ok){ if(first<0)first=k; last=k; sup++; }
+    }
+    if(first<0) return null;
+    const segLen=last-first;
+    if(segLen<minLen) return null;
+    if(sup/(segLen+1) < 0.30) return null;
+    return {x1:a[0]+ux*first, y1:a[1]+uy*first, x2:a[0]+ux*last, y2:a[1]+uy*last, len:segLen};
+  }
+
+  const rawLines=[];
+  for(const [v,t,r] of peaks){
+    const seg=clip(COS[t],SIN[t],r-D); if(!seg) continue;
+    const tr=trim(seg); if(tr) rawLines.push(tr);
+  }
+
+  // --- deduplica linhas quase coincidentes (mesmo ângulo + mesma posição) ---
+  function angOf(l){ return Math.atan2(l.y2-l.y1,l.x2-l.x1); }
+  function midDist(l,m){
+    const mx=(m.x1+m.x2)/2, my=(m.y1+m.y2)/2, dx=l.x2-l.x1, dy=l.y2-l.y1, len=Math.hypot(dx,dy)||1;
+    return Math.abs(dx*(l.y1-my)-dy*(l.x1-mx))/len;
+  }
+  rawLines.sort((a,b)=>b.len-a.len);
+  const lines=[];
+  const dupTol=Math.max(6, Math.min(W,H)*0.012);
+  for(const l of rawLines){
+    let dup=false;
+    for(const k of lines){
+      let da=Math.abs(angOf(l)-angOf(k)); if(da>Math.PI)da=2*Math.PI-da; da=Math.min(da,Math.PI-da);
+      if(da<4*Math.PI/180 && midDist(k,l)<dupTol){ dup=true; break; }
+    }
+    if(!dup) lines.push(l);
+  }
+
+  // --- classifica por ângulo da imagem ---
+  function imgAng(l){ let a=Math.abs(Math.atan2(l.y2-l.y1,l.x2-l.x1)*180/Math.PI); if(a>90)a=180-a; return a; }
+  let diag = lines.filter(l=>{ const a=imgAng(l); return a>8 && a<82; });
+  const horiz = lines.filter(l=>imgAng(l)<8);
+  // mantém só as diagonais mais longas (estabilidade + velocidade)
+  diag.sort((a,b)=>b.len-a.len); if(diag.length>90) diag=diag.slice(0,90);
+
   function intersect(a,b){
     const A=[a.y1-a.y2, a.x2-a.x1, a.x1*a.y2-a.x2*a.y1];
     const B=[b.y1-b.y2, b.x2-b.x1, b.x1*b.y2-b.x2*b.y1];
@@ -656,59 +719,66 @@ self.onmessage = function(e){
     if(Math.abs(w)<1e-6) return null;
     return {x:x/w, y:y/w};
   }
+
+  // --- ponto de fuga via RANSAC ---
+  // Todo VP de direção horizontal cai SOBRE a linha do horizonte, então o Y do
+  // melhor VP já é o horizonte — vale para perspectiva de 1 ponto e de 2 pontos.
   function distToLine(p,l){
     const dx=l.x2-l.x1, dy=l.y2-l.y1, len=Math.hypot(dx,dy)||1;
     return Math.abs(dx*(l.y1-p.y)-dy*(l.x1-p.x))/len;
   }
-
-  // --- RANSAC ponto de fuga ---
-  const tol = Math.max(8, Math.min(W,H)*0.015);
-  let best=null, bestCount=0;
-  const iters = Math.min(600, diag.length*(diag.length-1)/2);
-  for(let it=0;it<iters;it++){
-    const a=diag[(Math.random()*diag.length)|0], b=diag[(Math.random()*diag.length)|0];
-    if(a===b) continue;
-    const vp=intersect(a,b); if(!vp||!isFinite(vp.x)||!isFinite(vp.y)) continue;
-    if(Math.abs(vp.y)>H*4) continue;
-    let cnt=0; for(const l of diag) if(distToLine(vp,l)<tol) cnt++;
-    if(cnt>bestCount){ bestCount=cnt; best=vp; }
+  if(diag.length>=3){
+    const tol=Math.max(8, Math.min(W,H)*0.02);
+    let best=null, bestCount=0, bestW=0;
+    const pairs=diag.length*(diag.length-1)/2;
+    const iters=Math.min(1500, Math.max(pairs, 120));
+    for(let it=0;it<iters;it++){
+      const a=diag[(Math.random()*diag.length)|0], b=diag[(Math.random()*diag.length)|0];
+      if(a===b) continue;
+      const ai=Math.atan2(a.y2-a.y1,a.x2-a.x1), aj=Math.atan2(b.y2-b.y1,b.x2-b.x1);
+      let dd=Math.abs(ai-aj); if(dd>Math.PI)dd=2*Math.PI-dd; dd=Math.min(dd,Math.PI-dd);
+      if(dd<5*Math.PI/180) continue; // quase paralelas -> interseção instável
+      const vp=intersect(a,b); if(!vp||!isFinite(vp.x)||!isFinite(vp.y)) continue;
+      if(Math.abs(vp.y)>2*H) continue;
+      let cnt=0, wsum=0;
+      for(const l of diag) if(distToLine(vp,l)<tol){ cnt++; wsum+=l.len; }
+      if(cnt>bestCount || (cnt===bestCount && wsum>bestW)){ bestCount=cnt; bestW=wsum; best={x:vp.x,y:vp.y}; }
+    }
+    if(best && bestCount>=3){
+      const inl=diag.filter(l=>distToLine(best,l)<tol);
+      // refino por mínimos-quadrados ponderados: VP que minimiza dist às retas inliers
+      let Sxx=0,Sxy=0,Syy=0,bx=0,by=0;
+      for(const l of inl){
+        const dx=l.x2-l.x1, dy=l.y2-l.y1, len=Math.hypot(dx,dy)||1;
+        const nx=dy/len, ny=-dx/len, c=nx*l.x1+ny*l.y1, w=l.len;
+        Sxx+=w*nx*nx; Sxy+=w*nx*ny; Syy+=w*ny*ny; bx+=w*c*nx; by+=w*c*ny;
+      }
+      const det=Sxx*Syy-Sxy*Sxy;
+      if(Math.abs(det)>1e-6){ best.x=(Syy*bx-Sxy*by)/det; best.y=(Sxx*by-Sxy*bx)/det; }
+      self.postMessage({ok:true, vp:{x:best.x, y:best.y}, inl, allLines:lines, count:inl.length, fallback:false});
+      return;
+    }
   }
 
-  if(!best||bestCount<2){
-    // FALLBACK: sem diagonais suficientes — tenta estimar horizonte pelas linhas horizontais
-    // A junta chão-parede é a linha horizontal mais baixa e forte da cena
-    // O horizonte da câmera fica aproximadamente em 40-60% do topo até essa junta
-    const horiz = lines.filter(l=>{
-      let ang=Math.abs(Math.atan2(l.y2-l.y1,l.x2-l.x1)*180/Math.PI);
-      if(ang>90) ang=180-ang;
-      const len=Math.hypot(l.x2-l.x1,l.y2-l.y1);
-      return ang<10 && len>W*0.12;   // linhas quase horizontais e longas
-    });
-    if(horiz.length>=2){
-      // pega a linha horizontal mais baixa (junta chão-parede) e a mais alta (teto-parede)
-      horiz.sort((a,b)=>Math.max(a.y1,a.y2)-Math.max(b.y1,b.y2));
-      const floor_y = (horiz[horiz.length-1].y1 + horiz[horiz.length-1].y2)/2;
-      horiz.sort((a,b)=>Math.min(a.y1,a.y2)-Math.min(b.y1,b.y2));
-      const ceil_y  = (horiz[0].y1 + horiz[0].y2)/2;
-      // câmera a ~40% da altura do quarto → horizonte fica a 40% entre teto e chão
-      const est_y = ceil_y + (floor_y - ceil_y) * 0.42;
-      self.postMessage({ok:true, vp:{x:W/2, y:est_y}, inl:horiz, allLines:lines, count:horiz.length, fallback:true});
-    } else {
-      self.postMessage({ok:false, msg:'0 linhas de perspectiva — ajuste manual pelo slider Altura cam.', lines, diag});
-    }
+  // --- FALLBACK 1: linhas horizontais fortes (junta chão-parede / horizonte de cena) ---
+  const hz = horiz.filter(l=>l.len>W*0.10);
+  if(hz.length>=2){
+    hz.sort((a,b)=>Math.max(a.y1,a.y2)-Math.max(b.y1,b.y2));
+    const floor_y=(hz[hz.length-1].y1+hz[hz.length-1].y2)/2;
+    hz.sort((a,b)=>Math.min(a.y1,a.y2)-Math.min(b.y1,b.y2));
+    const ceil_y=(hz[0].y1+hz[0].y2)/2;
+    const est_y=ceil_y+(floor_y-ceil_y)*0.42;
+    self.postMessage({ok:true, vp:{x:W/2, y:est_y}, inl:hz, allLines:lines, count:hz.length, fallback:'horiz'});
+    return;
+  }
+  if(hz.length===1){
+    const y=(hz[0].y1+hz[0].y2)/2;
+    self.postMessage({ok:true, vp:{x:W/2, y:y}, inl:hz, allLines:lines, count:1, fallback:'horiz1'});
     return;
   }
 
-  // refina: média das interseções inliers
-  const inl=diag.filter(l=>distToLine(best,l)<tol);
-  let sx=0,sy=0,n=0;
-  for(let i=0;i<inl.length;i++) for(let j=i+1;j<inl.length;j++){
-    const vp=intersect(inl[i],inl[j]);
-    if(vp&&isFinite(vp.x)&&isFinite(vp.y)&&Math.abs(vp.y)<H*4){ sx+=vp.x; sy+=vp.y; n++; }
-  }
-  if(n>0) best={x:sx/n, y:sy/n};
-
-  self.postMessage({ok:true, vp:best, inl, allLines:lines, count:inl.length});
+  // --- FALLBACK 2: pouca estrutura -> horizonte no centro, ajuste fino manual ---
+  self.postMessage({ok:true, vp:{x:W/2, y:H*0.5}, inl:[], allLines:lines, count:lines.length, fallback:'center'});
 };
 `;
 
@@ -720,21 +790,27 @@ function getWorker(){
   return _worker;
 }
 
-// projeta um ponto no infinito horizontal e retorna seu Y em NDC (-1..1)
+// Y (NDC -1..1) do HORIZONTE real: projeta um ponto no infinito na direção
+// horizontal que a câmera olha (componente Y zerada). Corrige o bug do eixo óptico.
 function horizonNDC(){
   camera.updateMatrixWorld();
-  const far=new THREE.Vector3(0,0,-99999).applyMatrix4(camera.matrixWorld);
+  const fwd=new THREE.Vector3(); camera.getWorldDirection(fwd);
+  const horiz=new THREE.Vector3(fwd.x,0,fwd.z);
+  if(horiz.lengthSq()<1e-9) horiz.set(0,0,-1);
+  horiz.normalize();
+  const pos=new THREE.Vector3(); camera.getWorldPosition(pos);
+  const far=pos.clone().addScaledVector(horiz,1e6);
   far.project(camera);
   return far.y;
 }
-// move a câmera (via target.y) até o horizonte 3D bater no Y desejado (NDC)
+// inclina a câmera (via target.y) até o horizonte 3D bater no Y desejado (NDC)
 function aimHorizonAtNDC(targetY){
-  const lo0=-30, hi0=30;
+  const lo0=-40, hi0=40;
   orbit.target.y=lo0; orbit.update(); const yLo=horizonNDC();
   orbit.target.y=hi0; orbit.update(); const yHi=horizonNDC();
   const increasing = yHi>yLo;
   let lo=lo0, hi=hi0;
-  for(let i=0;i<46;i++){
+  for(let i=0;i<48;i++){
     const mid=(lo+hi)/2;
     orbit.target.y=mid; orbit.update();
     const cur=horizonNDC();
@@ -748,18 +824,20 @@ async function detectPerspective(){
   const btn=$('autoBtn');
   btn.textContent='⏳ Analisando foto...'; btn.disabled=true;
 
-  // extrai pixels da foto num canvas (reduzido pra velocidade)
-  const MAX=900;
+  // extrai pixels da foto (reduzido pra velocidade)
+  const MAX=820;
   const scale=Math.min(1, MAX/Math.max(bgImg.naturalWidth,bgImg.naturalHeight));
   const W=Math.round(bgImg.naturalWidth*scale), H=Math.round(bgImg.naturalHeight*scale);
   const c=document.createElement('canvas'); c.width=W; c.height=H;
-  c.getContext('2d').drawImage(bgImg,0,0,W,H);
-  const pixels=c.getContext('2d').getImageData(0,0,W,H).data;
+  const cx2=c.getContext('2d',{willReadFrequently:true});
+  cx2.drawImage(bgImg,0,0,W,H);
+  const pixels=cx2.getImageData(0,0,W,H).data; // Uint8ClampedArray
 
   const result = await new Promise(res=>{
     const w=getWorker();
     w.onmessage=e=>res(e.data);
     w.onerror=e=>res({ok:false,msg:'Erro no worker: '+e.message});
+    // envia o ArrayBuffer como transferível (rápido); o worker reembrulha em typed array
     w.postMessage({pixels:pixels.buffer, W, H},[pixels.buffer]);
   });
 
@@ -771,18 +849,22 @@ async function detectPerspective(){
     return;
   }
 
-  // ajusta vp de volta pra coordenadas originais
-  const vp={x:result.vp.x/scale, y:result.vp.y/scale};
-  const inl=result.inl.map(l=>({x1:l.x1/scale,y1:l.y1/scale,x2:l.x2/scale,y2:l.y2/scale}));
+  // volta vp e linhas pra coordenadas originais da foto
+  const inv=1/scale;
+  const vp={x:result.vp.x*inv, y:result.vp.y*inv};
+  const inl=(result.inl||[]).map(l=>({x1:l.x1*inv,y1:l.y1*inv,x2:l.x2*inv,y2:l.y2*inv}));
 
   const yHorizonPx = Math.max(-bgImg.naturalHeight, Math.min(2*bgImg.naturalHeight, vp.y));
   const ndcY = 1 - 2*(yHorizonPx/bgImg.naturalHeight);
   aimHorizonAtNDC(ndcY);
-  drawDetected(inl, vp, 1);
+  drawDetected(inl, {x:vp.x, y:yHorizonPx}, 1);
+
   const pct=Math.round((yHorizonPx/bgImg.naturalHeight)*100);
-  const msg = result.fallback
-    ? 'Estimado por linhas horizontais · horizonte ≈ '+pct+'% — ajuste fino com Altura cam.'
-    : 'Perspectiva detectada · horizonte ≈ '+pct+'% ('+result.count+' linhas)';
+  let msg;
+  if(result.fallback==='center')      msg='Pouca perspectiva na foto · horizonte no centro — ajuste fino com Altura cam.';
+  else if(result.fallback==='horiz' || result.fallback==='horiz1')
+                                      msg='Estimado por linhas horizontais · horizonte ≈ '+pct+'% — confira com a linha laranja';
+  else                                 msg='Perspectiva detectada · horizonte ≈ '+pct+'% ('+result.count+' cruzamentos)';
   toast(msg);
 }
 
