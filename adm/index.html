@@ -1030,6 +1030,13 @@ function cancelUnique(){
   return ps.filter(p=>p.cancelado&&p.tipo!=='estorno').filter(p=>{if(visto[p.gid])return false;visto[p.gid]=true;return true;})
     .sort((a,b)=>parseInt(b.num)-parseInt(a.num));
 }
+/* Estorno da comissão = valor do pedido × % atual do vendedor × fator (½ se meia).
+   Calculado pela porcentagem (não pelo com gravado), p/ refletir sempre a % do pedido. */
+function comEstornoPedido(p){
+  const vv=vs.find(x=>x.id===p.vid);
+  const fator=p.meia?0.5:1;
+  return vv?parseFloat((Number(p.val)*vv.perc/100*fator).toFixed(2)):(Number(p.com)||0);
+}
 function cancelarPedido(gidArg){
   const gid=(gidArg!=null)?gidArg:parseInt(document.getElementById('ep-gid').value);
   const regs=ps.filter(p=>p.gid===gid&&!p.cancelado&&p.tipo!=='estorno');
@@ -1037,7 +1044,7 @@ function cancelarPedido(gidArg){
   const num=regs[0].num,cid=regs[0].cid,uf=regs[0].uf;
   const hj=new Date();
   const cMes=MS[hj.getMonth()],cAno=hj.getFullYear();
-  const totalCom=regs.reduce((s,p)=>s+(Number(p.com)||0),0);
+  const totalCom=regs.reduce((s,p)=>s+comEstornoPedido(p),0);
   if(!confirm('Cancelar o pedido Nº '+num+' ('+cid+'/'+uf+')?\n\n'
     +'• Será ARQUIVADO: sai da contabilidade anual, das entregas e do faturamento do mês original.\n'
     +'• Será lançado um ESTORNO de comissão de '+fmt(totalCom)+' no mês atual ('+cMes+' '+cAno+') para o(s) vendedor(es).\n'
@@ -1047,9 +1054,10 @@ function cancelarPedido(gidArg){
   regs.forEach((p,i)=>{
     p.cancelado=true;p.cancEm=hj.toISOString();p.cancMes=cMes;p.cancAno=cAno;
     const eid='est'+stamp+'_'+i;
+    const vv=vs.find(x=>x.id===p.vid);
     ps.push({id:eid,gid:eid,tipo:'estorno',vid:p.vid,num:p.num,cancGid:gid,
-      prod:p.prod,cid:p.cid,uf:p.uf,val:0,meia:false,
-      com:-(Number(p.com)||0),mes:cMes,ano:cAno,
+      prod:p.prod,cid:p.cid,uf:p.uf,val:0,valOrig:Number(p.val)||0,perc:vv?vv.perc:null,meia:p.meia,
+      com:-comEstornoPedido(p),mes:cMes,ano:cAno,
       obs:'Cancelamento do pedido '+p.num});
   });
   if(sts[String(gid)])delete sts[String(gid)];

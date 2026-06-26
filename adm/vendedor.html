@@ -199,6 +199,13 @@ function mesAnterior(mes,ano){const i=MS.indexOf(mes);if(i<0)return {mes,ano};re
 function saldoTransferidoEntra(mes,ano){return transfs.filter(t=>t.dMes===mes&&t.dAno===ano).reduce((s,t)=>s+t.val,0);}
 function transferenciaSaida(mes,ano){return transfs.find(t=>t.oMes===mes&&t.oAno===ano)||null;}
 
+/* Estorno da comissão recalculado pela % atual do vendedor (igual à regra dos pedidos).
+   Usa valOrig do pedido cancelado; cai p/ o com gravado se valOrig não existir. */
+function comDoEstorno(e){
+  const fator=e.meia?0.5:1;
+  if(e.valOrig!=null&&vendedor)return -parseFloat((Number(e.valOrig)*vendedor.perc/100*fator).toFixed(2));
+  return -Math.abs(Number(e.com)||0);
+}
 function saudacao(){
   const h=new Date().getHours();
   if(h>=5&&h<12)return'Bom dia,';
@@ -278,7 +285,7 @@ function renderConteudo(){
   let mest=f?estornos.filter(e=>ck(e.mes,e.ano)===f):estornos;
 
   const tcPed=mps.reduce((s,p)=>s+parseFloat((p.val*vendedor.perc/100*(p.meia?0.5:1)).toFixed(2)),0);
-  const test=mest.reduce((s,e)=>s+(Number(e.com)||0),0);
+  const test=mest.reduce((s,e)=>s+comDoEstorno(e),0);
   const tc=tcPed+test;
   const tb=mbs.reduce((s,b)=>s+b.val,0);
   const tv=mps.reduce((s,p)=>s+p.val,0);
@@ -385,7 +392,7 @@ function renderConteudo(){
     mest.forEach(e=>{
       ex+='<div class="item-row">';
       ex+='<div class="desc">Cancelamento do pedido <strong>'+e.num+'</strong>'+(e.cid?' <span style="font-size:11px;color:#888">('+e.cid+'/'+e.uf+')</span>':'')+'</div>';
-      ex+='<div class="val vermelho">'+fmt(e.com)+'</div>';
+      ex+='<div class="val vermelho">'+fmt(comDoEstorno(e))+'</div>';
       ex+='</div>';
     });
     ex+='<div class="item-row"><div class="desc" style="font-weight:700">Total estornos</div><div class="val vermelho">'+fmt(test)+'</div></div>';
