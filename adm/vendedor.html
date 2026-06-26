@@ -88,6 +88,10 @@ tr:last-child td{border-bottom:none}
 .item-row .val{font-weight:700;flex-shrink:0;margin-left:10px}
 .item-row .val.roxo{color:#534AB7}
 .item-row .val.laranja{color:#854F0B}
+.item-row .val.vermelho{color:#A32D2D}
+.est-card{background:#FCEBEB;border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.est-card .titulo{font-size:12px;color:#A32D2D;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.3px}
+.resumo-linha.vermelho{color:#A32D2D}
 
 /* LOADING/ERRO */
 .loading{text-align:center;padding:80px 20px;color:#666}
@@ -163,7 +167,7 @@ const fmt=v=>'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,max
 const ck=(m,a)=>m+'_'+a;
 const ord=c=>{const p=c.split('_');return parseInt(p[1])*100+MS.indexOf(p[0]);};
 
-let vendedor=null,pedidos=[],adiantamentos=[],produtos=[],bonusLista=[],transfs=[];
+let vendedor=null,pedidos=[],adiantamentos=[],produtos=[],bonusLista=[],transfs=[],estornos=[];
 
 /* Normaliza pedidos vindos de qualquer origem (manual ou integração assinar.html).
    Garante que NOVAS VENDAS apareçam: mes(número->nome), ano/val/gid normalizados,
@@ -223,10 +227,15 @@ if(!nomeUrl){
     const visto={};
     pedidos=todosPs.filter(p=>{
       if(p.vid!==vendedor.id)return false;
+      if(p.cancelado)return false;        /* pedido arquivado: fora da contabilidade/vendas */
+      if(p.tipo==='estorno')return false; /* estornos vão para lista separada */
       if(visto[p.gid])return false;
       visto[p.gid]=true;
       return true;
     }).sort((a,b)=>parseInt(b.num)-parseInt(a.num));
+
+    estornos=todosPs.filter(p=>p.vid===vendedor.id&&p.tipo==='estorno')
+      .sort((a,b)=>parseInt(b.num)-parseInt(a.num));
 
     adiantamentos=(d.ads||[]).filter(a=>a.vid===vendedor.id);
     bonusLista=(d.bonus||[]).filter(b=>b.vid===vendedor.id);
@@ -237,6 +246,7 @@ if(!nomeUrl){
     pedidos.forEach(p=>{const c=ck(p.mes,p.ano);if(ks.indexOf(c)<0)ks.push(c);});
     adiantamentos.forEach(a=>{const c=ck(a.mes,a.ano);if(ks.indexOf(c)<0)ks.push(c);});
     bonusLista.forEach(b=>{const c=ck(b.mes,b.ano);if(ks.indexOf(c)<0)ks.push(c);});
+    estornos.forEach(e=>{const c=ck(e.mes,e.ano);if(ks.indexOf(c)<0)ks.push(c);});
     ks.sort((x,y)=>ord(y)-ord(x));
     const sel=document.getElementById('f-mes');
     ks.forEach(c=>{const p=c.split('_');const o=document.createElement('option');o.value=c;o.textContent=p[0]+' '+p[1];sel.appendChild(o);});
@@ -265,8 +275,11 @@ function renderConteudo(){
   let mps=f?pedidos.filter(p=>ck(p.mes,p.ano)===f):pedidos;
   let mas=f?adiantamentos.filter(a=>ck(a.mes,a.ano)===f):adiantamentos;
   let mbs=f?bonusLista.filter(b=>ck(b.mes,b.ano)===f):bonusLista;
+  let mest=f?estornos.filter(e=>ck(e.mes,e.ano)===f):estornos;
 
-  const tc=mps.reduce((s,p)=>s+parseFloat((p.val*vendedor.perc/100*(p.meia?0.5:1)).toFixed(2)),0);
+  const tcPed=mps.reduce((s,p)=>s+parseFloat((p.val*vendedor.perc/100*(p.meia?0.5:1)).toFixed(2)),0);
+  const test=mest.reduce((s,e)=>s+(Number(e.com)||0),0);
+  const tc=tcPed+test;
   const tb=mbs.reduce((s,b)=>s+b.val,0);
   const tv=mps.reduce((s,p)=>s+p.val,0);
   const ta=mas.reduce((s,a)=>s+a.val,0);
@@ -284,13 +297,14 @@ function renderConteudo(){
   // Métricas
   let mh='';
   mh+='<div class="metric"><div class="val">'+mps.length+'</div><div class="lbl">Pedidos</div></div>';
-  mh+='<div class="metric azul"><div class="val">'+fmt(tc)+'</div><div class="lbl">Comissão ('+vendedor.perc+'%)</div></div>';
+  mh+='<div class="metric azul"><div class="val">'+fmt(tcPed)+'</div><div class="lbl">Comissão ('+vendedor.perc+'%)</div></div>';
+  if(test<-0.005){mh+='<div class="metric" style="background:#FCEBEB"><div class="val" style="color:#A32D2D">'+fmt(test)+'</div><div class="lbl">Estornos (cancel.)</div></div>';}
   if(tb>0){mh+='<div class="metric roxo" style="background:#F5F3FF"><div class="val" style="color:#534AB7">'+fmt(tb)+'</div><div class="lbl">Bônus números</div></div>';}
   if(ta>0){mh+='<div class="metric laranja" style="background:#FFF4E0"><div class="val">'+fmt(ta)+'</div><div class="lbl">Adiantamentos</div></div>';}
-  if(f&&(temTransf||tb>0||ta>0)){
+  if(f&&(temTransf||tb>0||ta>0||test<-0.005)){
     const neg=saldoFinal<-0.005;
     mh+='<div class="metric verde full"'+(neg?' style="background:#FCEBEB"':'')+'><div class="val"'+(neg?' style="color:#A32D2D"':'')+'>'+fmt(saldoFinal)+'</div><div class="lbl">'+(saida?'Saldo do mês (transferido)':(neg?'⚠️ Saldo negativo':'💰 A receber (líquido)'))+'</div></div>';
-  } else if(tb>0||ta>0){
+  } else if(tb>0||ta>0||test<-0.005){
     mh+='<div class="metric verde full"><div class="val">'+fmt(tl)+'</div><div class="lbl">💰 A receber (líquido)</div></div>';
   }
   document.getElementById('metrics-wrap').innerHTML=mh;
@@ -365,10 +379,24 @@ function renderConteudo(){
     ex+='</div>';
   }
 
-  if(tb>0||ta>0||temTransf){
+  if(mest.length>0){
+    ex+='<div class="est-card">';
+    ex+='<div class="titulo">🚫 Cancelamentos (estornos)</div>';
+    mest.forEach(e=>{
+      ex+='<div class="item-row">';
+      ex+='<div class="desc">Cancelamento do pedido <strong>'+e.num+'</strong>'+(e.cid?' <span style="font-size:11px;color:#888">('+e.cid+'/'+e.uf+')</span>':'')+'</div>';
+      ex+='<div class="val vermelho">'+fmt(e.com)+'</div>';
+      ex+='</div>';
+    });
+    ex+='<div class="item-row"><div class="desc" style="font-weight:700">Total estornos</div><div class="val vermelho">'+fmt(test)+'</div></div>';
+    ex+='</div>';
+  }
+
+  if(tb>0||ta>0||temTransf||test<-0.005){
     const neg=saldoFinal<-0.005;
     ex+='<div class="resumo-liq"'+(neg?' style="background:#FCEBEB"':'')+'>';
-    ex+='<div class="resumo-linha">Comissão pedidos <span>'+fmt(tc)+'</span></div>';
+    ex+='<div class="resumo-linha">Comissão pedidos <span>'+fmt(tcPed)+'</span></div>';
+    if(test<-0.005){ex+='<div class="resumo-linha vermelho">− Cancelamentos (estornos) <span>'+fmt(Math.abs(test))+'</span></div>';}
     if(tb>0){ex+='<div class="resumo-linha roxo">+ Bônus números <span>'+fmt(tb)+'</span></div>';}
     if(ta>0){ex+='<div class="resumo-linha laranja">− Adiantamentos <span>'+fmt(ta)+'</span></div>';}
     if(Math.abs(entra)>0.005){ex+='<div class="resumo-linha" style="color:'+(entra>=0?'#1D7A53':'#A32D2D')+'">'+(entra>=0?'+':'−')+' Saldo transferido de '+ant.mes+' '+ant.ano+' <span>'+fmt(Math.abs(entra))+'</span></div>';}

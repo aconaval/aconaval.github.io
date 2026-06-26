@@ -445,6 +445,7 @@ textarea{font-family:inherit}
           <select id="ped-f-prod" onchange="renderPedidos()" style="width:auto;padding:6px 10px;font-size:13px">
             <option value="">Todos os produtos</option>
           </select>
+          <button id="btn-cancelados" class="btn" onclick="toggleCancelados()" style="width:auto;padding:6px 12px;font-size:13px;border-color:#A32D2D;color:#A32D2D">🗄️ <span id="btn-cancelados-txt">Cancelados</span> (<span id="canc-count">0</span>)</button>
         </div>
       </div>
       <div style="position:relative;margin-bottom:14px">
@@ -458,6 +459,7 @@ textarea{font-family:inherit}
           style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;cursor:pointer;color:#aaa;padding:2px 6px">✕</button>
       </div>
       <div id="lista-pedidos-gestao"><p class="empty">Nenhum pedido lançado.</p></div>
+      <div id="lista-cancelados" style="display:none;margin-top:18px;border-top:1px dashed #e0c4c4;padding-top:14px"></div>
     </div>
   </div>
 
@@ -642,7 +644,15 @@ textarea{font-family:inherit}
 
     <div style="display:flex;gap:10px;margin-top:20px">
       <button class="btn btn-primary" style="flex:1;font-size:15px;padding:12px" onclick="salvarEditPedido()">✅ Salvar alterações</button>
-      <button class="btn btn-danger" style="flex:1;font-size:15px;padding:12px" onclick="fecharEditPedido()">Cancelar</button>
+      <button class="btn" style="flex:1;font-size:15px;padding:12px" onclick="fecharEditPedido()">Fechar</button>
+    </div>
+
+    <div style="margin-top:18px;border-top:1px dashed #e0c4c4;padding-top:14px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#A32D2D;margin-bottom:8px">Cancelar pedido</div>
+      <p style="font-size:12px;color:#777;margin:0 0 10px;line-height:1.5">
+        O pedido é <strong>arquivado</strong> (sai da contabilidade anual, das entregas e do faturamento do mês original) e um <strong>estorno de comissão</strong> é lançado no <strong>mês atual</strong> para o(s) vendedor(es). O valor de vendas do mês não muda — apenas a comissão. Pode ser desfeito em "🗄️ Cancelados".
+      </p>
+      <button class="btn btn-danger" style="width:100%;font-size:14px;padding:11px" onclick="cancelarPedido()">🚫 Cancelar este pedido (estorno)</button>
     </div>
   </div>
 
@@ -1006,8 +1016,93 @@ function renderSel(){
 */
 function uniquePedidos(lista){
   const visto={};
-  const uniq=lista.filter(p=>{if(visto[p.gid])return false;visto[p.gid]=true;return true;});
+  const uniq=(lista||[]).filter(p=>!p.cancelado&&p.tipo!=='estorno').filter(p=>{if(visto[p.gid])return false;visto[p.gid]=true;return true;});
   return uniq.sort((a,b)=>parseInt(b.num)-parseInt(a.num));
+}
+
+/* ===================== CANCELAMENTO / ESTORNO DE PEDIDOS =====================
+   Cancelar um pedido = ARQUIVAR (sai da contabilidade anual, das entregas e do
+   faturamento do mês original) + lançar um ESTORNO de comissão no mês atual,
+   um por vendedor. O estorno tem val=0 (NÃO mexe nas vendas do mês) e com
+   negativo (reduz SÓ a comissão). Pode ser desfeito em "🗄️ Cancelados". */
+function cancelUnique(){
+  const visto={};
+  return ps.filter(p=>p.cancelado&&p.tipo!=='estorno').filter(p=>{if(visto[p.gid])return false;visto[p.gid]=true;return true;})
+    .sort((a,b)=>parseInt(b.num)-parseInt(a.num));
+}
+function cancelarPedido(gidArg){
+  const gid=(gidArg!=null)?gidArg:parseInt(document.getElementById('ep-gid').value);
+  const regs=ps.filter(p=>p.gid===gid&&!p.cancelado&&p.tipo!=='estorno');
+  if(!regs.length){alert('Pedido não encontrado ou já cancelado.');return;}
+  const num=regs[0].num,cid=regs[0].cid,uf=regs[0].uf;
+  const hj=new Date();
+  const cMes=MS[hj.getMonth()],cAno=hj.getFullYear();
+  const totalCom=regs.reduce((s,p)=>s+(Number(p.com)||0),0);
+  if(!confirm('Cancelar o pedido Nº '+num+' ('+cid+'/'+uf+')?\n\n'
+    +'• Será ARQUIVADO: sai da contabilidade anual, das entregas e do faturamento do mês original.\n'
+    +'• Será lançado um ESTORNO de comissão de '+fmt(totalCom)+' no mês atual ('+cMes+' '+cAno+') para o(s) vendedor(es).\n'
+    +'• O VALOR DE VENDAS do mês NÃO muda — apenas a comissão.\n\n'
+    +'Você pode desfazer depois em "🗄️ Cancelados".'))return;
+  const stamp=Date.now();
+  regs.forEach((p,i)=>{
+    p.cancelado=true;p.cancEm=hj.toISOString();p.cancMes=cMes;p.cancAno=cAno;
+    const eid='est'+stamp+'_'+i;
+    ps.push({id:eid,gid:eid,tipo:'estorno',vid:p.vid,num:p.num,cancGid:gid,
+      prod:p.prod,cid:p.cid,uf:p.uf,val:0,meia:false,
+      com:-(Number(p.com)||0),mes:cMes,ano:cAno,
+      obs:'Cancelamento do pedido '+p.num});
+  });
+  if(sts[String(gid)])delete sts[String(gid)];
+  salvar();renderV();renderRel();renderF();
+  if(document.getElementById('page-pedidos').classList.contains('active'))renderPedidos();
+  if(document.getElementById('page-entregas').classList.contains('active'))renderEntregas();
+  if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+  fecharEditPedido();
+  alert('✅ Pedido Nº '+num+' cancelado e arquivado.\nEstorno de '+fmt(totalCom)+' lançado em '+cMes+' '+cAno+'.');
+}
+function reativarPedido(gid){
+  const regs=ps.filter(p=>p.gid===gid&&p.cancelado);
+  if(!regs.length){alert('Pedido não encontrado.');return;}
+  const num=regs[0].num;
+  if(!confirm('Reativar o pedido Nº '+num+'?\n\nEle volta para a contabilidade e para as entregas (status "aguardando"), e os estornos de comissão lançados serão removidos.'))return;
+  ps=ps.filter(p=>!(p.tipo==='estorno'&&p.cancGid===gid));
+  regs.forEach(p=>{delete p.cancelado;delete p.cancEm;delete p.cancMes;delete p.cancAno;});
+  salvar();renderV();renderRel();renderF();
+  if(document.getElementById('page-pedidos').classList.contains('active'))renderPedidos();
+  if(document.getElementById('page-entregas').classList.contains('active'))renderEntregas();
+  if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+  alert('↩︎ Pedido Nº '+num+' reativado.');
+}
+function toggleCancelados(){
+  const el=document.getElementById('lista-cancelados');if(!el)return;
+  const show=el.style.display==='none'||!el.style.display;
+  el.style.display=show?'block':'none';
+  const t=document.getElementById('btn-cancelados-txt');
+  if(t)t.textContent=show?'Ocultar cancelados':'Cancelados';
+  if(show)renderCancelados();
+}
+function renderCancelados(){
+  const el=document.getElementById('lista-cancelados');if(!el)return;
+  const lista=cancelUnique();
+  if(!lista.length){el.innerHTML='<p class="empty">Nenhum pedido cancelado.</p>';return;}
+  let h='<div class="table-wrap"><table><thead><tr>'
+    +'<th>Nº</th><th>Mês orig.</th><th>Produto</th><th>Cidade</th><th>UF</th>'
+    +'<th style="text-align:right">Valor</th><th style="text-align:center">Estornado em</th><th style="text-align:right">Ações</th>'
+    +'</tr></thead><tbody>';
+  lista.forEach(p=>{
+    const pn=prods.find(x=>x.id===p.prod);
+    const canc=p.cancMes?(p.cancMes.substring(0,3)+' '+p.cancAno):'—';
+    h+='<tr style="opacity:.7">'
+      +'<td><strong>'+p.num+'</strong></td>'
+      +'<td><span class="badge-m">'+p.mes.substring(0,3)+' '+p.ano+'</span></td>'
+      +'<td>'+(pn?'<span class="badge-prod">'+pn.nome+'</span>':'<span style="color:#ccc">—</span>')+'</td>'
+      +'<td>'+p.cid+'</td><td><strong>'+p.uf+'</strong></td>'
+      +'<td style="text-align:right;font-weight:600;text-decoration:line-through;color:#999">'+fmt(p.val)+'</td>'
+      +'<td style="text-align:center;font-size:11px;color:#A32D2D;font-weight:600">'+canc+'</td>'
+      +'<td style="text-align:right;white-space:nowrap"><button class="btn" style="font-size:11px;padding:3px 8px" onclick="reativarPedido('+p.gid+')">↩︎ Reativar</button></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
 }
 
 function addPed(){
@@ -1203,7 +1298,7 @@ function transferenciaSaida(vid,mes,ano){
 }
 /* Saldo líquido do mês = comissão + bônus − adiantamentos + saldo que entrou */
 function calcSaldoMes(vid,mes,ano){
-  const cm=ps.filter(p=>p.vid===vid&&p.mes===mes&&p.ano===ano).reduce((s,p)=>s+(Number(p.com)||0),0);
+  const cm=ps.filter(p=>p.vid===vid&&p.mes===mes&&p.ano===ano&&!p.cancelado).reduce((s,p)=>s+(Number(p.com)||0),0);
   const bm=bonus.filter(b=>b.vid===vid&&b.mes===mes&&b.ano===ano).reduce((s,b)=>s+(Number(b.val)||0),0);
   const am=ads.filter(a=>a.vid===vid&&a.mes===mes&&a.ano===ano).reduce((s,a)=>s+(Number(a.val)||0),0);
   return cm+bm-am+saldoTransferidoEntra(vid,mes,ano);
@@ -1237,12 +1332,14 @@ function linhaSaldo(label,val,cor,italic){
     +'<span style="font-weight:600;color:'+cor+'">'+fmt(Math.abs(val))+'</span></div>';
 }
 /* Monta o quadro de saldo (com botão transferir quando um mês está filtrado) */
-function buildSaldoBox(v,f,tc,tb,ta2){
-  const baseLiq=tc+tb-ta2;
+function buildSaldoBox(v,f,tcPed,tb,ta2,test){
+  test=test||0;
+  const baseLiq=tcPed+test+tb-ta2;
   if(!f){
-    if(tb<=0&&ta2<=0)return '';
+    if(tb<=0&&ta2<=0&&test>=-0.005)return '';
     let h='<div style="background:#EAF3DE;border-radius:8px;padding:14px 18px;margin-top:14px">';
-    h+=linhaSaldo('Comissão pedidos',tc,'#666');
+    h+=linhaSaldo('Comissão pedidos',tcPed,'#666');
+    if(test<-0.005)h+=linhaSaldo('− Cancelamentos (estornos)',test,'#A32D2D');
     if(tb>0)h+=linhaSaldo('+ Bônus números',tb,'#534AB7');
     if(ta2>0)h+=linhaSaldo('− Adiantamentos',ta2,'#854F0B');
     h+='<div style="border-top:1px solid #c5e0ab;padding-top:10px;display:flex;justify-content:space-between;align-items:center">';
@@ -1262,7 +1359,8 @@ function buildSaldoBox(v,f,tc,tb,ta2){
   const bd=saida?'#e0e4e8':(pos?'#c5e0ab':'#f0b4b4');
   let h='<div style="background:'+bg+';border:1px solid '+bd+';border-radius:8px;padding:14px 18px;margin-top:14px">';
   h+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+cor+';margin-bottom:10px">Saldo de '+fMes+' '+fAno+'</div>';
-  h+=linhaSaldo('Comissão pedidos',tc,'#666');
+  h+=linhaSaldo('Comissão pedidos',tcPed,'#666');
+  if(test<-0.005)h+=linhaSaldo('− Cancelamentos (estornos)',test,'#A32D2D');
   if(tb>0)h+=linhaSaldo('+ Bônus números',tb,'#534AB7');
   if(ta2>0)h+=linhaSaldo('− Adiantamentos',ta2,'#854F0B');
   if(Math.abs(entra)>0.005)h+=linhaSaldo((entra>=0?'+ ':'− ')+'Saldo transferido de '+ant.mes+' '+ant.ano,entra,entra>=0?'#1D7A53':'#A32D2D',true);
@@ -1295,12 +1393,17 @@ function renderRel(){
   if(!vs.length){el.innerHTML='<p class="empty">Cadastre vendedores para ver os relatórios.</p>';return;}
   const v=vs.find(x=>x.id===ta);if(!v){el.innerHTML='';return;}
   const f=document.getElementById('f-mes').value;
-  let mp=ps.filter(p=>p.vid===v.id);if(f)mp=mp.filter(p=>ck(p.mes,p.ano)===f);
+  let mpAll=ps.filter(p=>p.vid===v.id&&!p.cancelado);if(f)mpAll=mpAll.filter(p=>ck(p.mes,p.ano)===f);
+  let mp=mpAll.filter(p=>p.tipo!=='estorno');
+  let mest=mpAll.filter(p=>p.tipo==='estorno');
   mp.sort((a,b)=>parseInt(b.num)-parseInt(a.num));
+  mest.sort((a,b)=>parseInt(b.num)-parseInt(a.num));
   let ma=ads.filter(a=>a.vid===v.id);if(f)ma=ma.filter(a=>ck(a.mes,a.ano)===f);
   let mb=bonus.filter(b=>b.vid===v.id);if(f)mb=mb.filter(b=>ck(b.mes,b.ano)===f);
   const unique=uniquePedidos(mp);
-  const tc=mp.reduce((s,p)=>s+p.com,0);
+  const tcPed=mp.reduce((s,p)=>s+p.com,0);
+  const test=mest.reduce((s,p)=>s+(Number(p.com)||0),0);
+  const tc=tcPed+test;
   const tb=mb.reduce((s,b)=>s+b.val,0);
   const tv=unique.reduce((s,p)=>s+p.val,0);
   const ta2=ma.reduce((s,a)=>s+a.val,0);
@@ -1315,7 +1418,8 @@ function renderRel(){
   h+='<div class="row" style="margin-bottom:16px;gap:8px">';
   h+='<div class="metric"><div class="val">'+unique.length+'</div><div class="lbl">Pedidos</div></div>';
   h+='<div class="metric"><div class="val">'+fmt(tv)+'</div><div class="lbl">Volume</div></div>';
-  h+='<div class="metric azul"><div class="val">'+fmt(tc)+'</div><div class="lbl">Comissão pedidos</div></div>';
+  h+='<div class="metric azul"><div class="val">'+fmt(tcPed)+'</div><div class="lbl">Comissão pedidos</div></div>';
+  if(test<-0.005){h+='<div class="metric" style="border-left:3px solid #A32D2D"><div class="val" style="color:#A32D2D">'+fmt(test)+'</div><div class="lbl">Estornos (cancel.)</div></div>';}
   if(tb>0){h+='<div class="metric roxo"><div class="val">'+fmt(tb)+'</div><div class="lbl">Bônus números</div></div>';}
   if(ta2>0){h+='<div class="metric laranja"><div class="val">'+fmt(ta2)+'</div><div class="lbl">Adiantamentos</div></div>';}
   if(f){
@@ -1348,7 +1452,7 @@ function renderRel(){
     });
     h+='<tr class="total-row"><td colspan="5">TOTAL COMISSÃO PEDIDOS</td>';
     h+='<td style="text-align:right">'+fmt(tv)+'</td>';
-    h+='<td style="text-align:right;color:#185FA5">'+fmt(tc)+'</td><td></td></tr>';
+    h+='<td style="text-align:right;color:#185FA5">'+fmt(tcPed)+'</td><td></td></tr>';
     h+='</tbody></table>';
   }
 
@@ -1381,7 +1485,19 @@ function renderRel(){
     h+='</tbody></table>';
   }
 
-  h+=buildSaldoBox(v,f,tc,tb,ta2);
+  if(mest.length>0){
+    h+='<div class="section-lbl" style="color:#A32D2D">🚫 Cancelamentos (estornos no mês)</div>';
+    h+='<table><thead><tr><th>Mês</th><th>Descrição</th><th style="text-align:right">Estorno comissão</th><th></th></tr></thead><tbody>';
+    mest.forEach(e=>{
+      h+='<tr><td><span class="badge-m">'+e.mes.substring(0,3)+' '+e.ano+'</span></td>';
+      h+='<td>Cancelamento do pedido <strong>'+e.num+'</strong>'+(e.cid?' — '+e.cid+'/'+e.uf:'')+'</td>';
+      h+='<td style="text-align:right;color:#A32D2D;font-weight:600">'+fmt(e.com)+'</td>';
+      h+='<td style="text-align:right"><button class="btn" style="font-size:11px;padding:3px 8px" onclick="reativarPedido('+e.cancGid+')">↩︎</button></td></tr>';
+    });
+    h+='<tr class="total-row"><td colspan="2">TOTAL ESTORNOS</td><td style="text-align:right;color:#A32D2D">'+fmt(test)+'</td><td></td></tr>';
+    h+='</tbody></table>';
+  }
+  h+=buildSaldoBox(v,f,tcPed,tb,ta2,test);
   el.innerHTML=h+'</div>';
   applyCardLabels('rel');
 }
@@ -1391,12 +1507,17 @@ function renderRel(){
 function pdfVendedor(vid){
   const v=vs.find(x=>x.id===vid);
   const f=document.getElementById('f-mes').value;
-  let mp=ps.filter(p=>p.vid===vid);if(f)mp=mp.filter(p=>ck(p.mes,p.ano)===f);
+  let mpAll=ps.filter(p=>p.vid===vid&&!p.cancelado);if(f)mpAll=mpAll.filter(p=>ck(p.mes,p.ano)===f);
+  let mp=mpAll.filter(p=>p.tipo!=='estorno');
+  let mest=mpAll.filter(p=>p.tipo==='estorno');
   mp.sort((a,b)=>parseInt(b.num)-parseInt(a.num));
+  mest.sort((a,b)=>parseInt(b.num)-parseInt(a.num));
   let ma=ads.filter(a=>a.vid===vid);if(f)ma=ma.filter(a=>ck(a.mes,a.ano)===f);
   let mb=bonus.filter(b=>b.vid===vid);if(f)mb=mb.filter(b=>ck(b.mes,b.ano)===f);
   const uniq=uniquePedidos(mp);
-  const tc=mp.reduce((s,p)=>s+p.com,0);
+  const tcPed=mp.reduce((s,p)=>s+p.com,0);
+  const test=mest.reduce((s,p)=>s+(Number(p.com)||0),0);
+  const tc=tcPed+test;
   const tb=mb.reduce((s,b)=>s+b.val,0);
   const tv=uniq.reduce((s,p)=>s+p.val,0);
   const ta2=ma.reduce((s,a)=>s+a.val,0);
@@ -1412,7 +1533,7 @@ function pdfVendedor(vid){
     ln+='<td style="text-align:right">'+fmt(p.val)+'</td>';
     ln+='<td style="text-align:right;color:#185FA5;font-weight:600">'+fmt(p.com)+(p.meia?' (½)':'')+'</td></tr>';
   });
-  ln+='<tr style="background:#eef3fa"><td colspan="4" style="font-weight:700">TOTAL COMISSÃO PEDIDOS</td><td style="text-align:right">'+fmt(tv)+'</td><td style="text-align:right;font-weight:700;color:#185FA5">'+fmt(tc)+'</td></tr>';
+  ln+='<tr style="background:#eef3fa"><td colspan="4" style="font-weight:700">TOTAL COMISSÃO PEDIDOS</td><td style="text-align:right">'+fmt(tv)+'</td><td style="text-align:right;font-weight:700;color:#185FA5">'+fmt(tcPed)+'</td></tr>';
 
   let bonusR='';
   if(mb.length>0){
@@ -1436,6 +1557,15 @@ function pdfVendedor(vid){
     adtR+='</tbody></table>';
   }
 
+  let estR='';
+  if(mest.length>0){
+    estR='<h3 style="margin:20px 0 8px;color:#A32D2D;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Cancelamentos (estornos no mês)</h3>';
+    estR+='<table><thead><tr><th>Mês</th><th colspan="4">Descrição</th><th style="text-align:right">Estorno comissão</th></tr></thead><tbody>';
+    mest.forEach(e=>{estR+='<tr><td>'+e.mes.substring(0,3)+'/'+e.ano+'</td><td colspan="4">Cancelamento do pedido '+e.num+(e.cid?' — '+e.cid+'/'+e.uf:'')+'</td><td style="text-align:right;color:#A32D2D;font-weight:600">'+fmt(e.com)+'</td></tr>';});
+    estR+='<tr style="background:#FCEBEB"><td colspan="5" style="font-weight:700;color:#A32D2D">TOTAL ESTORNOS</td><td style="text-align:right;font-weight:700;color:#A32D2D">'+fmt(test)+'</td></tr>';
+    estR+='</tbody></table>';
+  }
+
   // Saldo + transferências (quando um mês específico está filtrado)
   const _fmP=f?f.split('_')[0]:null,_faP=f?parseInt(f.split('_')[1]):null;
   const _entraP=f?saldoTransferidoEntra(vid,_fmP,_faP):0;
@@ -1444,10 +1574,11 @@ function pdfVendedor(vid){
   const _saldoFinalP=_saidaP?(_netP-_saidaP.val):_netP;
   const _temTransf=f&&(Math.abs(_entraP)>0.005||_saidaP);
   const _antP=f?mesAnterior(_fmP,_faP):null;
-  const resumoLiquido=(tb>0||ta2>0||_temTransf)?
+  const resumoLiquido=(tb>0||ta2>0||_temTransf||test<-0.005)?
     '<div style="background:'+(_saldoFinalP>=0?'#EAF3DE':'#FCEBEB')+';border-radius:8px;padding:14px 18px;margin-top:20px">'
     +'<table style="margin:0"><tbody>'
-    +'<tr><td style="color:#666;border:none;padding:4px 0">Comissão pedidos</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600">'+fmt(tc)+'</td></tr>'
+    +'<tr><td style="color:#666;border:none;padding:4px 0">Comissão pedidos</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600">'+fmt(tcPed)+'</td></tr>'
+    +(test<-0.005?'<tr><td style="color:#A32D2D;border:none;padding:4px 0">− Cancelamentos (estornos)</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600;color:#A32D2D">'+fmt(test)+'</td></tr>':'')
     +(tb>0?'<tr><td style="color:#534AB7;border:none;padding:4px 0">+ Bônus números</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600;color:#534AB7">'+fmt(tb)+'</td></tr>':'')
     +(ta2>0?'<tr><td style="color:#854F0B;border:none;padding:4px 0">− Adiantamentos</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600;color:#854F0B">'+fmt(ta2)+'</td></tr>':'')
     +(Math.abs(_entraP)>0.005?'<tr><td style="color:'+(_entraP>=0?'#1D7A53':'#A32D2D')+';border:none;padding:4px 0">'+(_entraP>=0?'+':'−')+' Saldo transferido de '+_antP.mes+' '+_antP.ano+'</td><td style="text-align:right;border:none;padding:4px 0;font-weight:600;color:'+(_entraP>=0?'#1D7A53':'#A32D2D')+'">'+fmt(Math.abs(_entraP))+'</td></tr>':'')
@@ -1474,7 +1605,8 @@ function pdfVendedor(vid){
     +'<div class="s">Referência: '+r+' &nbsp;|&nbsp; Comissão: '+v.perc+'%</div><hr>'
     +'<div class="rs">'
     +'<div class="bx"><div class="v">'+uniq.length+'</div><div class="l" style="color:#888">Pedidos</div></div>'
-    +'<div class="bx"><div class="v" style="color:#185FA5">'+fmt(tc)+'</div><div class="l" style="color:#888">Comissão pedidos</div></div>'
+    +'<div class="bx"><div class="v" style="color:#185FA5">'+fmt(tcPed)+'</div><div class="l" style="color:#888">Comissão pedidos</div></div>'
+    +(test<-0.005?'<div class="bx" style="border-left:3px solid #A32D2D"><div class="v" style="color:#A32D2D">'+fmt(test)+'</div><div class="l" style="color:#888">Estornos</div></div>':'')
     +(tb>0?'<div class="bx"><div class="v" style="color:#534AB7">'+fmt(tb)+'</div><div class="l" style="color:#888">Bônus números</div></div>':'')
     +(ta2>0?'<div class="bx"><div class="v" style="color:#854F0B">'+fmt(ta2)+'</div><div class="l" style="color:#888">Adiantamentos</div></div>':'')
     +'<div class="bx" style="border-left:3px solid #3B6D11"><div class="v" style="color:#3B6D11">'+fmt(tl)+'</div><div class="l" style="color:#888">A pagar</div></div>'
@@ -1482,7 +1614,7 @@ function pdfVendedor(vid){
     +'<h3 style="margin:0 0 6px;color:#003366;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Pedidos</h3>'
     +'<table><thead><tr><th>Nº</th><th>Produto</th><th>Cidade / UF</th><th>Mês</th><th style="text-align:right">Valor</th><th style="text-align:right">Comissão</th></tr></thead>'
     +'<tbody>'+ln+'</tbody></table>'
-    +bonusR+adtR+resumoLiquido
+    +bonusR+adtR+estR+resumoLiquido
     +'<div class="rd">Documento gerado automaticamente — Aço Naval</div></body></html>');
   w.document.close();
 }
@@ -1723,7 +1855,7 @@ function renderDashboard(){
   const uniqMesRef=uniquePedidos(ps.filter(p=>p.mes===mes&&p.ano===ano));
   const fatMes=uniqMesRef.reduce((s,p)=>s+p.val,0);
   const qtdMes=uniqMesRef.length;
-  const comMes=ps.filter(p=>p.mes===mes&&p.ano===ano).reduce((s,p)=>s+p.com,0);
+  const comMes=ps.filter(p=>p.mes===mes&&p.ano===ano&&!p.cancelado).reduce((s,p)=>s+p.com,0);
   const fatAno=uniquePedidos(ps.filter(p=>p.ano===ano)).reduce((s,p)=>s+p.val,0);
 
   const idxMes=MS.indexOf(mes);
@@ -1842,7 +1974,7 @@ function buildDetalheMes(chave){
   }
 
   // KPIs do mês selecionado
-  const comMesSel=ps.filter(p=>p.mes===mes&&p.ano===ano).reduce((s,p)=>s+p.com,0);
+  const comMesSel=ps.filter(p=>p.mes===mes&&p.ano===ano&&!p.cancelado).reduce((s,p)=>s+p.com,0);
   const CORES_DET=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75','#C9373A','#0E8A8A'];
 
   // --- Por Produto ---
@@ -2037,7 +2169,7 @@ function buildDetalheAno(ano){
     return `<div class="dash-card"><p class="dash-no-data">Nenhum pedido em ${ano}.</p></div>`;
   }
 
-  const comAno=ps.filter(p=>p.ano===ano).reduce((s,p)=>s+p.com,0);
+  const comAno=ps.filter(p=>p.ano===ano&&!p.cancelado).reduce((s,p)=>s+p.com,0);
   const CORES_DET=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75','#C9373A','#0E8A8A'];
 
   // --- Evolução mensal no ano ---
@@ -2162,7 +2294,7 @@ function pdfVendasAno(ano){
   const uniq=uniquePedidos(ps.filter(p=>p.ano===ano));
   if(!uniq.length){alert('Nenhum pedido em '+ano+'.');return;}
   const tv=uniq.reduce((s,p)=>s+p.val,0);
-  const comAno=ps.filter(p=>p.ano===ano).reduce((s,p)=>s+p.com,0);
+  const comAno=ps.filter(p=>p.ano===ano&&!p.cancelado).reduce((s,p)=>s+p.com,0);
 
   // Por mês
   const gm={};uniq.forEach(p=>{const c=p.mes;if(!gm[c])gm[c]={t:0,q:0};gm[c].t+=p.val;gm[c].q++;});
@@ -2266,6 +2398,8 @@ function renderSelPedFiltros(){
 function renderPedidos(){
   renderSelPedFiltros();
   const el=document.getElementById('lista-pedidos-gestao');if(!el)return;
+  const _cc=document.getElementById('canc-count');if(_cc)_cc.textContent=cancelUnique().length;
+  const _lc=document.getElementById('lista-cancelados');if(_lc&&_lc.style.display==='block')renderCancelados();
   const fMes=document.getElementById('ped-f-mes')?document.getElementById('ped-f-mes').value:'';
   const fProd=document.getElementById('ped-f-prod')?document.getElementById('ped-f-prod').value:'';
 
