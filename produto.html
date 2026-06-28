@@ -530,6 +530,41 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     </div>
   </div>
 
+  <!-- MAIS PRODUTOS DA MESMA CATEGORIA -->
+  <style>
+    .rel-section{margin-top:36px;padding-top:28px;border-top:1px solid var(--border)}
+    .rel-title{font-family:'Inter',sans-serif;font-size:20px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap}
+    .rel-sub{font-size:12.5px;color:var(--muted);margin-bottom:16px}
+    .rel-viewport{position:relative}
+    .rel-track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x proximity;padding:4px 2px 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .rel-track::-webkit-scrollbar{display:none}
+    .rel-card{flex:0 0 auto;width:200px;scroll-snap-align:start;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.05);transition:transform .15s,box-shadow .15s;text-decoration:none;display:flex;flex-direction:column}
+    .rel-card:hover{transform:translateY(-3px);box-shadow:0 12px 26px rgba(0,0,0,.13)}
+    .rel-card.current{border-color:var(--blue);box-shadow:0 0 0 2px rgba(24,95,165,.28);cursor:default}
+    .rel-thumb{height:150px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .rel-thumb img{width:100%;height:100%;object-fit:contain;padding:10px}
+    .rel-info{padding:10px 12px 13px;border-top:1px solid var(--border)}
+    .rel-code{font-size:11px;font-weight:700;color:var(--blue);letter-spacing:.5px}
+    .rel-name{font-size:13.5px;font-weight:600;color:var(--navy);line-height:1.3;margin:2px 0 6px;min-height:35px}
+    .rel-price{font-size:12px;color:var(--muted)}
+    .rel-price strong{color:var(--navy);font-size:13.5px}
+    .rel-tag-current{font-size:10px;font-weight:700;color:var(--blue);background:#E6F1FB;border:1px solid #B5D4F4;padding:2px 7px;border-radius:20px}
+    .rel-arrow{position:absolute;top:38%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:none;background:#fff;color:var(--blue);box-shadow:0 3px 14px rgba(0,0,0,.2);font-size:22px;line-height:1;cursor:pointer;z-index:3;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+    .rel-arrow.prev{left:-8px}.rel-arrow.next{right:-8px}
+    .rel-arrow:disabled{opacity:0;pointer-events:none}
+    @media(max-width:640px){ .rel-card{width:152px} .rel-thumb{height:120px} .rel-name{font-size:12.5px;min-height:32px} .rel-arrow{display:none} }
+  </style>
+
+  <div class="rel-section" id="rel-section" style="display:none">
+    <div class="rel-title">🔎 Mais em <span id="rel-cat"></span></div>
+    <div class="rel-sub">Toque em um produto para abri-lo</div>
+    <div class="rel-viewport">
+      <button class="rel-arrow prev" id="rel-prev" onclick="relScroll(-1)" aria-label="Anterior">‹</button>
+      <div class="rel-track" id="rel-track"></div>
+      <button class="rel-arrow next" id="rel-next" onclick="relScroll(1)" aria-label="Próximo">›</button>
+    </div>
+  </div>
+
   <div class="deplb" id="deplb" onclick="if(event.target===this)closeDepLb()">
     <button class="deplb-close" onclick="closeDepLb()">✕</button>
     <div class="deplb-row">
@@ -619,7 +654,10 @@ var ACN3D = (function() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 1.2;
+    controls.autoRotateSpeed = 0.6;
+    // Gira devagar e PARA assim que o cliente tocar/arrastar (nao volta a girar)
+    var userStopped = false;
+    controls.addEventListener('start', function(){ userStopped = true; controls.autoRotate = false; });
 
     // Iluminação estilo SketchUp: difusa, plana, sem estouro de brilho
     scene.add(new THREE.HemisphereLight(0xffffff, 0xeceff2, 0.85));
@@ -743,19 +781,27 @@ var ACN3D = (function() {
       var ok = !!(window.MediaRecorder && canvas.captureStream &&
                   navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
+      // Botao discreto: so o icone. Idle = circulo vermelho; gravando = quadrado pulsando.
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.style.cssText = 'position:absolute;left:10px;bottom:10px;z-index:31;display:flex;align-items:center;gap:7px;border:none;border-radius:22px;padding:9px 15px;font:600 13px/1 -apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;color:#fff;background:#1557a8;box-shadow:0 3px 10px rgba(0,0,0,.28);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation';
-      btn.innerHTML = '<span class="acn3d-rdot" style="width:11px;height:11px;border-radius:50%;background:#ff3b30;display:inline-block"></span><span class="acn3d-rlab">Gravar</span>';
+      btn.title = 'Gravar tela + voz';
+      btn.style.cssText = 'position:absolute;left:10px;bottom:10px;z-index:31;width:42px;height:42px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.9);box-shadow:0 2px 9px rgba(0,0,0,.22);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transition:background .15s';
+      btn.innerHTML = '<span class="acn3d-rdot" style="width:15px;height:15px;border-radius:50%;background:#e0352b;display:block;transition:border-radius .15s,background .15s"></span>';
       container.appendChild(btn);
       if (!ok) { btn.style.display = 'none'; return; }
 
+      // Cronometro discreto, ao lado do botao (so aparece gravando)
+      var lab = document.createElement('div');
+      lab.style.cssText = 'position:absolute;left:60px;bottom:19px;z-index:31;background:rgba(198,40,40,.94);color:#fff;font:700 11px/1 -apple-system,sans-serif;padding:6px 9px;border-radius:20px;display:none;align-items:center;gap:5px;pointer-events:none';
+      lab.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block;animation:acn3dpulse 1.2s ease-in-out infinite"></span><span class="acn3d-rtime">0:00</span>';
+      container.appendChild(lab);
+
       var toast = document.createElement('div');
-      toast.style.cssText = 'position:absolute;left:10px;bottom:54px;z-index:31;max-width:80%;background:rgba(0,0,0,.82);color:#fff;font:500 12px/1.45 -apple-system,sans-serif;padding:9px 12px;border-radius:10px;display:none;pointer-events:none;white-space:normal';
+      toast.style.cssText = 'position:absolute;left:10px;bottom:60px;z-index:31;max-width:80%;background:rgba(0,0,0,.82);color:#fff;font:500 12px/1.45 -apple-system,sans-serif;padding:9px 12px;border-radius:10px;display:none;pointer-events:none;white-space:normal';
       container.appendChild(toast);
 
       var dot = btn.querySelector('.acn3d-rdot');
-      var lab = btn.querySelector('.acn3d-rlab');
+      var labTime = lab.querySelector('.acn3d-rtime');
       var rec = null, chunks = [], micStream = null, mixStream = null, timer = null, t0 = 0;
       var audioCtx = null, srcNode = null, destNode = null, keepGain = null;
       var origPR = renderer.getPixelRatio();
@@ -783,10 +829,10 @@ var ACN3D = (function() {
       }
       function resetUI() {
         if (timer) { clearInterval(timer); timer = null; }
-        btn.style.background = '#1557a8';
-        lab.textContent = 'Gravar';
-        dot.style.background = '#ff3b30';
-        dot.style.animation = 'none';
+        btn.style.background = 'rgba(255,255,255,.9)';
+        dot.style.borderRadius = '50%';
+        dot.style.background = '#e0352b';
+        lab.style.display = 'none';
       }
       function boostResolution(on) {
         try {
@@ -813,7 +859,7 @@ var ACN3D = (function() {
 
       hardStopRec = function() {
         if (rec && rec.state !== 'inactive') { rec.onstop = null; try{ rec.stop(); }catch(e){} }
-        stopTracks(); resetUI(); controls.autoRotate = true; rec = null;
+        stopTracks(); resetUI(); controls.autoRotate = !userStopped; rec = null;
       };
 
       async function start() {
@@ -867,16 +913,18 @@ var ACN3D = (function() {
         rec.start();
 
         controls.autoRotate = false;        // voce controla o angulo enquanto narra
-        btn.style.background = '#c62828';
-        dot.style.animation = 'acn3dpulse 1s ease-in-out infinite';
+        btn.style.background = 'rgba(255,255,255,.97)';
+        dot.style.borderRadius = '3px';      // vira quadrado (stop)
+        dot.style.background = '#c62828';
         t0 = Date.now();
-        lab.textContent = '⏹ 0:00';
-        timer = setInterval(function(){ lab.textContent = '⏹ ' + fmt(Math.floor((Date.now()-t0)/1000)); }, 500);
+        labTime.textContent = '0:00';
+        lab.style.display = 'inline-flex';
+        timer = setInterval(function(){ labTime.textContent = fmt(Math.floor((Date.now()-t0)/1000)); }, 500);
         flash('Gravando… fale e gire o modelo. Toque no botao para encerrar.', 2800);
       }
 
       function stop() {
-        if (rec && rec.state === 'recording') { lab.textContent = '…'; try{ rec.stop(); }catch(e){} }
+        if (rec && rec.state === 'recording') { labTime.textContent = '…'; try{ rec.stop(); }catch(e){} }
       }
 
       async function finish() {
@@ -884,7 +932,7 @@ var ACN3D = (function() {
         var mime = (rec && rec.mimeType) || pickMime() || 'video/webm';
         var ext  = mime.indexOf('mp4') > -1 ? 'mp4' : 'webm';
         var blob = new Blob(chunks, { type: (mime.split(';')[0] || 'video/webm') });
-        stopTracks(); resetUI(); controls.autoRotate = true;
+        stopTracks(); resetUI(); controls.autoRotate = !userStopped;
         if (destroyed) return;
         if (!blob.size) { flash('A gravacao saiu vazia. Tente novamente.', 4000); return; }
 
@@ -959,6 +1007,17 @@ const db = firebase.firestore();
 
 // ── STATE ──
 let produto = null;
+
+// ── WHATSAPP ──────────────────────────────────────────────────────
+// Numero no formato internacional, so digitos: 55 (Brasil) + DDD + numero.
+// (55) 2018-1818  →  confira se o DDD/numero estao corretos.
+const WHATS_NUM = '555520181818';
+function atualizarWhatsApp(){
+  const wa = document.getElementById('wa-float');
+  if(!wa || !produto) return;
+  const msg = `olá, estava olhando o produto ${produto.nome} e gostaria de mais informações`;
+  wa.href = `https://wa.me/${WHATS_NUM}?text=${encodeURIComponent(msg)}`;
+}
 let allPhotos = [];   // [{src, label}] — foto principal + projeto + clientes
 let currentPhotoIdx = 0;
 let lbFotos  = [];
@@ -1123,6 +1182,8 @@ setupGestures();
     renderProduto();
     showScreen('prod');
     carregarDepoimentos(produto.cat);
+    carregarRelacionados(produto.cat, produto.id);
+    atualizarWhatsApp();
     if (com3d.length > 1) renderVariacoes(com3d);
     renderEspelhoToggle();
     // Abre sempre no 3D se o produto tiver modelo
@@ -1165,6 +1226,53 @@ async function carregarDepoimentos(cat){
   track.onmouseleave = startDepAuto;
   updateDepArrows();
   startDepAuto();
+}
+
+// ── MAIS PRODUTOS DA MESMA CATEGORIA (ordem da loja) ──────────────
+async function carregarRelacionados(cat, currentId){
+  const sec = document.getElementById('rel-section');
+  const track = document.getElementById('rel-track');
+  if(!cat || !sec || !track) return;
+  try{
+    const idxSnap = await db.collection('acn').doc('produtos_index').get();
+    if(!idxSnap.exists){ sec.style.display='none'; return; }
+    const ids = idxSnap.data().ids || [];
+    const snaps = await Promise.all(ids.map(id => db.collection('acn_produtos').doc(String(id)).get().catch(()=>null)));
+    const lista = snaps.filter(s=>s&&s.exists).map(s=>{ const d=s.data(); d.id=(d.id!=null)?d.id:s.id; return d; })
+      .filter(p => p.nome && p.cat===cat && !p.ehVariacao && !(p.cat||'').toLowerCase().includes('cano'));
+    if(lista.length < 2){ sec.style.display='none'; return; }   // so mostra se houver alternativa
+    document.getElementById('rel-cat').textContent = cat;
+    track.innerHTML = lista.map(p=>{
+      const preco = p.preco||0;
+      const total = preco.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const parc  = (preco/12).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const isCur = String(p.id)===String(currentId);
+      const img = p.foto ? `<img src="${p.foto}" loading="lazy" alt="${p.nome}">` : '<div style="font-size:40px;opacity:.2">⚙️</div>';
+      const href = isCur ? 'javascript:void(0)' : ('?id='+encodeURIComponent(p.id));
+      return `<a class="rel-card${isCur?' current':''}" href="${href}">
+        <div class="rel-thumb">${img}</div>
+        <div class="rel-info">
+          ${isCur ? '<div class="rel-tag-current">Você está vendo</div>'
+                  : (p.codigo?`<div class="rel-code">${p.codigo}</div>`:'')}
+          <div class="rel-name">${p.nome}</div>
+          <div class="rel-price">12x R$ ${parc} · <strong>R$ ${total}</strong></div>
+        </div>
+      </a>`;
+    }).join('');
+    sec.style.display='block';
+    const cur = track.querySelector('.rel-card.current');
+    if(cur) track.scrollLeft = Math.max(0, cur.offsetLeft - 16);   // centraliza no atual
+    track.onscroll = updateRelArrows;
+    updateRelArrows();
+  }catch(e){ console.error('relacionados:', e); sec.style.display='none'; }
+}
+function relCardW(){ const c=document.querySelector('.rel-card'); return c ? c.offsetWidth+14 : 214; }
+function relScroll(dir){ const t=document.getElementById('rel-track'); if(t) t.scrollBy({left:dir*relCardW()*2,behavior:'smooth'}); }
+function updateRelArrows(){
+  const t=document.getElementById('rel-track'); if(!t) return;
+  const p=document.getElementById('rel-prev'), n=document.getElementById('rel-next');
+  if(p) p.disabled = t.scrollLeft <= 4;
+  if(n) n.disabled = t.scrollLeft + t.clientWidth >= t.scrollWidth - 4;
 }
 
 function depCardW(){ const c = document.querySelector('.dep-card'); return c ? c.offsetWidth + 14 : 246; }
@@ -1672,5 +1780,11 @@ function showToast(msg){
   toastTimer=setTimeout(()=>el.classList.remove('show'),2800);
 }
 </script>
+<!-- BOTÃO FLUTUANTE WHATSAPP -->
+<a id="wa-float" href="#" target="_blank" rel="noopener" aria-label="Falar no WhatsApp"
+   style="position:fixed;right:18px;bottom:18px;z-index:900;width:58px;height:58px;border-radius:50%;background:#25D366;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;text-decoration:none;transition:transform .15s"
+   onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'">
+  <svg width="33" height="33" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.946C.157 5.335 5.494 0 12.05 0a11.82 11.82 0 018.413 3.488 11.82 11.82 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.51 5.26l-.999 3.648 3.535-.927.392.215zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.612-.916-2.207-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+</a>
 </body>
 </html>
