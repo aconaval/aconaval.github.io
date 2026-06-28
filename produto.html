@@ -793,7 +793,7 @@ var ACN3D = (function() {
           if (on) {
             var w = container.clientWidth || 300, h = container.clientHeight || 300;
             var longSide = Math.max(w, h) || 300;
-            var pr = Math.min(3, Math.max(origPR, 1280 / longSide));   // alvo ~1280px no lado maior
+            var pr = Math.min(4, Math.max(origPR, 1600 / longSide));   // alvo ~1600px no lado maior
             renderer.setPixelRatio(pr);
           } else {
             renderer.setPixelRatio(origPR);
@@ -853,7 +853,7 @@ var ACN3D = (function() {
         mixStream = cs;
 
         var mime = pickMime();
-        var opt = { videoBitsPerSecond: 12000000, audioBitsPerSecond: 192000 };
+        var opt = { videoBitsPerSecond: 14000000, audioBitsPerSecond: 256000 };
         if (mime) opt.mimeType = mime;
         try {
           rec = new MediaRecorder(mixStream, opt);
