@@ -110,6 +110,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 .gal-thumb-3d span{font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.8}
 .gallery-main.is-3d{cursor:default}
+/* ── Seletor de variações 3D ── */
+#variacoes-3d{margin-top:12px}
+.var3d-grp{margin-bottom:10px}
+.var3d-grp-label{font-size:11px;font-weight:700;color:var(--steel);text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px;display:flex;align-items:center;gap:5px}
+.var3d-chips{display:flex;gap:8px;flex-wrap:wrap}
+.var3d-chip{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-size:13px;font-weight:600;color:var(--text)}
+.var3d-chip:hover{border-color:var(--blue)}
+.var3d-chip.active{border-color:var(--blue);background:var(--blue-light);box-shadow:0 0 0 3px rgba(21,87,168,.1)}
+.var3d-chip img{width:38px;height:38px;border-radius:7px;object-fit:cover;background:#f3f6fb;flex:none}
+.var3d-chip .var3d-ph{width:38px;height:38px;border-radius:7px;background:#f0f3f8;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
+.var3d-chip .var3d-3dtag{font-size:11px;color:var(--blue)}
+.esp-chips{display:flex;gap:8px}
+.esp-chip{flex:0 0 auto;padding:8px 16px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);transition:border-color .15s,background .15s}
+.esp-chip:hover{border-color:var(--blue)}
+.esp-chip.active{border-color:var(--blue);background:var(--blue-light);box-shadow:0 0 0 3px rgba(21,87,168,.1)}
 .gal-section-label{
   font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.6px;text-align:center;padding:2px 0 4px;line-height:1
@@ -335,6 +350,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="gallery-strip" id="gallery-strip"></div>
   </div>
 
+  <!-- SELETOR DE VARIAÇÕES 3D -->
+  <div id="variacoes-3d" style="display:none"></div>
+  <!-- TOGGLE LADO (espelho esq/dir) -->
+  <div id="espelho-toggle" style="display:none;margin-top:12px">
+    <div class="var3d-grp-label">🔁 Lado</div>
+    <div class="esp-chips">
+      <button class="esp-chip active" data-side="esq" onclick="setEspelho(false)">◧ Esquerda</button>
+      <button class="esp-chip" data-side="dir" onclick="setEspelho(true)">◨ Direita</button>
+    </div>
+  </div>
+
   <!-- CONTENT LAYOUT -->
   <div class="prod-layout">
 
@@ -534,9 +560,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
 // ── ACN3D: visualizador 3D Aço Naval (Three.js) ──────────────────
-// Idêntico ao teste-3d.html: fundo branco, grid sutil, arestas,
+// Fundo branco limpo, iluminação difusa estilo SketchUp, arestas,
 // marca d'água aconaval.com, auto-rotação, iluminação clara.
 var ACN3D = (function() {
+
+  // Cache de sessão: GLB já baixado não é baixado de novo ao trocar de variação
+  if (THREE && THREE.Cache) THREE.Cache.enabled = true;
 
   function mount(container, url, opts) {
     opts = opts || {};
@@ -554,9 +583,13 @@ var ACN3D = (function() {
     wm.innerHTML = '<span style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:22px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:rgba(0,0,0,0.18);user-select:none;white-space:nowrap;transform:rotate(-25deg)">aconaval.com</span>';
     container.appendChild(wm);
 
-    // Overlay de loading
+    // Overlay de loading (mostra a foto renderizada do SketchUp enquanto baixa o GLB)
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:20';
+    overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:20;transition:opacity .35s';
+    if (opts.poster) {
+      overlay.style.background =
+        'linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,.55)), #fff url("' + opts.poster + '") center/contain no-repeat';
+    }
     overlay.innerHTML =
       '<div style="width:40px;height:40px;border:4px solid rgba(0,0,0,.1);border-top:4px solid #1557a8;border-radius:50%;animation:acn3dspin 1s linear infinite"></div>' +
       '<div class="acn3d-pct" style="font-size:20px;font-weight:700;color:#1557a8">0%</div>' +
@@ -573,8 +606,8 @@ var ACN3D = (function() {
     var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.LinearToneMapping;
-    renderer.toneMappingExposure = 1.8;
+    renderer.toneMapping = THREE.NoToneMapping;   // sem tonemapping → look plano/matte do SketchUp
+    renderer.toneMappingExposure = 1.0;
 
     var scene = new THREE.Scene();
     scene.background = new THREE.Color(0xffffff);
@@ -588,20 +621,18 @@ var ACN3D = (function() {
     controls.autoRotate = true;
     controls.autoRotateSpeed = 1.2;
 
-    // Iluminação (igual teste-3d)
-    scene.add(new THREE.AmbientLight(0xffffff, 1.4));
-    var d1 = new THREE.DirectionalLight(0xffffff, 0.8); d1.position.set(3, 6, 4);  scene.add(d1);
-    var d2 = new THREE.DirectionalLight(0xffffff, 0.6); d2.position.set(-4, 4, 3); scene.add(d2);
-    var d3 = new THREE.DirectionalLight(0xffffff, 0.5); d3.position.set(0, 2, 8);  scene.add(d3);
+    // Iluminação estilo SketchUp: difusa, plana, sem estouro de brilho
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xeceff2, 0.85));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    var kLight = new THREE.DirectionalLight(0xffffff, 0.55); kLight.position.set(4, 8, 6);   scene.add(kLight);
+    var fLight = new THREE.DirectionalLight(0xffffff, 0.30); fLight.position.set(-5, 4, -2); scene.add(fLight);
+    var bLight = new THREE.DirectionalLight(0xffffff, 0.18); bLight.position.set(0, 5, -7);  scene.add(bLight);
 
-    // Grid sutil
-    var grid = new THREE.GridHelper(20, 20, 0xdddddd, 0xeeeeee);
-    grid.material.opacity = 0.5;
-    grid.material.transparent = true;
-    scene.add(grid);
+    // Sem grid — fundo branco limpo igual export do SketchUp
 
     var destroyed = false;
     var rafId = null;
+    var viewerPivot = null;   // grupo que aplica o espelhamento esq/dir
 
     function animate() {
       if (destroyed) return;
@@ -640,14 +671,29 @@ var ACN3D = (function() {
         model.scale.setScalar(scale);
         var box2 = new THREE.Box3().setFromObject(model);
         model.position.y -= box2.min.y;
-        scene.add(model);
+        // Pivot para espelhar (esquerda/direita) — conteúdo já centrado em x=0
+        var pivot = new THREE.Group();
+        pivot.add(model);
+        pivot.scale.x = opts.mirror ? -1 : 1;
+        scene.add(pivot);
+        viewerPivot = pivot;
 
-        // Arestas sutis
+        // Acabamento matte estilo SketchUp + arestas pretas sutis
         model.traverse(function(n) {
           if (n.isMesh && n.geometry) {
+            // suaviza brilho/specular dos metais (tira o estouro de claridade)
+            var mats = Array.isArray(n.material) ? n.material : [n.material];
+            mats.forEach(function(m) {
+              if (!m) return;
+              if (m.metalness !== undefined) m.metalness = Math.min(m.metalness, 0.15);
+              if (m.roughness !== undefined) m.roughness = Math.max(m.roughness, 0.6);
+              if (m.envMapIntensity !== undefined) m.envMapIntensity = 0.35;
+              m.side = THREE.DoubleSide;   // espelhar (scale.x=-1) sem faces invertidas
+              m.needsUpdate = true;
+            });
             var edges = new THREE.EdgesGeometry(n.geometry, 18);
             var line  = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
-              color: 0x000000, transparent: true, opacity: 0.18, depthTest: true
+              color: 0x000000, transparent: true, opacity: 0.28, depthTest: true
             }));
             n.add(line);
           }
@@ -659,7 +705,8 @@ var ACN3D = (function() {
         controls.target.set(0, (size.y * scale) / 2, 0);
         controls.update();
 
-        overlay.style.display = 'none';
+        overlay.style.opacity = '0';
+        setTimeout(function(){ if (overlay && overlay.parentNode) overlay.style.display = 'none'; }, 360);
         resize();
       },
       function(xhr) {
@@ -691,6 +738,7 @@ var ACN3D = (function() {
     });
 
     return {
+      setMirror: function(on) { if (viewerPivot) viewerPivot.scale.x = on ? -1 : 1; },
       destroy: function() {
         destroyed = true;
         if (rafId) cancelAnimationFrame(rafId);
@@ -733,6 +781,14 @@ let currentPhotoIdx = 0;
 let lbFotos  = [];
 let lbIdx    = 0;
 
+// ── Variações 3D (lazy load + cache de sessão) ──
+let var3dList   = [];
+let varSelUrl   = null;   // URL do GLB da variação escolhida (null = principal)
+let varSelPoster = null;  // foto renderizada usada como prévia enquanto carrega
+let espelhado        = false;  // estado do espelho esq/dir no viewer 3D
+let familiaEspelhavel = false; // produto permite espelhamento (esq/dir)
+let varAtual         = null;   // item (produto ou variação) atualmente exibido na galeria
+
 
 
 // Carrega fotos de clientes — suporta formato antigo e novo (docs separados)
@@ -773,7 +829,21 @@ async function carregarFotosProjetoDoc(prodId) {
   } catch { return []; }
 }
 
-// ── MENU DE CATEGORIAS ──
+// Carrega fotos de projeto do LADO DIREITO (espelho) — docs {id}_fd{i}
+async function carregarFotosProjetoDirDoc(prodId) {
+  try {
+    const snap = await db.collection('acn_prod_fotos').doc(String(prodId)).get().catch(() => null);
+    if (!snap || !snap.exists) return [];
+    const count = snap.data().fotoDirCount || 0;
+    if (!count) return [];
+    const snaps = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        db.collection('acn_prod_fotos').doc(`${prodId}_fd${i}`).get().catch(() => null)
+      )
+    );
+    return snaps.map(s => s && s.exists ? s.data().foto : null).filter(Boolean);
+  } catch { return []; }
+}
 function voltarCatalogo() {
   // Se veio de outra página do site, volta; senão vai pra loja
   if (document.referrer && document.referrer.indexOf(location.host) > -1) history.back();
@@ -857,11 +927,21 @@ setupGestures();
     ]);
     if (!prodSnap.exists) { showScreen('erro'); return; }
     produto = prodSnap.data();
+    produto.id = (produto.id != null) ? produto.id : prodId;
     produto.fotosprojeto  = fotosprojeto || [];
-    produto.fotosclientes = await carregarFotosClientesDoc(prodId);
+    // Fotos de clientes são da família — sempre pelo id da raiz (não mudam por variação)
+    produto.rootId = (produto.ehVariacao && produto.paiId != null) ? produto.paiId : produto.id;
+    produto.fotosclientes = await carregarFotosClientesDoc(produto.rootId);
+    // Variações (só metadados — nenhum GLB é baixado aqui)
+    const com3d = await carregarVariacoes();
+    if (com3d.length && !produto.modelo3d) produto.modelo3d = com3d[0].modelo3d;
+    familiaEspelhavel = familiaEspelhavel || !!produto.espelhavel;
+    varAtual = produto;
     renderProduto();
     showScreen('prod');
     carregarDepoimentos(produto.cat);
+    if (com3d.length > 1) renderVariacoes(com3d);
+    renderEspelhoToggle();
     // Abre sempre no 3D se o produto tiver modelo
     if (produto.modelo3d) {
       const idx3d = allPhotos.findIndex(f => f.tipo === '3d');
@@ -1059,7 +1139,7 @@ function setMainPhoto(idx) {
   if (ph.tipo === '3d') {
     mainEl.classList.add('is-3d');
     mainEl.innerHTML = '';
-    window._acn3dViewer = ACN3D.mount(mainEl, ph.src);
+    window._acn3dViewer = ACN3D.mount(mainEl, varSelUrl || ph.src, { poster: varSelPoster || produto.foto || null, mirror: espelhado });
     if (setas) mainEl.insertAdjacentHTML('beforeend', setas);
     // Hint interativo — aparece e some
     const hint = document.createElement('div');
@@ -1087,6 +1167,112 @@ function navPhoto(dir) {
   if (n < 0) n = allPhotos.length - 1;
   if (n >= allPhotos.length) n = 0;
   setMainPhoto(n);
+}
+
+// ── VARIAÇÕES 3D ──────────────────────────────────────────────────
+// Busca o produto principal + suas variações-filhas (paiId), retorna
+// só as que têm modelo3d. Os GLB NÃO são baixados aqui — só metadados.
+async function carregarVariacoes() {
+  try {
+    const familiaPaiId = produto.ehVariacao ? produto.paiId : produto.id;
+    if (familiaPaiId == null) return [];
+    const [paiSnap, varSnap] = await Promise.all([
+      produto.ehVariacao
+        ? db.collection('acn_produtos').doc(String(familiaPaiId)).get().catch(() => null)
+        : Promise.resolve(null),
+      db.collection('acn_produtos').where('paiId', '==', familiaPaiId).get().catch(() => null)
+    ]);
+    let lista = [];
+    const pai = produto.ehVariacao
+      ? (paiSnap && paiSnap.exists ? Object.assign({ id: familiaPaiId }, paiSnap.data()) : null)
+      : produto;
+    if (pai) lista.push(Object.assign({}, pai, { _eixo: 'Modelo', _label: pai.nome || 'Padrão' }));
+    if (pai && pai.espelhavel) familiaEspelhavel = true;
+    if (varSnap && !varSnap.empty) {
+      varSnap.docs.map(d => Object.assign({ id: d.id }, d.data()))
+        .filter(v => v.ehVariacao)
+        .sort((a, b) => (a.ordem || 0) - (b.ordem || 0)
+          || String(a.codigo || '').localeCompare(String(b.codigo || '')))
+        .forEach(v => lista.push(Object.assign({}, v, { _eixo: v.eixo || 'Variação', _label: v.nome })));
+    }
+    return lista.filter(v => v.modelo3d);   // só quem tem 3D entra no seletor
+  } catch (e) { console.error('variacoes:', e); return []; }
+}
+
+function renderVariacoes(lista) {
+  const box = document.getElementById('variacoes-3d');
+  if (!box || lista.length < 2) return;       // 1 só modelo → nada a escolher
+  var3dList = lista;
+  lista.forEach((v, i) => v._i = i);
+  const grupos = {};
+  lista.forEach(v => { (grupos[v._eixo] = grupos[v._eixo] || []).push(v); });
+  let html = '';
+  Object.keys(grupos).forEach(eixo => {
+    html += `<div class="var3d-grp"><div class="var3d-grp-label">🔀 ${eixo}</div><div class="var3d-chips">`;
+    grupos[eixo].forEach(v => {
+      const active = v.modelo3d === (varSelUrl || produto.modelo3d);
+      const thumb = v.foto ? `<img src="${v.foto}" alt="">` : `<div class="var3d-ph">🧊</div>`;
+      html += `<div class="var3d-chip${active ? ' active' : ''}" id="var3d-${v._i}" onclick="selecionarVariacao(${v._i})">${thumb}<span>${v._label || '—'}</span></div>`;
+    });
+    html += `</div></div>`;
+  });
+  box.innerHTML = html;
+  box.style.display = 'block';
+}
+
+async function selecionarVariacao(i) {
+  const v = var3dList[i];
+  if (!v) return;
+  // marca o chip ativo de imediato
+  document.querySelectorAll('.var3d-chip').forEach(c => c.classList.remove('active'));
+  const el = document.getElementById('var3d-' + i);
+  if (el) el.classList.add('active');
+  await montarGaleriaItem(v);
+}
+
+// Monta a galeria de um item (produto ou variação) no lado atual (esq/dir).
+// Foto principal + projeto trocam por lado; 3D é o mesmo GLB (espelhado no viewer);
+// fotos de clientes são da família e ficam fixas.
+async function montarGaleriaItem(item) {
+  varAtual = item;
+  varSelUrl    = item.modelo3d || null;
+  varSelPoster = (espelhado && item.fotoDir ? item.fotoDir : item.foto) || produto.foto || null;
+  // medidas, se houver
+  if (item.dim) {
+    const d = document.getElementById('prod-dim'), blk = document.getElementById('info-dim');
+    if (d && blk) { d.textContent = item.dim; blk.style.display = 'block'; }
+  }
+  // foto principal do lado atual (cai pro esquerdo se o direito não tiver)
+  const foto = (espelhado && item.fotoDir) ? item.fotoDir : item.foto;
+  // projeto do lado atual (lazy; cai pro esquerdo se o direito estiver vazio)
+  let proj = [];
+  try {
+    proj = espelhado ? await carregarFotosProjetoDirDoc(item.id) : await carregarFotosProjetoDoc(item.id);
+    if (espelhado && !proj.length) proj = await carregarFotosProjetoDoc(item.id);
+  } catch (e) { proj = []; }
+  const mainFotos    = foto ? [{ src: foto, label: item._label || produto.nome, tipo: 'main' }] : [];
+  const fotos3d      = item.modelo3d ? [{ src: item.modelo3d, label: 'Ver em 3D', tipo: '3d' }] : [];
+  const projFotos    = (proj || []).map((s, idx) => ({ src: s, label: `Projeto ${idx + 1}`, tipo: 'projeto' }));
+  const clienteFotos = (produto.fotosclientes || []).map((s, idx) => ({ src: s, label: `Cliente ${idx + 1}`, tipo: 'cliente' }));
+  allPhotos = [...mainFotos, ...fotos3d, ...projFotos, ...clienteFotos];
+  renderGallery(allPhotos);
+  const idx3d = allPhotos.findIndex(f => f.tipo === '3d');
+  if (idx3d > -1) setMainPhoto(idx3d);
+}
+
+// ── ESPELHO (lado esquerda/direita) ──
+function renderEspelhoToggle() {
+  const box = document.getElementById('espelho-toggle');
+  if (!box) return;
+  box.style.display = familiaEspelhavel ? 'block' : 'none';
+}
+function setEspelho(on) {
+  espelhado = on;
+  document.querySelectorAll('#espelho-toggle .esp-chip')
+    .forEach(c => c.classList.toggle('active', (c.dataset.side === 'dir') === on));
+  // troca foto + projeto do lado e espelha o 3D (remontado com o lado certo)
+  if (varAtual) montarGaleriaItem(varAtual);
+  else if (window._acn3dViewer && window._acn3dViewer.setMirror) window._acn3dViewer.setMirror(on);
 }
 
 function renderClientPhotos(fotos) {
