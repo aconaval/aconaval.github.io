@@ -598,7 +598,7 @@ var ACN3D = (function() {
     if (!document.getElementById('acn3d-style')) {
       var st = document.createElement('style');
       st.id = 'acn3d-style';
-      st.textContent = '@keyframes acn3dspin{to{transform:rotate(360deg)}}';
+      st.textContent = '@keyframes acn3dspin{to{transform:rotate(360deg)}}@keyframes acn3dpulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.5);opacity:.4}}';
       document.head.appendChild(st);
     }
 
@@ -737,10 +737,147 @@ var ACN3D = (function() {
       }
     });
 
+    // ── Gravacao: canvas (so o modelo 3D) + voz → compartilhar no WhatsApp ──
+    var hardStopRec = function(){};
+    (function setupRec() {
+      var ok = !!(window.MediaRecorder && canvas.captureStream &&
+                  navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.style.cssText = 'position:absolute;left:10px;bottom:10px;z-index:31;display:flex;align-items:center;gap:7px;border:none;border-radius:22px;padding:9px 15px;font:600 13px/1 -apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;color:#fff;background:#1557a8;box-shadow:0 3px 10px rgba(0,0,0,.28);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation';
+      btn.innerHTML = '<span class="acn3d-rdot" style="width:11px;height:11px;border-radius:50%;background:#ff3b30;display:inline-block"></span><span class="acn3d-rlab">Gravar</span>';
+      container.appendChild(btn);
+      if (!ok) { btn.style.display = 'none'; return; }
+
+      var toast = document.createElement('div');
+      toast.style.cssText = 'position:absolute;left:10px;bottom:54px;z-index:31;max-width:80%;background:rgba(0,0,0,.82);color:#fff;font:500 12px/1.45 -apple-system,sans-serif;padding:9px 12px;border-radius:10px;display:none;pointer-events:none;white-space:normal';
+      container.appendChild(toast);
+
+      var dot = btn.querySelector('.acn3d-rdot');
+      var lab = btn.querySelector('.acn3d-rlab');
+      var rec = null, chunks = [], micStream = null, mixStream = null, timer = null, t0 = 0;
+
+      function flash(msg, ms) {
+        toast.textContent = msg; toast.style.display = 'block';
+        clearTimeout(toast._t);
+        if (ms) toast._t = setTimeout(function(){ toast.style.display = 'none'; }, ms);
+      }
+      function fmt(s){ var m=Math.floor(s/60), x=s%60; return m+':'+(x<10?'0':'')+x; }
+      function pickMime() {
+        var c = ['video/mp4;codecs=h264,aac','video/mp4',
+                 'video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+        for (var i=0;i<c.length;i++){ try{ if(MediaRecorder.isTypeSupported(c[i])) return c[i]; }catch(e){} }
+        return '';
+      }
+      function resetUI() {
+        if (timer) { clearInterval(timer); timer = null; }
+        btn.style.background = '#1557a8';
+        lab.textContent = 'Gravar';
+        dot.style.background = '#ff3b30';
+        dot.style.animation = 'none';
+      }
+      function stopTracks() {
+        if (micStream) { micStream.getTracks().forEach(function(t){ t.stop(); }); micStream = null; }
+        mixStream = null;
+      }
+
+      hardStopRec = function() {
+        if (rec && rec.state !== 'inactive') { rec.onstop = null; try{ rec.stop(); }catch(e){} }
+        stopTracks(); resetUI(); controls.autoRotate = true; rec = null;
+      };
+
+      async function start() {
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation:true, noiseSuppression:true }, video:false });
+        } catch(e) {
+          flash('🎤 Nao consegui acessar o microfone. Autorize o uso do microfone e tente de novo.', 5000);
+          return;
+        }
+        var vTracks = canvas.captureStream(30).getVideoTracks();
+        mixStream = new MediaStream(vTracks.concat(micStream.getAudioTracks()));
+        var mime = pickMime();
+        try {
+          rec = mime ? new MediaRecorder(mixStream, { mimeType:mime, videoBitsPerSecond:6000000 })
+                     : new MediaRecorder(mixStream);
+        } catch(e) {
+          try { rec = new MediaRecorder(mixStream); }
+          catch(e2){ flash('Seu navegador nao suporta gravacao de video.', 5000); stopTracks(); return; }
+        }
+        chunks = [];
+        rec.ondataavailable = function(ev){ if (ev.data && ev.data.size) chunks.push(ev.data); };
+        rec.onstop = finish;
+        rec.start();
+
+        controls.autoRotate = false;        // voce controla o angulo enquanto narra
+        btn.style.background = '#c62828';
+        dot.style.animation = 'acn3dpulse 1s ease-in-out infinite';
+        t0 = Date.now();
+        lab.textContent = '⏹ 0:00';
+        timer = setInterval(function(){ lab.textContent = '⏹ ' + fmt(Math.floor((Date.now()-t0)/1000)); }, 500);
+        flash('Gravando… fale e gire o modelo. Toque no botao para encerrar.', 2800);
+      }
+
+      function stop() {
+        if (rec && rec.state === 'recording') { lab.textContent = '…'; try{ rec.stop(); }catch(e){} }
+      }
+
+      async function finish() {
+        if (timer) { clearInterval(timer); timer = null; }
+        var mime = (rec && rec.mimeType) || pickMime() || 'video/webm';
+        var ext  = mime.indexOf('mp4') > -1 ? 'mp4' : 'webm';
+        var blob = new Blob(chunks, { type: (mime.split(';')[0] || 'video/webm') });
+        stopTracks(); resetUI(); controls.autoRotate = true;
+        if (destroyed) return;
+        if (!blob.size) { flash('A gravacao saiu vazia. Tente novamente.', 4000); return; }
+
+        var base = (opts.nome || 'aconaval-3d').toString()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+                    .replace(/[^\w\-]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase() || 'aconaval-3d';
+        var nome = base + '.' + ext;
+        var file = new File([blob], nome, { type: blob.type });
+
+        // 1) Celular/PWA: abre a folha de compartilhamento (WhatsApp aparece na lista)
+        if (navigator.canShare && navigator.canShare({ files:[file] })) {
+          try {
+            await navigator.share({ files:[file], title:'Aco Naval 3D' });
+            flash('✅ Pronto! Escolha o WhatsApp na lista para enviar.', 3500);
+            return;
+          } catch(e) {
+            if (e && e.name === 'AbortError') return; // usuario cancelou a folha
+          }
+        }
+
+        // 2) Tenta copiar pra area de transferencia (poucos navegadores aceitam video)
+        var copied = false;
+        try {
+          if (navigator.clipboard && window.ClipboardItem) {
+            var item = {}; item[blob.type] = blob;
+            await navigator.clipboard.write([ new ClipboardItem(item) ]);
+            copied = true;
+          }
+        } catch(e) { copied = false; }
+        if (copied) { flash('✅ Video copiado! Cole no WhatsApp (Ctrl+V).', 4500); return; }
+
+        // 3) PC: baixa o arquivo (arraste pra conversa do WhatsApp Web)
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = nome;
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+        flash('✅ Video salvo! Arraste o arquivo pra conversa do WhatsApp Web.', 5000);
+      }
+
+      btn.addEventListener('click', function() {
+        if (rec && rec.state === 'recording') stop(); else start();
+      });
+    })();
+
     return {
       setMirror: function(on) { if (viewerPivot) viewerPivot.scale.x = on ? -1 : 1; },
       destroy: function() {
         destroyed = true;
+        try { hardStopRec(); } catch(e) {}
         if (rafId) cancelAnimationFrame(rafId);
         window.removeEventListener('resize', resize);
         controls.dispose();
@@ -1139,7 +1276,7 @@ function setMainPhoto(idx) {
   if (ph.tipo === '3d') {
     mainEl.classList.add('is-3d');
     mainEl.innerHTML = '';
-    window._acn3dViewer = ACN3D.mount(mainEl, varSelUrl || ph.src, { poster: varSelPoster || produto.foto || null, mirror: espelhado });
+    window._acn3dViewer = ACN3D.mount(mainEl, varSelUrl || ph.src, { poster: varSelPoster || produto.foto || null, mirror: espelhado, nome: (produto && produto.nome) || 'aconaval-3d' });
     if (setas) mainEl.insertAdjacentHTML('beforeend', setas);
     // Hint interativo — aparece e some
     const hint = document.createElement('div');
