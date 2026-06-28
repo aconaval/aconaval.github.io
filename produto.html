@@ -757,7 +757,8 @@ var ACN3D = (function() {
       var dot = btn.querySelector('.acn3d-rdot');
       var lab = btn.querySelector('.acn3d-rlab');
       var rec = null, chunks = [], micStream = null, mixStream = null, timer = null, t0 = 0;
-      var audioCtx = null, srcNode = null, destNode = null;
+      var audioCtx = null, srcNode = null, destNode = null, keepGain = null;
+      var origPR = renderer.getPixelRatio();
       var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
                      (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.userAgent));
 
@@ -787,12 +788,27 @@ var ACN3D = (function() {
         dot.style.background = '#ff3b30';
         dot.style.animation = 'none';
       }
+      function boostResolution(on) {
+        try {
+          if (on) {
+            var w = container.clientWidth || 300, h = container.clientHeight || 300;
+            var longSide = Math.max(w, h) || 300;
+            var pr = Math.min(3, Math.max(origPR, 1280 / longSide));   // alvo ~1280px no lado maior
+            renderer.setPixelRatio(pr);
+          } else {
+            renderer.setPixelRatio(origPR);
+          }
+          resize();
+        } catch(e) {}
+      }
       function stopTracks() {
         try { if (srcNode) srcNode.disconnect(); } catch(e) {}
+        try { if (keepGain) keepGain.disconnect(); } catch(e) {}
         try { if (audioCtx && audioCtx.state !== 'closed') audioCtx.close(); } catch(e) {}
-        srcNode = null; destNode = null; audioCtx = null;
+        srcNode = null; destNode = null; keepGain = null; audioCtx = null;
         if (micStream) { micStream.getTracks().forEach(function(t){ t.stop(); }); micStream = null; }
         mixStream = null;
+        boostResolution(false);
       }
 
       hardStopRec = function() {
@@ -809,9 +825,8 @@ var ACN3D = (function() {
           return;
         }
 
-        // Audio do microfone roteado pela Web Audio API → corrige som sumido no
-        // iOS/Safari e Android ao misturar com o canvas (captureStream).
-        var audioTracks = micStream.getAudioTracks();
+        // Microfone roteado pela Web Audio API → corrige audio mudo no iOS/Android.
+        var micTrack = null;
         try {
           var AC = window.AudioContext || window.webkitAudioContext;
           if (AC) {
@@ -820,18 +835,30 @@ var ACN3D = (function() {
             srcNode  = audioCtx.createMediaStreamSource(micStream);
             destNode = audioCtx.createMediaStreamDestination();
             srcNode.connect(destNode);
-            if (destNode.stream.getAudioTracks().length) audioTracks = destNode.stream.getAudioTracks();
+            // Mantem o grafo de audio "rodando" no iOS — sem isto o destino sai MUDO.
+            // Ganho 0 → nao gera microfonia/eco nos alto-falantes.
+            keepGain = audioCtx.createGain();
+            keepGain.gain.value = 0;
+            srcNode.connect(keepGain);
+            keepGain.connect(audioCtx.destination);
+            if (destNode.stream.getAudioTracks().length) micTrack = destNode.stream.getAudioTracks()[0];
           }
-        } catch(e) { /* fallback: usa o track cru do microfone */ }
+        } catch(e) { /* fallback abaixo usa o track cru do microfone */ }
+        if (!micTrack) micTrack = micStream.getAudioTracks()[0];
 
-        var vTracks = canvas.captureStream(30).getVideoTracks();
-        mixStream = new MediaStream(vTracks.concat(audioTracks));
+        boostResolution(true);                         // grava em resolucao maior
+        var cs = canvas.captureStream(30);
+        try { if (micTrack) cs.addTrack(micTrack); }   // audio adicionado AO stream do canvas (mais estavel no iOS)
+        catch(e) { cs = new MediaStream(cs.getVideoTracks().concat(micTrack ? [micTrack] : [])); }
+        mixStream = cs;
+
         var mime = pickMime();
+        var opt = { videoBitsPerSecond: 12000000, audioBitsPerSecond: 192000 };
+        if (mime) opt.mimeType = mime;
         try {
-          rec = mime ? new MediaRecorder(mixStream, { mimeType:mime, videoBitsPerSecond:6000000, audioBitsPerSecond:128000 })
-                     : new MediaRecorder(mixStream);
+          rec = new MediaRecorder(mixStream, opt);
         } catch(e) {
-          try { rec = new MediaRecorder(mixStream); }
+          try { rec = mime ? new MediaRecorder(mixStream, { mimeType:mime }) : new MediaRecorder(mixStream); }
           catch(e2){ flash('Seu navegador nao suporta gravacao de video.', 5000); stopTracks(); return; }
         }
         chunks = [];
