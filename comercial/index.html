@@ -416,7 +416,7 @@ tbody tr:hover{background:#fafbfc}
         <button class="tipo-btn" id="tipo-btn-conjunto" onclick="setTipoProduto('conjunto')">📦 Conjunto</button>
       </div>
       <div class="grid2">
-        <div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="inp-nome" placeholder="Ex: Fogão a Lenha Industrial"/></div>
+        <div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="inp-nome" placeholder="Ex: Fogão a Lenha Industrial" oninput="atualizarPreviewCodigoVar()"/></div>
         <div class="form-group"><label class="form-label">Dimensões / Especificações</label><input class="form-input" id="inp-dim" placeholder="Ex: 70x50cm — inox 430"/></div>
       </div>
       <div class="grid2">
@@ -448,6 +448,9 @@ tbody tr:hover{background:#fafbfc}
             <label class="form-label">Eixo / grupo da variação <span style="font-weight:400;color:#888;font-size:11px">— ex: Largura, Lado, Acabamento</span></label>
             <input class="form-input" id="inp-var-eixo" list="dl-var-eixos" placeholder="Ex: Largura"/>
             <datalist id="dl-var-eixos"></datalist>
+          </div>
+          <div id="var-codigo-preview" style="display:none;margin-top:10px;font-size:13px;color:#6B3FA0;background:#fff;border:1px solid #D6C6EE;border-radius:6px;padding:8px 11px">
+            Código gerado: <b id="var-codigo-preview-val" style="letter-spacing:.5px">—</b>
           </div>
           <div style="font-size:11px;color:#888;margin-top:6px;line-height:1.5">
             💡 O <b>Nome</b> lá em cima vira o rótulo da opção (ex: "60&nbsp;cm" ou "Direita"). Cada variação tem seu próprio <b>preço, foto e modelo 3D</b>. Na loja aparece só o produto principal; as variações surgem na página do produto.
@@ -500,7 +503,7 @@ tbody tr:hover{background:#fafbfc}
         </div>
         <input type="file" id="inp-foto-projeto" accept="image/*" multiple style="display:none" onchange="onFotoProjetoChange(event)"/>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="grupo-fotos-clientes">
         <label class="form-label">📸 Fotos de Clientes <span style="font-weight:400;color:#888;font-size:11px">(instalações reais, obras finalizadas — aparece na loja e na página do produto)</span></label>
         <div id="clientes-thumbs-wrap" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
         <div class="photo-upload-area" id="clientes-drop" onclick="document.getElementById('inp-foto-clientes').click()">
@@ -511,6 +514,11 @@ tbody tr:hover{background:#fafbfc}
           </div>
         </div>
         <input type="file" id="inp-foto-clientes" accept="image/*" multiple style="display:none" onchange="onFotoClienteChange(event)"/>
+      </div>
+      <div id="nota-clientes-variacao" class="form-group" style="display:none">
+        <div style="font-size:12px;color:#6B3FA0;background:#F1ECFB;border:1px solid #D6C6EE;border-radius:6px;padding:8px 11px;line-height:1.5">
+          📸 <b>Fotos de clientes ficam no produto principal</b> — valem para todas as variações e não mudam ao trocar de tamanho/opção. Só foto principal, projeto e 3D são por variação.
+        </div>
       </div>
       <div class="form-group" id="glb-wrap">
         <label class="form-label">🧊 Modelo 3D (GLB) <span style="font-weight:400;color:#888;font-size:11px">— visualização interativa 360° para o cliente</span></label>
@@ -527,6 +535,35 @@ tbody tr:hover{background:#fafbfc}
           </div>
         </div>
         <input type="file" id="inp-glb" accept=".glb,.gltf" style="display:none" onchange="onGlbChange(event)"/>
+        <label style="display:flex;align-items:flex-start;gap:8px;margin-top:10px;font-size:13px;color:#444;cursor:pointer;line-height:1.4">
+          <input type="checkbox" id="inp-espelhavel" style="margin-top:2px" onchange="toggleLadoDireito()"/>
+          <span>🔁 <b>Permite espelhar (Esquerda / Direita)</b> — mostra ao cliente a opção de virar o lado usando o mesmo GLB, sem precisar de outro arquivo. A foto/projeto acima são do lado <b>Esquerda</b>; o lado <b>Direita</b> tem seu próprio conjunto abaixo.</span>
+        </label>
+        <div id="grupo-lado-direito" style="display:none;border-left:3px solid #D6C6EE;padding-left:14px;margin-top:12px">
+          <div style="font-size:12px;font-weight:700;color:#6B3FA0;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">◨ Lado Direito — foto e projeto próprios</div>
+          <label class="form-label">Foto do Produto (Direita)</label>
+          <div class="photo-upload-area" id="photo-drop-dir" onclick="document.getElementById('inp-foto-dir').click()">
+            <div id="photo-placeholder-dir">
+              <div style="font-size:22px;margin-bottom:6px">📷</div>
+              <div style="font-size:12px;color:#888">Foto do lado direito</div>
+            </div>
+            <img id="photo-preview-img-dir" class="photo-preview" style="display:none"/>
+          </div>
+          <input type="file" id="inp-foto-dir" accept="image/*" style="display:none" onchange="onFotoDirChange(event)"/>
+          <div id="photo-actions-dir" style="display:none;margin-top:6px;gap:6px">
+            <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('inp-foto-dir').click()">🔄 Trocar</button>
+            <button class="btn btn-danger btn-sm" type="button" onclick="removeFotoDir()">✕ Remover</button>
+          </div>
+          <label class="form-label" style="margin-top:12px">📐 Fotos do Projeto (Direita)</label>
+          <div id="projeto-thumbs-wrap-dir" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+          <div class="photo-upload-area" id="projeto-drop-dir" onclick="document.getElementById('inp-foto-projeto-dir').click()">
+            <div id="projeto-placeholder-dir">
+              <div style="font-size:22px;margin-bottom:6px">📐</div>
+              <div style="font-size:12px;color:#888">Fotos de projeto do lado direito</div>
+            </div>
+          </div>
+          <input type="file" id="inp-foto-projeto-dir" accept="image/*" multiple style="display:none" onchange="onFotoProjetoDirChange(event)"/>
+        </div>
       </div>
       <div id="prod-acoes-extra" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f0f2f5;padding-top:12px;margin-top:4px;margin-bottom:12px">
         <span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.4px;width:100%">Outras ações para este produto</span>
@@ -1120,6 +1157,10 @@ async function save() {
         setStatus('🖼️ Comprimindo foto…');
         p.foto = await comprimirFoto(p.foto);
       }
+      if (p.fotoDir && p.fotoDir.startsWith('data:')) {
+        setStatus('🖼️ Comprimindo foto (direita)…');
+        p.fotoDir = await comprimirFoto(p.fotoDir);
+      }
     }
 
     // Salva cada produto em documento separado (evita limite de 1MB)
@@ -1146,11 +1187,15 @@ async function save() {
     // Salva cada produto em documento separado (evita limite de 1MB).
     // IMPORTANTE: fotosprojeto fica em acn_prod_fotos/{id} para não estoura o 1MB.
     const fotosPorProd = {};
+    const fotosDirPorProd = {};
     const prodsSemFotos = produtos.map(p => {
       if (Array.isArray(p.fotosprojeto) && p.fotosprojeto.length) {
         fotosPorProd[p.id] = p.fotosprojeto;
       }
-      const { fotosprojeto, ...rest } = p;  // retira fotosprojeto do doc do produto
+      if (Array.isArray(p.fotosprojetoDir) && p.fotosprojetoDir.length) {
+        fotosDirPorProd[p.id] = p.fotosprojetoDir;
+      }
+      const { fotosprojeto, fotosprojetoDir, ...rest } = p;  // retira projeto (esq/dir) do doc
       return rest;
     });
 
@@ -1158,6 +1203,9 @@ async function save() {
       ...prodsSemFotos.map(p => colProd.doc(String(p.id)).set(p)),
       ...Object.entries(fotosPorProd).map(([id, fotos]) =>
         salvarFotosProjeto(id, fotos)
+      ),
+      ...Object.entries(fotosDirPorProd).map(([id, fotos]) =>
+        salvarFotosProjetoDir(id, fotos)
       )
     ]);
 
@@ -1436,6 +1484,10 @@ function clearProdForm() {
   renderClienteThumbs();
   currentGlbFile = null;
   currentModelo3dUrl = null;
+  { const espChk = document.getElementById('inp-espelhavel'); if (espChk) espChk.checked = false; }
+  currentFotoDirBase64 = null; resetFotoDirUI();
+  currentFotosProjetoDirBase64 = []; renderProjetoDirThumbs();
+  toggleLadoDireito();
   resetGlbUI();
   // Reseta estado de variação e volta para "Produto simples"
   currentPaiId = null;
@@ -1658,7 +1710,7 @@ async function onFotoProjetoChange(e) {
       prod.fotosprojeto = [...currentFotosProjetoBase64];
       Promise.all([
         salvarFotosProjeto(prod.id, prod.fotosprojeto),
-        salvarFotosClientes(prod.id, currentFotosClientesBase64),
+        ...(prod.ehVariacao ? [] : [salvarFotosClientes(prod.id, currentFotosClientesBase64)]),
       ])
         .then(() => setStatus('✅ Foto salva', 'ok'))
         .catch(e => {
@@ -1696,6 +1748,108 @@ function renderProjetoThumbs() {
     </div>`).join('');
 }
 
+// ── LADO DIREITO (espelho): foto + projeto próprios ───────────────
+let currentFotoDirBase64 = null;
+let currentFotosProjetoDirBase64 = [];
+
+function toggleLadoDireito() {
+  const on = !!(document.getElementById('inp-espelhavel') && document.getElementById('inp-espelhavel').checked);
+  const blk = document.getElementById('grupo-lado-direito');
+  if (blk) blk.style.display = on ? 'block' : 'none';
+}
+
+function onFotoDirChange(e) {
+  const file = e.target.files[0]; if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { alert('Foto muito grande. Use uma imagem até 2MB.'); return; }
+  const reader = new FileReader();
+  reader.onload = ev => { currentFotoDirBase64 = ev.target.result; applyFotoDirUI(ev.target.result); };
+  reader.readAsDataURL(file);
+}
+function applyFotoDirUI(src) {
+  const img = document.getElementById('photo-preview-img-dir');
+  const ph  = document.getElementById('photo-placeholder-dir');
+  const acts = document.getElementById('photo-actions-dir');
+  if (img) { img.src = src; img.style.display = 'block'; }
+  if (ph)  ph.style.display = 'none';
+  if (acts) acts.style.display = 'flex';
+}
+function resetFotoDirUI() {
+  const img = document.getElementById('photo-preview-img-dir');
+  const ph  = document.getElementById('photo-placeholder-dir');
+  const acts = document.getElementById('photo-actions-dir');
+  if (img) { img.src = ''; img.style.display = 'none'; }
+  if (ph)  ph.style.display = 'block';
+  if (acts) acts.style.display = 'none';
+  const inp = document.getElementById('inp-foto-dir'); if (inp) inp.value = '';
+}
+function removeFotoDir() { currentFotoDirBase64 = null; resetFotoDirUI(); }
+
+async function onFotoProjetoDirChange(e) {
+  const files = Array.from(e.target.files);
+  for (const file of files) {
+    if (file.size > 2 * 1024 * 1024) { alert('Foto muito grande. Use uma imagem até 2MB.'); continue; }
+    const reader = new FileReader();
+    const base64 = await new Promise(res => { reader.onload = ev => res(ev.target.result); reader.readAsDataURL(file); });
+    const compressed = await comprimirFotoProjeto(base64);
+    currentFotosProjetoDirBase64.push(compressed);
+    renderProjetoDirThumbs();
+  }
+  e.target.value = '';
+  const eid = document.getElementById('edit-prod-id')?.value;
+  if (eid) {
+    const prod = produtos.find(p => p.id == eid);
+    if (prod) {
+      prod.fotosprojetoDir = [...currentFotosProjetoDirBase64];
+      salvarFotosProjetoDir(prod.id, prod.fotosprojetoDir)
+        .then(() => setStatus('✅ Foto (direita) salva', 'ok'))
+        .catch(err => { console.error(err); setStatus('⚠️ Erro ao salvar foto (direita)', 'erro'); });
+    }
+  }
+}
+function removeFotoProjetoDir(idx) {
+  currentFotosProjetoDirBase64.splice(idx, 1);
+  renderProjetoDirThumbs();
+  const eid = document.getElementById('edit-prod-id')?.value;
+  if (eid) {
+    const prod = produtos.find(p => p.id == eid);
+    if (prod) { prod.fotosprojetoDir = [...currentFotosProjetoDirBase64]; salvarFotosProjetoDir(prod.id, prod.fotosprojetoDir).catch(()=>{}); }
+  }
+}
+function renderProjetoDirThumbs() {
+  const wrap = document.getElementById('projeto-thumbs-wrap-dir');
+  if (!wrap) return;
+  if (!currentFotosProjetoDirBase64.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = currentFotosProjetoDirBase64.map((src, idx) => `
+    <div style="position:relative;display:inline-block">
+      <img src="${src}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #e0e4e8"/>
+      <button onclick="removeFotoProjetoDir(${idx})" style="position:absolute;top:-6px;right:-6px;background:#A32D2D;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0;text-align:center">✕</button>
+    </div>`).join('');
+}
+// Projeto do lado direito em docs separados: acn_prod_fotos/{id}_fd{i} + fotoDirCount
+async function salvarFotosProjetoDir(prodId, fotos) {
+  if (!db || !prodId) return;
+  const arr = fotos || [];
+  const batch = db.batch();
+  batch.set(db.collection('acn_prod_fotos').doc(String(prodId)), { fotoDirCount: arr.length }, { merge: true });
+  arr.forEach((foto, i) => batch.set(db.collection('acn_prod_fotos').doc(`${prodId}_fd${i}`), { foto, ordem: i }));
+  await batch.commit();
+}
+async function carregarFotosProjetoDir(prodId) {
+  if (!db || !prodId) return [];
+  try {
+    const snap = await db.collection('acn_prod_fotos').doc(String(prodId)).get();
+    if (!snap.exists) return [];
+    const count = snap.data().fotoDirCount || 0;
+    if (!count) return [];
+    const snaps = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        db.collection('acn_prod_fotos').doc(`${prodId}_fd${i}`).get().catch(() => null)
+      )
+    );
+    return snaps.map(s => s && s.exists ? s.data().foto : null).filter(Boolean);
+  } catch { return []; }
+}
+
 async function saveProduto() {
   const nome = document.getElementById('inp-nome').value.trim();
   const dim  = document.getElementById('inp-dim').value.trim();
@@ -1707,6 +1861,7 @@ async function saveProduto() {
   catFs.forEach(f => { const el=document.getElementById('inp-f-'+slugify(f)); if(el) filtros[f]=el.value.trim(); });
   const ehVariacao = document.getElementById('tipo-btn-variacao').classList.contains('active');
   const varEixo = ehVariacao ? document.getElementById('inp-var-eixo').value.trim() : '';
+  const ehEspelhavel = !!(document.getElementById('inp-espelhavel') && document.getElementById('inp-espelhavel').checked);
   const tipoProd = document.getElementById('tipo-btn-conjunto').classList.contains('active') ? 'conjunto' : 'simples';
   const componentes = tipoProd==='conjunto' ? [...currentComponentes] : [];
   const precoFinal = tipoProd==='conjunto'
@@ -1737,22 +1892,25 @@ async function saveProduto() {
     const idx = produtos.findIndex(p => p.id == eid);
     if (idx >= 0) {
       const codigoExistente = produtos[idx].codigo; // preserva o código já atribuído
-      // Código: ajusta se o tipo mudou (simples↔variação)
+      // Código: variação = por valor (Nome); simples = mantém ou gera novo da categoria
       let codigoFinal = codigoExistente;
-      if (ehVariacao && !/-\d+$/.test(String(codigoFinal||''))) codigoFinal = proximoSufixoVariacao(currentPaiId);
-      else if (!ehVariacao && /-\d+$/.test(String(codigoFinal||''))) codigoFinal = proximoCodigoLivrePorCat(cat);
+      if (ehVariacao) codigoFinal = proximoSufixoVariacao(currentPaiId, nome, prodId);
+      else if (String(codigoFinal || '').includes('-')) codigoFinal = proximoCodigoLivrePorCat(cat);
       produtos[idx] = { ...produtos[idx], nome, dim, preco:precoFinal, cat, obs, codigo:codigoFinal, filtros, tipoProd, componentes,
         ehVariacao, paiId: ehVariacao ? currentPaiId : null, eixo: ehVariacao ? varEixo : null,
-        modelo3d: modelo3dUrl || produtos[idx].modelo3d || null };
+        modelo3d: modelo3dUrl || produtos[idx].modelo3d || null, espelhavel: ehEspelhavel };
       if (currentFotoBase64 !== null) produtos[idx].foto = currentFotoBase64;
       produtos[idx].fotosprojeto = [...currentFotosProjetoBase64];
+      if (currentFotoDirBase64 !== null) produtos[idx].fotoDir = currentFotoDirBase64;
+      produtos[idx].fotosprojetoDir = [...currentFotosProjetoDirBase64];
     }
   } else {
-    // Auto-atribui código: variação herda do pai (CHU01-1); senão por categoria
-    const proximoCodigo = ehVariacao ? proximoSufixoVariacao(currentPaiId) : proximoCodigoLivrePorCat(cat);
+    // Auto-atribui código: variação por valor (Nome); senão por categoria
+    const proximoCodigo = ehVariacao ? proximoSufixoVariacao(currentPaiId, nome) : proximoCodigoLivrePorCat(cat);
     produtos.push({ id: prodId, nome, dim, preco:precoFinal, cat, obs, codigo:proximoCodigo, filtros, tipoProd, componentes,
       ehVariacao, paiId: ehVariacao ? currentPaiId : null, eixo: ehVariacao ? varEixo : null,
-      foto: currentFotoBase64 || '', fotosprojeto: [...currentFotosProjetoBase64], modelo3d: modelo3dUrl || null });
+      foto: currentFotoBase64 || '', fotosprojeto: [...currentFotosProjetoBase64], modelo3d: modelo3dUrl || null, espelhavel: ehEspelhavel,
+      fotoDir: currentFotoDirBase64 || null, fotosprojetoDir: [...currentFotosProjetoDirBase64] });
   }
   save(); renderProdutos(); cancelProdForm();
 }
@@ -1792,10 +1950,16 @@ function editProduto(id) {
     currentFotosProjetoBase64 = Array.isArray(p.fotosprojeto) ? [...p.fotosprojeto] : [];
     renderProjetoThumbs();
   });
-  carregarFotosClientes(p.id).then(fc => {
-    currentFotosClientesBase64 = fc || [];
+  if (p.ehVariacao) {
+    // Variação não tem fotos de clientes próprias — ficam no produto principal
+    currentFotosClientesBase64 = [];
     renderClienteThumbs();
-  });
+  } else {
+    carregarFotosClientes(p.id).then(fc => {
+      currentFotosClientesBase64 = fc || [];
+      renderClienteThumbs();
+    });
+  }
   // Restaura modelo 3D
   currentGlbFile = null;
   if (p.modelo3d) {
@@ -1804,6 +1968,13 @@ function editProduto(id) {
   } else {
     resetGlbUI();
   }
+  { const espChk = document.getElementById('inp-espelhavel'); if (espChk) espChk.checked = !!p.espelhavel; }
+  toggleLadoDireito();
+  currentFotoDirBase64 = null;
+  if (p.fotoDir) applyFotoDirUI(p.fotoDir); else resetFotoDirUI();
+  carregarFotosProjetoDir(p.id)
+    .then(fd => { currentFotosProjetoDirBase64 = fd || []; renderProjetoDirThumbs(); })
+    .catch(() => { currentFotosProjetoDirBase64 = []; renderProjetoDirThumbs(); });
   toggleProdForm(true);
   document.getElementById('prod-form-panel').scrollIntoView({behavior:'smooth'});
 }
@@ -2192,6 +2363,8 @@ async function saveConfig(){
 function renderFiltrosExtrasForm(){
   const wrap=document.getElementById('filtros-extras-form');
   if(!wrap) return;
+  wrap.innerHTML=''; return;   // Filtros removidos do cadastro — as variações fazem esse papel
+  // eslint-disable-next-line no-unreachable
   const sel=document.getElementById('inp-cat');
   const cat=(sel?.value||'').trim();
   const fs=filtrosDef[cat]||[];
@@ -2331,6 +2504,26 @@ function setTipoProduto(tipo) {
   if(inp) inp.readOnly = isCj;
   if(isCj) renderCompList();
   if(isVar) refreshVarEixosDatalist();
+  // Fotos de clientes são da família (produto principal) — somem nas variações
+  const grpCli  = document.getElementById('grupo-fotos-clientes');
+  const notaCli = document.getElementById('nota-clientes-variacao');
+  if (grpCli)  grpCli.style.display  = isVar ? 'none' : '';
+  if (notaCli) notaCli.style.display = isVar ? '' : 'none';
+  atualizarPreviewCodigoVar();
+}
+
+// Mostra o código que será gerado para a variação enquanto o Nome é digitado
+function atualizarPreviewCodigoVar() {
+  const wrap = document.getElementById('var-codigo-preview');
+  const val  = document.getElementById('var-codigo-preview-val');
+  if (!wrap || !val) return;
+  const isVar = document.getElementById('tipo-btn-variacao').classList.contains('active');
+  const nome  = (document.getElementById('inp-nome').value || '').trim();
+  if (!isVar || !currentPaiId || !nome) { wrap.style.display = 'none'; return; }
+  const pai  = produtos.find(p => p.id === currentPaiId);
+  const base = pai ? (pai.codigo || pai.id) : currentPaiId;
+  val.textContent = gerarCodigoVariacao(base, nome);
+  wrap.style.display = '';
 }
 
 function renderConjDropdown(q) {
@@ -2500,18 +2693,33 @@ function renderVarPaiSelected() {
   }
   document.getElementById('var-pai-nome').textContent = p.nome;
   document.getElementById('var-pai-sub').textContent = [p.codigo, p.cat].filter(Boolean).join(' · ');
+  atualizarPreviewCodigoVar();
 }
 
-// Próximo sufixo numérico livre para variações de um pai: CHU01-1, CHU01-2…
-function proximoSufixoVariacao(paiId) {
+// Token a partir do valor do eixo: número puro p/ medidas, sigla curta p/ nomes.
+function tokenVariacao(valor) {
+  const v = String(valor || '').trim();
+  if (!v) return '';
+  if (/^\D*\d+\D*$/.test(v)) { const n = v.replace(/[^\d]/g, ''); if (n) return n; }   // "180cm" → "180"
+  const limpo = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                 .toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return limpo.length <= 4 ? limpo : limpo.slice(0, 3);   // ILHA / NAO / PAR / MAD
+}
+// Código da variação: BASE + token(s). Aceita 1 valor ou vários (multi-eixo).
+function gerarCodigoVariacao(codigoBase, valores) {
+  const toks = (Array.isArray(valores) ? valores : [valores]).map(tokenVariacao).filter(Boolean);
+  return toks.length ? `${codigoBase}-${toks.join('-')}` : String(codigoBase);
+}
+// Código da variação por VALOR (não sequencial). Determinístico; evita colisão exata.
+function proximoSufixoVariacao(paiId, valorNome, excludeId) {
   const pai = produtos.find(p => p.id === paiId);
   const base = pai ? (pai.codigo || pai.id) : paiId;
-  const usados = produtos
-    .filter(p => p.ehVariacao && p.paiId === paiId && p.codigo)
-    .map(p => { const m = String(p.codigo).match(/-(\d+)$/); return m ? parseInt(m[1]) : 0; });
-  let n = 1;
-  while (usados.includes(n)) n++;
-  return `${base}-${n}`;
+  let cod = gerarCodigoVariacao(base, valorNome);
+  const usados = new Set(produtos
+    .filter(p => p.ehVariacao && p.paiId === paiId && p.codigo && p.id != excludeId)
+    .map(p => String(p.codigo)));
+  if (usados.has(cod)) { let k = 2; while (usados.has(`${cod}-${k}`)) k++; cod = `${cod}-${k}`; }
+  return cod;
 }
 
 // Abre o form já configurado como variação de um produto principal.
