@@ -757,6 +757,9 @@ var ACN3D = (function() {
       var dot = btn.querySelector('.acn3d-rdot');
       var lab = btn.querySelector('.acn3d-rlab');
       var rec = null, chunks = [], micStream = null, mixStream = null, timer = null, t0 = 0;
+      var audioCtx = null, srcNode = null, destNode = null;
+      var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+                     (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.userAgent));
 
       function flash(msg, ms) {
         toast.textContent = msg; toast.style.display = 'block';
@@ -778,6 +781,9 @@ var ACN3D = (function() {
         dot.style.animation = 'none';
       }
       function stopTracks() {
+        try { if (srcNode) srcNode.disconnect(); } catch(e) {}
+        try { if (audioCtx && audioCtx.state !== 'closed') audioCtx.close(); } catch(e) {}
+        srcNode = null; destNode = null; audioCtx = null;
         if (micStream) { micStream.getTracks().forEach(function(t){ t.stop(); }); micStream = null; }
         mixStream = null;
       }
@@ -790,16 +796,32 @@ var ACN3D = (function() {
       async function start() {
         try {
           micStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation:true, noiseSuppression:true }, video:false });
+            audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video:false });
         } catch(e) {
           flash('🎤 Nao consegui acessar o microfone. Autorize o uso do microfone e tente de novo.', 5000);
           return;
         }
+
+        // Audio do microfone roteado pela Web Audio API → corrige som sumido no
+        // iOS/Safari e Android ao misturar com o canvas (captureStream).
+        var audioTracks = micStream.getAudioTracks();
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) {
+            audioCtx = new AC();
+            if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch(e) {} }
+            srcNode  = audioCtx.createMediaStreamSource(micStream);
+            destNode = audioCtx.createMediaStreamDestination();
+            srcNode.connect(destNode);
+            if (destNode.stream.getAudioTracks().length) audioTracks = destNode.stream.getAudioTracks();
+          }
+        } catch(e) { /* fallback: usa o track cru do microfone */ }
+
         var vTracks = canvas.captureStream(30).getVideoTracks();
-        mixStream = new MediaStream(vTracks.concat(micStream.getAudioTracks()));
+        mixStream = new MediaStream(vTracks.concat(audioTracks));
         var mime = pickMime();
         try {
-          rec = mime ? new MediaRecorder(mixStream, { mimeType:mime, videoBitsPerSecond:6000000 })
+          rec = mime ? new MediaRecorder(mixStream, { mimeType:mime, videoBitsPerSecond:6000000, audioBitsPerSecond:128000 })
                      : new MediaRecorder(mixStream);
         } catch(e) {
           try { rec = new MediaRecorder(mixStream); }
@@ -838,34 +860,24 @@ var ACN3D = (function() {
         var nome = base + '.' + ext;
         var file = new File([blob], nome, { type: blob.type });
 
-        // 1) Celular/PWA: abre a folha de compartilhamento (WhatsApp aparece na lista)
-        if (navigator.canShare && navigator.canShare({ files:[file] })) {
+        // CELULAR: abre a folha de compartilhamento (WhatsApp aparece na lista)
+        if (isMobile && navigator.canShare && navigator.canShare({ files:[file] })) {
           try {
             await navigator.share({ files:[file], title:'Aco Naval 3D' });
             flash('✅ Pronto! Escolha o WhatsApp na lista para enviar.', 3500);
             return;
           } catch(e) {
             if (e && e.name === 'AbortError') return; // usuario cancelou a folha
+            // qualquer outro erro → cai pro download abaixo
           }
         }
 
-        // 2) Tenta copiar pra area de transferencia (poucos navegadores aceitam video)
-        var copied = false;
-        try {
-          if (navigator.clipboard && window.ClipboardItem) {
-            var item = {}; item[blob.type] = blob;
-            await navigator.clipboard.write([ new ClipboardItem(item) ]);
-            copied = true;
-          }
-        } catch(e) { copied = false; }
-        if (copied) { flash('✅ Video copiado! Cole no WhatsApp (Ctrl+V).', 4500); return; }
-
-        // 3) PC: baixa o arquivo (arraste pra conversa do WhatsApp Web)
+        // PC (e fallback do celular): baixa o arquivo automaticamente
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob); a.download = nome;
         document.body.appendChild(a); a.click();
         setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
-        flash('✅ Video salvo! Arraste o arquivo pra conversa do WhatsApp Web.', 5000);
+        flash('✅ Video baixado! Arraste o arquivo pra conversa do WhatsApp.', 5000);
       }
 
       btn.addEventListener('click', function() {
