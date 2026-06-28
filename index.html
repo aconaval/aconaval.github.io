@@ -36,10 +36,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   box-shadow:0 2px 16px rgba(0,0,0,.25)
 }
 .logo-wrap{display:flex;align-items:center;gap:12px}
-.logo-icon{
-  width:40px;height:40px;background:var(--blue);border-radius:8px;
-  display:flex;align-items:center;justify-content:center;font-size:20px
-}
+.logo-img{width:46px;height:46px;object-fit:contain;display:block;flex-shrink:0}
 .logo-text{color:#fff;font-family:'Inter',sans-serif;font-size:22px;font-weight:700;letter-spacing:.5px;line-height:1.1}
 .logo-text small{display:block;font-size:11px;color:rgba(255,255,255,.55);font-weight:400;font-family:'DM Sans',sans-serif;letter-spacing:.3px}
 .cart-btn{
@@ -55,11 +52,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   border-radius:999px;font-size:11px;font-weight:700;
   padding:1px 7px;min-width:20px;text-align:center
 }
+/* Promo dentro da barra escura do topo (só desktop) */
+.topbar-promo{display:none}
+@media(min-width:992px){
+  .topbar-promo{display:flex;flex:1;justify-content:center;align-items:center;gap:14px;color:#fff;font-size:12.5px;font-weight:500;white-space:nowrap;padding:0 16px;min-width:0;overflow:hidden}
+  .topbar-promo strong{font-weight:700}
+  .topbar-promo .tp-sep{opacity:.45}
+  .destaque-bar{display:none}   /* no desktop a frase sobe pro topo */
+}
 
 /* ── HERO ── */
 .hero{
   background:linear-gradient(135deg,var(--navy) 0%,#1a4a7a 60%,var(--blue) 100%);
-  padding:40px 24px 36px;
+  padding:24px 24px 22px;
   text-align:center;
   position:relative;overflow:hidden
 }
@@ -72,7 +77,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .hero h1 span{color:#7EC8F4}
 .hero p{color:rgba(255,255,255,.75);font-size:15px;max-width:500px;margin:0 auto 20px}
 .destaque-bar{
-  background:linear-gradient(90deg,#15803d,#0f5229);color:#fff;
+  background:linear-gradient(90deg,var(--navy),var(--blue));color:#fff;
   overflow:hidden;white-space:nowrap;padding:9px 0;font-size:13px;font-weight:500
 }
 .destaque-track{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:0 16px}
@@ -80,19 +85,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .destaque-item strong{font-weight:700}
 .destaque-sep{opacity:.5}
 @media(max-width:768px){
-  .destaque-bar{font-size:12px;padding:8px 0}
-  .destaque-track{
-    flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;
-    -webkit-overflow-scrolling:touch;scrollbar-width:none
-  }
-  .destaque-track::-webkit-scrollbar{display:none}
-  .destaque-item{flex-shrink:0}
+  .destaque-bar{font-size:11.5px;padding:7px 10px;white-space:normal}
+  .destaque-track{flex-wrap:wrap;justify-content:center;gap:6px 12px;white-space:normal}
+  .destaque-sep{display:none}
 }
 .hero-badges{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 .hero-badge{
   background:rgba(255,255,255,.12);backdrop-filter:blur(6px);
   color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;
   font-weight:600;border:1px solid rgba(255,255,255,.2)
+}
+.hero-trust{display:flex;align-items:center;gap:14px;justify-content:center;max-width:560px;margin:0 auto;background:linear-gradient(135deg,#16a34a,#0f6e34);border:1px solid rgba(255,255,255,.22);border-radius:14px;padding:15px 18px;box-shadow:0 6px 20px rgba(10,90,40,.35);text-align:left}
+.hero-trust-icon{font-size:34px;line-height:1;flex-shrink:0}
+.hero-trust-title{font-family:'Inter',sans-serif;font-size:20px;font-weight:800;color:#fff;line-height:1.15}
+.hero-trust-sub{font-size:13.5px;color:#DCF5E5;margin-top:3px;font-weight:600;line-height:1.3}
+/* Desktop: frete mais pra cima + card de confiança numa linha só (não afeta o celular) */
+@media(min-width:992px){
+  .hero{padding:16px 24px 18px}
+  .hero-trust{display:inline-flex;max-width:none;width:auto;margin:0 auto;padding:13px 24px}
+  .hero-trust > div{display:flex;align-items:baseline;gap:9px;white-space:nowrap}
+  .hero-trust-title{font-size:17.5px}
+  .hero-trust-sub{margin-top:0;font-size:13px}
+  .hero-trust-sub::before{content:"— ";opacity:.85}
 }
 
 /* ── CONTAINER ── */
@@ -123,7 +137,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   margin:0 -20px 18px;padding:12px 20px 10px;
   border-bottom:1px solid var(--border);
 }
-.cat-row{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.cat-row{display:flex;flex-wrap:wrap;gap:8px}
 .cat-row::-webkit-scrollbar{display:none}
 .cat-chip{
   padding:7px 16px;border-radius:999px;border:1.5px solid var(--border);
@@ -488,8 +502,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .modal-canos-total{font-size:13px;color:var(--muted);text-align:center;min-height:18px}
 
 /* ── FOOTER ── */
-.site-footer{background:var(--navy);color:rgba(255,255,255,.6);text-align:center;padding:24px;font-size:12px;margin-top:40px}
+.site-footer{background:var(--navy);color:rgba(255,255,255,.6);text-align:center;padding:28px 24px;font-size:12px;margin-top:40px}
 .site-footer strong{color:#fff}
+.footer-wa{display:inline-flex;align-items:center;gap:9px;background:#25D366;color:#fff;font-weight:700;font-size:14px;padding:11px 20px;border-radius:30px;text-decoration:none;box-shadow:0 3px 12px rgba(37,211,102,.35);transition:transform .15s}
+.footer-wa:hover{transform:translateY(-2px)}
+.footer-wa svg{width:20px;height:20px;fill:#fff;flex-shrink:0}
 
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
@@ -530,11 +547,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .proj-thumbs::-webkit-scrollbar{display:none}
   .proj-thumb{width:52px;height:52px;flex-shrink:0;scroll-snap-align:start}
 
-  /* Categorias: scroll horizontal */
+  /* Categorias: tudo numa tela so (quebra linha, sem rolar) */
   .cat-bar{top:54px;margin:0 -12px 14px;padding:10px 12px 8px}
-  .cat-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  .cat-row::-webkit-scrollbar{display:none}
-  .cat-chip{flex-shrink:0;font-size:12px;padding:6px 14px}
+  .cat-row{flex-wrap:wrap;gap:7px}
+  .cat-chip{font-size:12px;padding:6px 13px}
 
   /* Busca */
   .search-bar{padding:10px 12px}
@@ -551,6 +567,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   /* Drawer (carrinho) largura total */
   .drawer{width:100vw}
   .cart-btn span.label{display:none}
+  .logo-img{width:40px;height:40px}
   .logo-text{font-size:18px}
 
   /* Grids de formulário colapsam */
@@ -653,11 +670,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <!-- TOPBAR -->
 <header class="topbar">
   <div class="logo-wrap">
-    <div class="logo-icon">⚓</div>
+    <img class="logo-img" src="data:image/png;base64,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" alt="Aço Naval">
     <div class="logo-text">
       AÇO NAVAL
       <small>Catálogo Online</small>
     </div>
+  </div>
+  <div class="topbar-promo">
+    <span>🚚 <strong>Frete grátis</strong> Sul/Sudeste/C.Oeste</span>
+    <span class="tp-sep">•</span>
+    <span>💳 <strong>12x sem juros</strong> no cartão</span>
   </div>
   <div style="display:flex;gap:10px;align-items:center">
     <button class="cart-btn" id="dep-nav-btn" onclick="showDepoimentos()" style="display:none;background:rgba(255,255,255,.14)">
@@ -673,26 +695,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <!-- BARRA DE DESTAQUE -->
 <div class="destaque-bar">
   <div class="destaque-track">
-    <span class="destaque-item">💰 <strong>Pagamento só na entrega</strong></span>
-    <span class="destaque-sep">•</span>
     <span class="destaque-item">🚚 <strong>Frete grátis</strong> para Sul, Sudeste e Centro-Oeste</span>
     <span class="destaque-sep">•</span>
-    <span class="destaque-item">🏭 Fabricação própria</span>
-    <span class="destaque-sep">•</span>
-    <span class="destaque-item">💳 12x sem juros</span>
+    <span class="destaque-item">💳 <strong>12x sem juros</strong> no cartão</span>
   </div>
 </div>
 
 <!-- HERO -->
 <div class="hero" id="main-hero">
   <div class="hero-content">
-    <h1>Produtos <span>de Qualidade</span><br>Direto da Fábrica</h1>
-    <p>Fogões a lenha, chaminés, churrasqueiras e muito mais.<br>Faça seu pedido online com entrega em todo o Brasil.</p>
-    <div class="hero-badges">
-      <span class="hero-badge">💰 Pague só na entrega</span>
-      <span class="hero-badge">🚚 Frete grátis Sul/Sudeste/C.Oeste</span>
-      <span class="hero-badge">💳 12x sem juros</span>
-      <span class="hero-badge">🏭 Fabricação própria</span>
+    <div class="hero-trust">
+      <span class="hero-trust-icon">🛡️</span>
+      <div>
+        <div class="hero-trust-title">Compre com confiança total</div>
+        <div class="hero-trust-sub">Você só paga quando o produto chega na sua casa — sem nenhum pagamento antecipado.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -985,9 +1002,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 <!-- FOOTER -->
 <footer class="site-footer">
-  <strong>Aço Naval — Fábrica LCA</strong><br>
-  CNPJ: 42.310.905/0001-08 · www.aconaval.com · contato.aconaval@gmail.com<br>
-  💳 Cartão: até 12x sem juros · 💰 PIX com 10% de desconto
+  <a class="footer-wa" href="https://wa.me/555520181818?text=ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.946C.157 5.335 5.494 0 12.05 0a11.82 11.82 0 018.413 3.488 11.82 11.82 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.51 5.26l-.999 3.648 3.535-.927.392.215zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.612-.916-2.207-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg> Falar no WhatsApp · (55) 2018-1818
+  </a>
+  <div style="margin-top:16px">
+    <strong>Aço Naval — Fábrica LCA</strong><br>
+    CNPJ: 42.310.905/0001-08 · www.aconaval.com · contato.aconaval@gmail.com<br>
+    💳 Cartão: até 12x sem juros · 💰 PIX com 10% de desconto
+  </div>
 </footer>
 
 <!-- Firebase SDK -->
@@ -1050,16 +1072,25 @@ async function loadProdutos() {
   }
   renderCategories();
   renderCatalog();
-  // Centraliza o chip ativo se não for "Todos"
-  if (filtroAtivo !== 'Todos') {
-    const ativo = document.querySelector('.cat-chip.active');
-    if (ativo) ativo.scrollIntoView({ inline:'center', block:'nearest' });
-  }
+  atualizarWhatsAppLoja();
   if (produtos.length) document.getElementById('cart-btn').style.display = 'flex';
 }
 
 // ── CATEGORIES ───────────────────────────────────────────────────
 const isCano = p => (p.cat||'').toLowerCase().includes('cano');
+
+// ── WHATSAPP ──────────────────────────────────────────────────────
+// Numero internacional, so digitos: 55 (Brasil) + DDD + numero.  (55) 2018-1818
+const WHATS_NUM = '555520181818';
+function atualizarWhatsAppLoja(){
+  const wa = document.getElementById('wa-float');
+  if(!wa) return;
+  const frase = (!filtroAtivo || filtroAtivo === 'Todos')
+      ? 'estava visitando a loja'
+      : 'estava olhando a categoria de ' + String(filtroAtivo).toLowerCase();
+  const msg = 'olá, ' + frase + ' e gostaria de mais informações';
+  wa.href = 'https://wa.me/' + WHATS_NUM + '?text=' + encodeURIComponent(msg);
+}
 
 function renderCategories() {
   const cats = ['Todos', ...new Set(produtos.filter(p=>!isCano(p)).map(p => p.cat).filter(Boolean))];
@@ -1075,9 +1106,17 @@ function setCategoria(cat) {
   else history.replaceState({}, '', '?cat=' + encodeURIComponent(cat));
   renderCategories();
   renderCatalog();
-  // Garante que o chip ativo fique visível na faixa
-  const ativo = document.querySelector('.cat-chip.active');
-  if (ativo) ativo.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' });
+  atualizarWhatsAppLoja();
+  // Volta pro primeiro produto (corrige a tela ficar lá embaixo ao trocar de categoria)
+  const grid = document.getElementById('product-grid');
+  const topbarH = (document.querySelector('.topbar') || {}).offsetHeight || 60;
+  const catBarH = (document.getElementById('cat-bar') || {}).offsetHeight || 50;
+  if (grid) {
+    const y = grid.getBoundingClientRect().top + window.scrollY - topbarH - catBarH - 8;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 }
 
 // ── CATALOG ──────────────────────────────────────────────────────
@@ -1936,5 +1975,11 @@ function closeDepLb(){
 loadProdutos();
 loadDepoimentos();
 </script>
+<!-- BOTÃO FLUTUANTE WHATSAPP -->
+<a id="wa-float" href="#" target="_blank" rel="noopener" aria-label="Falar no WhatsApp"
+   style="position:fixed;right:18px;bottom:18px;z-index:400;width:58px;height:58px;border-radius:50%;background:#25D366;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;text-decoration:none;transition:transform .15s"
+   onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'">
+  <span style="width:33px;height:33px;fill:#fff;display:block"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.946C.157 5.335 5.494 0 12.05 0a11.82 11.82 0 018.413 3.488 11.82 11.82 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.51 5.26l-.999 3.648 3.535-.927.392.215zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.612-.916-2.207-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg></span>
+</a>
 </body>
 </html>
