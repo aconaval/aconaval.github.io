@@ -215,8 +215,8 @@
         <h2>5 · Luz & sombra</h2>
         <div class="row">
           <label>Exposição</label>
-          <input type="range" id="sExp" min="0.4" max="3" step="0.05" value="1.8">
-          <output id="oExp">1.80</output>
+          <input type="range" id="sExp" min="0.4" max="3" step="0.05" value="1">
+          <output id="oExp">1.00</output>
         </div>
         <div class="row">
           <label>Direção</label>
@@ -267,7 +267,6 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const $ = id => document.getElementById(id);
 const toast = (m)=>{const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._);t._=setTimeout(()=>t.classList.remove('show'),2200);};
@@ -278,8 +277,7 @@ const frame=$('frame'), bgImg=$('bg'), cv=$('cv'), empty=$('empty');
 const renderer = new THREE.WebGLRenderer({canvas:cv, antialias:true, alpha:true, preserveDrawingBuffer:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.LinearToneMapping;
-renderer.toneMappingExposure = 1.8;
+renderer.toneMapping = THREE.NoToneMapping;   // look plano/matte estilo SketchUp (igual ao produto)
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -287,20 +285,22 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.01, 5000);
 camera.position.set(0, 1.2, 4.0);
 
-// ambiente PBR neutro (reflexos suaves) + luz do baseline
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-
-const amb = new THREE.AmbientLight(0xffffff, 1.4); scene.add(amb);
-const fill1 = new THREE.DirectionalLight(0xffffff, 0.6); fill1.position.set(-3,4,-2); scene.add(fill1);
-const fill2 = new THREE.DirectionalLight(0xffffff, 0.4); fill2.position.set(3,2,-3); scene.add(fill2);
-const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+// Iluminação estilo SketchUp (igual ao visualizador do produto): difusa, plana, matte, sem reflexo
+const hemi  = new THREE.HemisphereLight(0xffffff, 0xd6dbe1, 0.50); scene.add(hemi);
+const amb   = new THREE.AmbientLight(0xffffff, 0.28); scene.add(amb);
+const fill1 = new THREE.DirectionalLight(0xffffff, 0.26); fill1.position.set(-3,4,-2); scene.add(fill1);
+const fill2 = new THREE.DirectionalLight(0xffffff, 0.15); fill2.position.set(3,2,-3); scene.add(fill2);
+const sun = new THREE.DirectionalLight(0xffffff, 0.78);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048,2048);
 sun.shadow.camera.near=0.1; sun.shadow.camera.far=40;
 sun.shadow.camera.left=-6; sun.shadow.camera.right=6; sun.shadow.camera.top=6; sun.shadow.camera.bottom=-6;
 sun.shadow.bias=-0.0004;
 scene.add(sun); scene.add(sun.target);
+
+// "Exposição" controla o brilho geral (multiplicador das luzes), já que NoToneMapping ignora toneMappingExposure
+const _lightBase = [[hemi,0.50],[amb,0.28],[fill1,0.26],[fill2,0.15],[sun,0.78]];
+function applyExposure(mult){ _lightBase.forEach(p=>{ p[0].intensity = p[1]*mult; }); }
 
 // chão que só recebe sombra (invisível no resultado, mostra só a sombra)
 const shadowMat = new THREE.ShadowMaterial({opacity:0.35});
@@ -340,7 +340,24 @@ function loadGLB(url, revoke){
     if(revoke) URL.revokeObjectURL(url);
     if(model){ scene.remove(model); tcontrols.detach(); }
     model = gltf.scene;
-    model.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.material && (o.material.envMapIntensity=0.8);} });
+    model.traverse(o=>{
+      if(o.isMesh){
+        o.castShadow=true; o.receiveShadow=true;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach(m=>{ if(!m) return;
+          if(m.metalness!==undefined) m.metalness=Math.min(m.metalness,0.15);
+          if(m.roughness!==undefined) m.roughness=Math.max(m.roughness,0.6);
+          if(m.envMapIntensity!==undefined) m.envMapIntensity=0.35;
+          m.side=THREE.DoubleSide; m.needsUpdate=true;
+        });
+        if(o.geometry){
+          const edges=new THREE.EdgesGeometry(o.geometry,18);
+          const line=new THREE.LineSegments(edges, new THREE.LineBasicMaterial({color:0x000000, transparent:true, opacity:0.60, depthTest:true}));
+          line.userData.acnEdge=true;
+          o.add(line);
+        }
+      }
+    });
     // normaliza: centraliza em XZ, base no Y=0, cabe em ~1.5 de altura
     const box=new THREE.Box3().setFromObject(model); const size=new THREE.Vector3(); box.getSize(size);
     const c=new THREE.Vector3(); box.getCenter(c);
@@ -524,12 +541,15 @@ function applyCamPos(){
 }
 bind('sCamH','oCamH',v=>{ applyCamPos(); }, v=>(+v).toFixed(2)+'m');
 bind('sCamD','oCamD',v=>{ applyCamPos(); }, v=>(+v).toFixed(1)+'m');
-bind('sExp','oExp',v=>{ renderer.toneMappingExposure=v; }, v=>(+v).toFixed(2));
+bind('sExp','oExp',v=>{ applyExposure(v); }, v=>(+v).toFixed(2));
 bind('sAzim','oAzim',()=>setSunDir(), v=>v+'°');
 bind('sElev','oElev',()=>setSunDir(), v=>v+'°');
 bind('sShadow','oShadow',v=>{ shadowMat.opacity=v; }, v=>(+v).toFixed(2));
 let curOpacity=1;
-function applyOpacity(){ if(!model) return; model.traverse(o=>{ if(o.isMesh&&o.material){ o.material.transparent=curOpacity<1; o.material.opacity=curOpacity; }});}
+function applyOpacity(){ if(!model) return; model.traverse(o=>{
+  if(o.userData && o.userData.acnEdge){ o.material.opacity=0.60*curOpacity; o.material.transparent=true; return; }
+  if(o.isMesh&&o.material){ o.material.transparent=curOpacity<1; o.material.opacity=curOpacity; }
+});}
 bind('sOpacity','oOpacity',v=>{ curOpacity=v; applyOpacity(); }, v=>Math.round(v*100)+'%');
 
 $('cGrid').addEventListener('change',e=>grid.visible=e.target.checked);
