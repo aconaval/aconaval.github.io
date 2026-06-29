@@ -110,6 +110,16 @@ body{background:#f5f7fa;color:#222;min-height:100vh}
 .cat-filtro-chip button{background:none;border:none;color:#185FA5;cursor:pointer;font-size:11px;padding:0;line-height:1;opacity:.6}
 .cat-filtro-chip button:hover{opacity:1}
 .cat-add-filtro-row{display:flex;gap:5px;align-items:center}
+.cat-eixos{margin-top:10px;border-top:1px dashed #e0e4e8;padding-top:10px}
+.cat-eixos-label{font-size:10px;font-weight:700;color:#6B3FA0;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.eixo-row{background:#fff;border:1px solid #e6def5;border-radius:7px;padding:8px 9px;margin-bottom:7px}
+.eixo-row-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.eixo-nome{font-size:12px;font-weight:700;color:#5a2d91}
+.eixo-opcoes{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px;min-height:20px}
+.eixo-opc-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;background:#F1ECFB;color:#6B3FA0;border:1px solid #D6C6EE;border-radius:20px;font-size:11px;font-weight:600}
+.eixo-opc-chip button{background:none;border:none;color:#6B3FA0;cursor:pointer;font-size:11px;padding:0;line-height:1;opacity:.55}
+.eixo-opc-chip button:hover{opacity:1}
+.eixo-add-row{display:flex;gap:5px;align-items:center}
 .filtro-def-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f5f7fa;border-radius:6px;margin-bottom:5px}
 .filtro-def-name{flex:1;font-size:13px;font-weight:500;color:#003366}
 .filtro-add-row{display:flex;gap:6px;margin-top:6px}
@@ -412,49 +422,31 @@ tbody tr:hover{background:#fafbfc}
       <div style="font-size:14px;font-weight:700;color:#003366;margin-bottom:10px" id="prod-form-title">Novo Produto</div>
       <div class="tipo-toggle">
         <button class="tipo-btn active" id="tipo-btn-simples" onclick="setTipoProduto('simples')">Produto simples</button>
-        <button class="tipo-btn" id="tipo-btn-variacao" onclick="setTipoProduto('variacao')">🔀 Variação</button>
         <button class="tipo-btn" id="tipo-btn-conjunto" onclick="setTipoProduto('conjunto')">📦 Conjunto</button>
       </div>
       <div class="grid2">
-        <div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="inp-nome" placeholder="Ex: Fogão a Lenha Industrial" oninput="atualizarPreviewCodigoVar()"/></div>
+        <div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="inp-nome" placeholder="Ex: Fogão a Lenha Industrial"/></div>
         <div class="form-group"><label class="form-label">Dimensões / Especificações</label><input class="form-input" id="inp-dim" placeholder="Ex: 70x50cm — inox 430"/></div>
       </div>
       <div class="grid2">
         <div class="form-group" id="wrap-preco"><label class="form-label">Valor Unitário (R$)</label><input class="form-input" id="inp-preco" type="number" min="0" step="0.01" placeholder="0,00"/></div>
         <div class="form-group"><label class="form-label">Categoria</label>
-          <select class="form-input" id="inp-cat" onchange="renderFiltrosExtrasForm()" style="cursor:pointer">
+          <select class="form-input" id="inp-cat" onchange="renderFiltrosExtrasForm();renderComboWrap()" style="cursor:pointer">
             <option value="">Selecione a categoria...</option>
           </select>
         </div>
       </div>
-      <!-- PAINEL VARIAÇÃO -->
-      <div id="var-picker-wrap" style="display:none">
-        <div class="conj-picker">
-          <div style="font-size:12px;font-weight:600;color:#185FA5;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Variação de qual produto principal?</div>
-          <div id="var-pai-selected" style="display:none;align-items:center;gap:8px;padding:8px 10px;background:#fff;border:1px solid #B5D4F4;border-radius:6px;margin-bottom:8px">
-            <img id="var-pai-img" class="comp-row-img" style="display:none"/>
-            <div style="flex:1">
-              <div id="var-pai-nome" style="font-size:13px;font-weight:600;color:#003366"></div>
-              <div id="var-pai-sub" style="font-size:11px;color:#888"></div>
-            </div>
-            <button class="btn btn-ghost btn-sm" type="button" onclick="limparVarPai()">✕ trocar</button>
-          </div>
-          <div class="conj-search-wrap" id="var-search-row">
-            <input id="var-search-inp" placeholder="🔍 Buscar produto principal..." autocomplete="off"
-              oninput="renderVarPaiDropdown(this.value)" onfocus="renderVarPaiDropdown(this.value)" onblur="setTimeout(()=>closeVarDropdown(),180)"/>
-            <div class="conj-dropdown" id="var-dropdown"></div>
-          </div>
-          <div class="form-group" style="margin:10px 0 0">
-            <label class="form-label">Eixo / grupo da variação <span style="font-weight:400;color:#888;font-size:11px">— ex: Largura, Lado, Acabamento</span></label>
-            <input class="form-input" id="inp-var-eixo" list="dl-var-eixos" placeholder="Ex: Largura"/>
-            <datalist id="dl-var-eixos"></datalist>
-          </div>
-          <div id="var-codigo-preview" style="display:none;margin-top:10px;font-size:13px;color:#6B3FA0;background:#fff;border:1px solid #D6C6EE;border-radius:6px;padding:8px 11px">
-            Código gerado: <b id="var-codigo-preview-val" style="letter-spacing:.5px">—</b>
-          </div>
-          <div style="font-size:11px;color:#888;margin-top:6px;line-height:1.5">
-            💡 O <b>Nome</b> lá em cima vira o rótulo da opção (ex: "60&nbsp;cm" ou "Direita"). Cada variação tem seu próprio <b>preço, foto e modelo 3D</b>. Na loja aparece só o produto principal; as variações surgem na página do produto.
-          </div>
+      <!-- BANNER: esta é uma combinação de um produto principal -->
+      <div id="combo-banner" style="display:none;align-items:center;gap:8px;padding:9px 12px;background:#F1ECFB;border:1px solid #D6C6EE;border-radius:7px;margin-bottom:12px">
+        <span style="font-size:16px">🔀</span>
+        <div style="font-size:12.5px;color:#5a2d91">Combinação de: <b id="combo-banner-nome"></b></div>
+      </div>
+      <!-- SELETORES DE EIXOS (combinação padrão do principal OU valores de uma combinação) -->
+      <div id="combo-wrap" style="display:none">
+        <div class="conj-picker" style="background:#faf7ff;border-color:#e6def5">
+          <div id="combo-label" style="font-size:12px;font-weight:700;color:#6B3FA0;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px"></div>
+          <div id="combo-selects" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+          <div id="combo-hint" style="font-size:11px;color:#888;margin-top:9px;line-height:1.5"></div>
         </div>
       </div>
       <!-- PAINEL CONJUNTO -->
@@ -527,6 +519,7 @@ tbody tr:hover{background:#fafbfc}
           <span id="glb-filename" style="font-size:12px;color:#185FA5;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
           <button class="btn btn-danger btn-sm" type="button" onclick="removeModelo3d()">✕ Remover</button>
         </div>
+        <div id="glb-comp-status" style="display:none;font-size:11.5px;font-weight:600;margin:-2px 0 8px;padding:7px 10px;border-radius:6px;line-height:1.4"></div>
         <div class="photo-upload-area" id="glb-drop" onclick="document.getElementById('inp-glb').click()">
           <div id="glb-placeholder">
             <div style="font-size:22px;margin-bottom:6px">🧊</div>
@@ -567,7 +560,7 @@ tbody tr:hover{background:#fafbfc}
       </div>
       <div id="prod-acoes-extra" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f0f2f5;padding-top:12px;margin-top:4px;margin-bottom:12px">
         <span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.4px;width:100%">Outras ações para este produto</span>
-        <button class="btn btn-ghost btn-sm" id="btn-prod-variacao" style="color:#6B3FA0" onclick="novaVariacaoDe(parseInt(document.getElementById('edit-prod-id').value))" title="Adicionar variação deste produto">🔀 + Variação</button>
+        <button class="btn btn-ghost btn-sm" id="btn-prod-variacao" style="color:#6B3FA0" onclick="novaCombinacaoDe(parseInt(document.getElementById('edit-prod-id').value))" title="Adicionar uma combinação deste produto">🔀 + Combinação</button>
         <button class="btn btn-ghost btn-sm" style="color:#185FA5" onclick="copiarLinkProduto(document.getElementById('edit-prod-id').value, this)" title="Copiar link do produto para enviar ao cliente">🔗 Copiar Link</button>
         <button class="btn btn-danger btn-sm" onclick="deleteProduto(document.getElementById('edit-prod-id').value)">🗑️ Excluir Produto</button>
       </div>
@@ -1039,6 +1032,7 @@ let orcamentos = [];
 let items = [];
 let currentOrcamento = null;
 let filtrosDef = {};      // ex: { "Fogão": ["Largura","Material"], "Chaminé": ["Diâmetro"] }
+let eixosDef = {};        // ex: { "Fogões": [{nome:"Comprimento",opcoes:["130 cm","140 cm","150 cm"]}, ...] }
 let filtrosAtivos = {};   // ex: {"Largura":"70cm"}
 let categorias = [];      // ex: ["Fogão", "Chaminé", "Churrasqueira"]
 let catPrefixes = {};     // ex: {"Fogão":"FOG","Chaminé":"CHAM","Conjunto":"CONJ"}
@@ -1181,7 +1175,7 @@ async function save() {
     await Promise.all([
       colOrc.doc('orcamentos').set({ lista: orcSemFoto }),
       colOrc.doc('produtos_index').set({ ids: produtos.map(p => p.id) }),
-      colOrc.doc('config').set({ filtrosDef, categorias, catPrefixes })
+      colOrc.doc('config').set({ filtrosDef, eixosDef, categorias, catPrefixes })
     ]);
 
     // Salva cada produto em documento separado (evita limite de 1MB).
@@ -1293,6 +1287,8 @@ async function loadFromFirebase() {
     if (cfgSnap.exists) {
       filtrosDef = cfgSnap.data().filtrosDef || {};
       if (Array.isArray(filtrosDef)) filtrosDef = {}; // migração do formato antigo
+      eixosDef = cfgSnap.data().eixosDef || {};
+      if (Array.isArray(eixosDef)) eixosDef = {};
       categorias = cfgSnap.data().categorias || [];
       catPrefixes = cfgSnap.data().catPrefixes || {};
     }
@@ -1320,6 +1316,8 @@ async function loadFromFirebase() {
     orcamentos = JSON.parse(localStorage.getItem('acn_orcamentos') || '[]');
     filtrosDef = JSON.parse(localStorage.getItem('acn_filtros_def') || '{}');
     if (Array.isArray(filtrosDef)) filtrosDef = {};
+    eixosDef = JSON.parse(localStorage.getItem('acn_eixos_def') || '{}');
+    if (Array.isArray(eixosDef)) eixosDef = {};
     categorias = JSON.parse(localStorage.getItem('acn_categorias') || '[]');
     catPrefixes = JSON.parse(localStorage.getItem('acn_cat_prefixes') || '{}');
     if (!categorias.length && produtos.length) {
@@ -1489,12 +1487,9 @@ function clearProdForm() {
   currentFotosProjetoDirBase64 = []; renderProjetoDirThumbs();
   toggleLadoDireito();
   resetGlbUI();
-  // Reseta estado de variação e volta para "Produto simples"
-  currentPaiId = null;
+  // Reseta estado de combinação e volta para "Produto simples"
   currentComponentes = [];
-  const eixoInp = document.getElementById('inp-var-eixo');
-  if (eixoInp) eixoInp.value = '';
-  renderVarPaiSelected();
+  setComboMode(null);
   setTipoProduto('simples');
 }
 let currentFotoBase64 = null;
@@ -1511,6 +1506,122 @@ function onGlbChange(e) {
   document.getElementById('glb-current').style.display = 'flex';
   document.getElementById('glb-drop').style.display = 'none';
   document.getElementById('glb-placeholder').style.display = '';
+  comprimirGlbSelecionado(file);   // comprime as texturas antes do upload
+}
+
+// ── COMPRESSOR DE TEXTURAS GLB (100% no navegador, antes do upload) ──
+function fmtBytesGlb(b) { return b >= 1048576 ? (b/1048576).toFixed(2)+' MB' : (b/1024).toFixed(0)+' KB'; }
+
+async function comprimirGlbSelecionado(file) {
+  const status = document.getElementById('glb-comp-status');
+  const setStatus = (bg, cor, html) => {
+    if (!status) return;
+    status.style.display = 'block';
+    status.style.background = bg; status.style.color = cor;
+    status.innerHTML = html;
+  };
+  setStatus('#f0f6ff', '#185FA5', '🗜️ Comprimindo texturas…');
+  try {
+    const raw = new Uint8Array(await file.arrayBuffer());
+    const res = await compressGLB(raw, (i, t) =>
+      setStatus('#f0f6ff', '#185FA5', `🗜️ Comprimindo textura ${i} de ${t}…`));
+    const origSize = file.size, novoSize = res.bytes.length;
+    if (res.imgsCompressed > 0 && novoSize < origSize * 0.97) {
+      const blob = new Blob([res.bytes], { type:'model/gltf-binary' });
+      const nome = file.name.replace(/\.(glb|gltf)$/i,'') + '.glb';
+      currentGlbFile = new File([blob], nome, { type:'model/gltf-binary' });
+      const pct = ((1 - novoSize/origSize) * 100).toFixed(0);
+      document.getElementById('glb-filename').textContent = `${nome}  (${(novoSize/1048576).toFixed(1)} MB)`;
+      setStatus('#e8f5ee', '#156d3a',
+        `✅ Comprimido: ${fmtBytesGlb(origSize)} → <b>${fmtBytesGlb(novoSize)}</b> (−${pct}%) · ${res.imgsCompressed} textura(s)`);
+    } else {
+      setStatus('#fff8e8', '#9a6b00', `ℹ️ Já estava otimizado — enviando o original (${fmtBytesGlb(origSize)})`);
+    }
+  } catch (err) {
+    console.warn('Compressão GLB falhou, usando original:', err);
+    setStatus('#fff0f0', '#a32d2d', '⚠️ Não deu pra comprimir — será enviado o arquivo original');
+  }
+}
+
+async function compressGLB(bytes, onProg) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset);
+  if (dv.getUint32(0,true) !== 0x46546C67) throw new Error('Arquivo não é um GLB válido.');
+  const jsonLen  = dv.getUint32(12,true);
+  const jsonType = dv.getUint32(16,true);
+  if (jsonType !== 0x4E4F534A) throw new Error('Chunk JSON não encontrado.');
+  const json = JSON.parse(new TextDecoder().decode(bytes.slice(20, 20+jsonLen)));
+  const binOff = 20 + jsonLen;
+  if (bytes.length <= binOff+8) return { bytes, imgsCompressed:0, imgsSkipped:0 };
+  const binType = dv.getUint32(binOff+4,true);
+  if (binType !== 0x004E4942) return { bytes, imgsCompressed:0, imgsSkipped:0 };
+  const binLen = dv.getUint32(binOff, true);
+  const bin = bytes.slice(binOff+8, binOff+8+binLen);
+  if (!json.images || json.images.length === 0) return { bytes, imgsCompressed:0, imgsSkipped:0 };
+  const bvDatas = json.bufferViews.map(bv =>
+    bin.slice(bv.byteOffset||0, (bv.byteOffset||0)+bv.byteLength));
+  let imgsCompressed = 0, imgsSkipped = 0;
+  const total = json.images.length;
+  for (let i = 0; i < total; i++) {
+    const img = json.images[i];
+    if (img.bufferView === undefined) { imgsSkipped++; continue; }
+    if (onProg) onProg(i+1, total);
+    try {
+      const compressed = await jpegCompress(bvDatas[img.bufferView], 0.72);
+      if (compressed.length < bvDatas[img.bufferView].length) {
+        bvDatas[img.bufferView] = compressed;
+        json.images[i].mimeType = 'image/jpeg';
+        imgsCompressed++;
+      } else imgsSkipped++;
+    } catch(e) { imgsSkipped++; }
+  }
+  const newOffsets = []; let cursor = 0;
+  for (const d of bvDatas) { newOffsets.push(cursor); cursor += d.length; cursor += (4 - (d.length % 4)) % 4; }
+  const newBin = new Uint8Array(cursor);
+  for (let i = 0; i < bvDatas.length; i++) newBin.set(bvDatas[i], newOffsets[i]);
+  for (let i = 0; i < json.bufferViews.length; i++) {
+    json.bufferViews[i].byteOffset = newOffsets[i];
+    json.bufferViews[i].byteLength = bvDatas[i].length;
+  }
+  if (json.buffers && json.buffers[0]) json.buffers[0].byteLength = newBin.length;
+  const newJsonBytes = new TextEncoder().encode(JSON.stringify(json));
+  const jPad = (4 - (newJsonBytes.length % 4)) % 4;
+  const bPad = (4 - (newBin.length % 4)) % 4;
+  const total2 = 12 + 8 + newJsonBytes.length + jPad + 8 + newBin.length + bPad;
+  const out = new Uint8Array(total2);
+  const ov  = new DataView(out.buffer);
+  ov.setUint32(0, 0x46546C67, true);
+  ov.setUint32(4, 2, true);
+  ov.setUint32(8, total2, true);
+  ov.setUint32(12, newJsonBytes.length+jPad, true);
+  ov.setUint32(16, 0x4E4F534A, true);
+  out.set(newJsonBytes, 20);
+  for (let i=0;i<jPad;i++) out[20+newJsonBytes.length+i] = 0x20;
+  const bStart = 20 + newJsonBytes.length + jPad;
+  ov.setUint32(bStart,   newBin.length+bPad, true);
+  ov.setUint32(bStart+4, 0x004E4942, true);
+  out.set(newBin, bStart+8);
+  return { bytes: out, imgsCompressed, imgsSkipped };
+}
+
+function jpegCompress(imgData, quality) {
+  return new Promise((res, rej) => {
+    const blob = new Blob([imgData]);
+    const url  = URL.createObjectURL(blob);
+    const img  = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const cv  = document.createElement('canvas');
+      cv.width  = img.naturalWidth;
+      cv.height = img.naturalHeight;
+      cv.getContext('2d').drawImage(img, 0, 0);
+      cv.toBlob(b => {
+        if (!b) { rej(new Error('Canvas toBlob falhou')); return; }
+        b.arrayBuffer().then(ab => res(new Uint8Array(ab)));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Imagem inválida')); };
+    img.src = url;
+  });
 }
 function removeModelo3d() {
   currentGlbFile = null;
@@ -1521,12 +1632,14 @@ function removeModelo3d() {
 function resetGlbUI() {
   document.getElementById('glb-current').style.display = 'none';
   document.getElementById('glb-drop').style.display = '';
+  const s = document.getElementById('glb-comp-status'); if (s) s.style.display = 'none';
 }
 function applyGlbUI(url, filename) {
   currentModelo3dUrl = url;
   document.getElementById('glb-filename').textContent = filename || 'modelo3d.glb';
   document.getElementById('glb-current').style.display = 'flex';
   document.getElementById('glb-drop').style.display = 'none';
+  const s = document.getElementById('glb-comp-status'); if (s) s.style.display = 'none';
 }
 async function uploadGlbToStorage(prodId, file) {
   if (!storage) throw new Error('Firebase Storage não inicializado.');
@@ -1851,7 +1964,6 @@ async function carregarFotosProjetoDir(prodId) {
 }
 
 async function saveProduto() {
-  const nome = document.getElementById('inp-nome').value.trim();
   const dim  = document.getElementById('inp-dim').value.trim();
   const preco = parseFloat(document.getElementById('inp-preco').value);
   const cat  = document.getElementById('inp-cat').value.trim();
@@ -1859,21 +1971,41 @@ async function saveProduto() {
   const filtros = {};
   const catFs = filtrosDef[cat] || [];
   catFs.forEach(f => { const el=document.getElementById('inp-f-'+slugify(f)); if(el) filtros[f]=el.value.trim(); });
-  const ehVariacao = document.getElementById('tipo-btn-variacao').classList.contains('active');
-  const varEixo = ehVariacao ? document.getElementById('inp-var-eixo').value.trim() : '';
+  const ehCombinacao = !!currentPaiId;
   const ehEspelhavel = !!(document.getElementById('inp-espelhavel') && document.getElementById('inp-espelhavel').checked);
-  const tipoProd = document.getElementById('tipo-btn-conjunto').classList.contains('active') ? 'conjunto' : 'simples';
+  const tipoProd = (!ehCombinacao && document.getElementById('tipo-btn-conjunto').classList.contains('active')) ? 'conjunto' : 'simples';
   const componentes = tipoProd==='conjunto' ? [...currentComponentes] : [];
   const precoFinal = tipoProd==='conjunto'
     ? componentes.reduce((s,c)=>{ const p=produtos.find(x=>x.id===c.prodId); return s+(p?p.preco:0); },0)
     : preco;
-  if (!nome) return alert('Informe o nome do produto.');
+
+  // Nome: combinação herda o nome da família (pai); produto normal usa o campo Nome
+  const pai = ehCombinacao ? produtos.find(p => p.id === currentPaiId) : null;
+  const nome = ehCombinacao ? (pai ? pai.nome : '') : document.getElementById('inp-nome').value.trim();
+
+  // Combo (valores dos eixos) — vale tanto pra combinação quanto pra padrão do principal
+  const eixosCat = eixosDef[cat] || [];
+  const combo = (eixosCat.length) ? readCombo() : null;
+
+  if (ehCombinacao && !pai) return alert('Produto principal não encontrado.');
+  if (!ehCombinacao && !nome) return alert('Informe o nome do produto.');
   if (tipoProd==='simples' && (isNaN(preco) || preco < 0)) return alert('Informe um valor válido.');
   if (tipoProd==='conjunto' && componentes.length===0) return alert('Adicione ao menos um componente ao conjunto.');
-  if (ehVariacao && !currentPaiId) return alert('Escolha de qual produto principal esta é uma variação.');
+  // Combinação exige um valor por eixo
+  if (ehCombinacao) {
+    if (!eixosCat.length) return alert('A categoria "'+cat+'" não tem eixos definidos. Defina os eixos em "Categorias e Filtros".');
+    const faltando = eixosCat.filter(e => !combo || !combo[e.nome]);
+    if (faltando.length) return alert('Escolha um valor para: ' + faltando.map(e=>e.nome).join(', '));
+    // Evita combinação duplicada no mesmo principal
+    const eidNum = document.getElementById('edit-prod-id').value;
+    const dup = produtos.find(p => p.ehVariacao && p.paiId===currentPaiId && String(p.id)!==String(eidNum)
+      && p.combo && JSON.stringify(p.combo)===JSON.stringify(combo));
+    if (dup) return alert('Já existe uma combinação idêntica neste produto: ' + Object.values(combo).join(' · '));
+  }
+
   const eid = document.getElementById('edit-prod-id').value;
-  // Determina o prodId definitivo (existente ou novo)
   const prodId = eid ? parseInt(eid) : Date.now();
+
   // Upload GLB se houver arquivo novo selecionado
   let modelo3dUrl = currentModelo3dUrl;
   if (currentGlbFile) {
@@ -1888,16 +2020,19 @@ async function saveProduto() {
     }
     if (btnSave) { btnSave.disabled = false; btnSave.innerHTML = '💾 Salvar Produto'; }
   }
+
   if (eid) {
     const idx = produtos.findIndex(p => p.id == eid);
     if (idx >= 0) {
-      const codigoExistente = produtos[idx].codigo; // preserva o código já atribuído
-      // Código: variação = por valor (Nome); simples = mantém ou gera novo da categoria
+      const codigoExistente = produtos[idx].codigo;
       let codigoFinal = codigoExistente;
-      if (ehVariacao) codigoFinal = proximoSufixoVariacao(currentPaiId, nome, prodId);
+      if (ehCombinacao) codigoFinal = codigoCombinacao(currentPaiId, combo, prodId);
       else if (String(codigoFinal || '').includes('-')) codigoFinal = proximoCodigoLivrePorCat(cat);
       produtos[idx] = { ...produtos[idx], nome, dim, preco:precoFinal, cat, obs, codigo:codigoFinal, filtros, tipoProd, componentes,
-        ehVariacao, paiId: ehVariacao ? currentPaiId : null, eixo: ehVariacao ? varEixo : null,
+        ehVariacao: ehCombinacao, paiId: ehCombinacao ? currentPaiId : null,
+        combo: ehCombinacao ? combo : null,
+        comboPadrao: (!ehCombinacao && combo) ? combo : (produtos[idx].comboPadrao || null),
+        eixo: null,   // campo antigo de eixo único não é mais usado
         modelo3d: modelo3dUrl || produtos[idx].modelo3d || null, espelhavel: ehEspelhavel };
       if (currentFotoBase64 !== null) produtos[idx].foto = currentFotoBase64;
       produtos[idx].fotosprojeto = [...currentFotosProjetoBase64];
@@ -1905,10 +2040,12 @@ async function saveProduto() {
       produtos[idx].fotosprojetoDir = [...currentFotosProjetoDirBase64];
     }
   } else {
-    // Auto-atribui código: variação por valor (Nome); senão por categoria
-    const proximoCodigo = ehVariacao ? proximoSufixoVariacao(currentPaiId, nome) : proximoCodigoLivrePorCat(cat);
+    const proximoCodigo = ehCombinacao ? codigoCombinacao(currentPaiId, combo) : proximoCodigoLivrePorCat(cat);
     produtos.push({ id: prodId, nome, dim, preco:precoFinal, cat, obs, codigo:proximoCodigo, filtros, tipoProd, componentes,
-      ehVariacao, paiId: ehVariacao ? currentPaiId : null, eixo: ehVariacao ? varEixo : null,
+      ehVariacao: ehCombinacao, paiId: ehCombinacao ? currentPaiId : null,
+      combo: ehCombinacao ? combo : null,
+      comboPadrao: (!ehCombinacao && combo) ? combo : null,
+      eixo: null,
       foto: currentFotoBase64 || '', fotosprojeto: [...currentFotosProjetoBase64], modelo3d: modelo3dUrl || null, espelhavel: ehEspelhavel,
       fotoDir: currentFotoDirBase64 || null, fotosprojetoDir: [...currentFotosProjetoDirBase64] });
   }
@@ -1926,18 +2063,21 @@ function editProduto(id) {
   const catFsEdit = filtrosDef[p.cat] || [];
   catFsEdit.forEach(f => { const el=document.getElementById('inp-f-'+slugify(f)); if(el) el.value=(p.filtros&&p.filtros[f])||''; });
   currentComponentes = p.componentes ? [...p.componentes] : [];
-  // Carrega estado de variação (produto-filho)
-  currentPaiId = p.ehVariacao ? (p.paiId || null) : null;
-  const eixoInp = document.getElementById('inp-var-eixo');
-  if (eixoInp) eixoInp.value = p.ehVariacao ? (p.eixo || '') : '';
-  setTipoProduto(p.ehVariacao ? 'variacao' : (p.tipoProd || 'simples'));
-  if (p.ehVariacao) renderVarPaiSelected();
+  // Carrega estado de combinação (produto-filho) ou produto principal
+  if (p.ehVariacao) {
+    setComboMode(p.paiId || null);
+    renderComboWrap(p.combo || null);
+  } else {
+    setComboMode(null);
+    setTipoProduto(p.tipoProd || 'simples');
+    renderComboWrap(p.comboPadrao || null);
+  }
   document.getElementById('edit-prod-id').value = p.id;
-  document.getElementById('prod-form-title').textContent = 'Editar Produto';
+  document.getElementById('prod-form-title').textContent = p.ehVariacao ? 'Editar Combinação' : 'Editar Produto';
   const acoesExtra = document.getElementById('prod-acoes-extra');
   if (acoesExtra) acoesExtra.style.display = 'flex';
   const btnVarExtra = document.getElementById('btn-prod-variacao');
-  if (btnVarExtra) btnVarExtra.style.display = (p.tipoProd === 'conjunto') ? 'none' : '';
+  if (btnVarExtra) btnVarExtra.style.display = (p.tipoProd === 'conjunto' || p.ehVariacao) ? 'none' : '';
   currentFotoBase64 = null; // preserve existing unless changed
   if (p.foto) { applyFotoUI(p.foto); }
   else resetFotoUI();
@@ -2116,7 +2256,7 @@ function deleteProduto(id) {
   const variacoes = prod ? produtos.filter(p => p.ehVariacao && p.paiId == id) : [];
   const idsExcluir = [id, ...variacoes.map(v => v.id)];
   const msgVar = variacoes.length
-    ? ` Este produto tem ${variacoes.length} ${variacoes.length===1?'variação':'variações'} — ${variacoes.length===1?'ela será excluída':'elas serão excluídas'} junto.`
+    ? ` Este produto tem ${variacoes.length} ${variacoes.length===1?'combinação':'combinações'} — ${variacoes.length===1?'ela será excluída':'elas serão excluídas'} junto.`
     : '';
   showConfirm(
     'Excluir Produto',
@@ -2231,10 +2371,96 @@ function renderFiltrosDefPanel(){
           <input class="form-input" id="inp-f-novo-${slug}" placeholder="Novo filtro (ex: Largura)" style="font-size:12px;padding:5px 8px" onkeydown="if(event.key==='Enter')addFiltroDef('${cat.replace(/'/g,"\\'")}')"/>
           <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap" onclick="addFiltroDef('${cat.replace(/'/g,"\\'")}')">＋ Filtro</button>
         </div>
+        ${eixosDefCardHTML(cat, slug)}
       </div>`;
     }).join('');
   }
   populateCatSelect();
+}
+
+/* ── EIXOS DE VARIAÇÃO (definidos por categoria) ──────────────────
+   Estrutura: eixosDef[cat] = [{ nome:"Comprimento", opcoes:["130 cm","140 cm"] }, ...]
+   Cada produto da categoria herda esses eixos; as combinações são cadastradas no produto. */
+function eixosDefCardHTML(cat, slug){
+  const esc = s => String(s).replace(/'/g,"\\'");
+  const eixos = eixosDef[cat] || [];
+  const linhas = eixos.map((e, i) => `
+    <div class="eixo-row">
+      <div class="eixo-row-head">
+        <span class="eixo-nome">🔀 ${e.nome}</span>
+        <button class="btn btn-ghost btn-sm" style="padding:1px 8px;font-size:11px;color:#a32d2d;border-color:#f0c5c5" onclick="removeEixoDef('${esc(cat)}',${i})" title="Remover eixo">🗑 eixo</button>
+      </div>
+      <div class="eixo-opcoes">
+        ${(e.opcoes||[]).length
+          ? (e.opcoes||[]).map((o,j)=>`<span class="eixo-opc-chip">${o}<button onclick="removeOpcaoEixoDef('${esc(cat)}',${i},${j})" title="Remover valor">✕</button></span>`).join('')
+          : '<span style="font-size:11px;color:#bbb">Sem valores — adicione abaixo</span>'}
+      </div>
+      <div class="eixo-add-row">
+        <input class="form-input" id="inp-opc-${slug}-${i}" placeholder="Novo valor (ex: 150 cm)" style="font-size:12px;padding:4px 8px" onkeydown="if(event.key==='Enter')addOpcaoEixoDef('${esc(cat)}',${i})"/>
+        <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap" onclick="addOpcaoEixoDef('${esc(cat)}',${i})">＋ valor</button>
+      </div>
+    </div>`).join('');
+  return `<div class="cat-eixos">
+    <div class="cat-eixos-label">🔀 Eixos de variação${eixos.length?` <span style="color:#bbb;font-weight:600">(${eixos.length})</span>`:''}</div>
+    ${linhas || '<div style="font-size:11px;color:#bbb;margin-bottom:8px">Nenhum eixo. Crie o primeiro abaixo — ex: Comprimento, Largura, Posição, Bocas.</div>'}
+    <div class="eixo-add-row">
+      <input class="form-input" id="inp-eixo-novo-${slug}" placeholder="Novo eixo (ex: Comprimento)" style="font-size:12px;padding:5px 8px" onkeydown="if(event.key==='Enter')addEixoDef('${esc(cat)}')"/>
+      <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;color:#6B3FA0;border-color:#D6C6EE" onclick="addEixoDef('${esc(cat)}')">＋ Eixo</button>
+    </div>
+  </div>`;
+}
+
+function addEixoDef(cat){
+  const inp = document.getElementById('inp-eixo-novo-'+slugify(cat));
+  if(!inp) return;
+  const nome = inp.value.trim();
+  if(!nome) return alert('Digite o nome do eixo (ex: Comprimento).');
+  if(!eixosDef[cat]) eixosDef[cat] = [];
+  if(eixosDef[cat].some(e => e.nome.toLowerCase() === nome.toLowerCase()))
+    return alert('Já existe um eixo "'+nome+'" nessa categoria.');
+  eixosDef[cat].push({ nome, opcoes: [] });
+  inp.value='';
+  renderFiltrosDefPanel();
+  saveConfig();
+  setTimeout(()=>{ const el=document.getElementById('inp-opc-'+slugify(cat)+'-'+(eixosDef[cat].length-1)); if(el) el.focus(); }, 30);
+}
+
+function removeEixoDef(cat, i){
+  const e = (eixosDef[cat]||[])[i];
+  if(!e) return;
+  showConfirm('Remover eixo "'+e.nome+'"',
+    'O eixo e seus valores serão removidos de "'+cat+'". As combinações já cadastradas nos produtos continuam salvas.',
+    ()=>{
+      eixosDef[cat].splice(i,1);
+      if(!eixosDef[cat].length) delete eixosDef[cat];
+      renderFiltrosDefPanel();
+      saveConfig();
+    });
+}
+
+function addOpcaoEixoDef(cat, i){
+  const inp = document.getElementById('inp-opc-'+slugify(cat)+'-'+i);
+  if(!inp) return;
+  const val = inp.value.trim();
+  if(!val) return alert('Digite o valor (ex: 150 cm).');
+  const e = (eixosDef[cat]||[])[i];
+  if(!e) return;
+  if(!e.opcoes) e.opcoes = [];
+  if(e.opcoes.some(o => o.toLowerCase() === val.toLowerCase()))
+    return alert('O valor "'+val+'" já existe no eixo "'+e.nome+'".');
+  e.opcoes.push(val);
+  inp.value='';
+  renderFiltrosDefPanel();
+  saveConfig();
+  setTimeout(()=>{ const el=document.getElementById('inp-opc-'+slugify(cat)+'-'+i); if(el) el.focus(); }, 30);
+}
+
+function removeOpcaoEixoDef(cat, i, j){
+  const e = (eixosDef[cat]||[])[i];
+  if(!e || !e.opcoes) return;
+  e.opcoes.splice(j,1);
+  renderFiltrosDefPanel();
+  saveConfig();
 }
 
 function populateCatSelect(){
@@ -2352,8 +2578,9 @@ function removeFiltroDef(cat, idx){
 
 async function saveConfig(){
   try {
-    if(db) await db.collection('acn').doc('config').set({ filtrosDef, categorias, catPrefixes });
+    if(db) await db.collection('acn').doc('config').set({ filtrosDef, eixosDef, categorias, catPrefixes });
     localStorage.setItem('acn_filtros_def', JSON.stringify(filtrosDef));
+    localStorage.setItem('acn_eixos_def', JSON.stringify(eixosDef));
     localStorage.setItem('acn_categorias', JSON.stringify(categorias));
     localStorage.setItem('acn_cat_prefixes', JSON.stringify(catPrefixes));
   } catch(e){ console.error('saveConfig error',e); }
@@ -2456,7 +2683,7 @@ function renderProdutos() {
           <div style="display:flex;align-items:center;gap:6px;font-weight:600">
             ${p.nome}
             ${isConj?`<span style="background:#E6F1FB;color:#185FA5;font-size:10px;padding:1px 7px;border-radius:20px;border:1px solid #B5D4F4;font-weight:600">📦 ${p.componentes?p.componentes.length:0} itens</span>`:''}
-            ${variacoes.length?`<span style="background:#F1ECFB;color:#6B3FA0;font-size:10px;padding:1px 7px;border-radius:20px;border:1px solid #D6C6EE;font-weight:600">🔀 ${variacoes.length} ${variacoes.length===1?'variação':'variações'}</span>`:''}
+            ${variacoes.length?`<span style="background:#F1ECFB;color:#6B3FA0;font-size:10px;padding:1px 7px;border-radius:20px;border:1px solid #D6C6EE;font-weight:600">🔀 ${variacoes.length} ${variacoes.length===1?'combinação':'combinações'}</span>`:''}
           </div>
           ${p.dim ? `<div style="font-size:12px;color:#888">${p.dim}</div>` : ''}
           ${isConj && compNames.length ? `<div style="font-size:11px;color:#888;margin-top:2px">↳ ${compNames.join(' · ')}</div>` : ''}
@@ -2467,13 +2694,14 @@ function renderProdutos() {
           </div>` : ''}
           ${variacoes.length ? `<div style="margin-top:5px;border-left:2px solid #E9E2F6;padding-left:8px;display:flex;flex-direction:column;gap:1px">
             ${variacoes.map(v=>`<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#555">
-              <span style="color:#6B3FA0;font-weight:600">🔀 ${v.eixo?v.eixo+': ':''}${v.nome}</span>
+              <span style="color:#6B3FA0;font-weight:600">🔀 ${v.combo ? Object.values(v.combo).join(' · ') : (v.eixo?v.eixo+': ':'')+(v.nome||'')}</span>
               <span style="color:#999">${[v.codigo, fmtBRL(v.preco)].filter(Boolean).join(' · ')}</span>
               ${v.modelo3d?'<span title="Tem modelo 3D">🧊</span>':''}
-              <button class="btn btn-ghost btn-sm" style="padding:0 6px;font-size:10px" onclick="editProduto(${v.id})" title="Editar variação">✏️</button>
-              <button class="btn btn-danger btn-sm" style="padding:0 6px;font-size:10px" onclick="deleteProduto(${v.id})" title="Excluir variação">🗑️</button>
+              <button class="btn btn-ghost btn-sm" style="padding:0 6px;font-size:10px" onclick="editProduto(${v.id})" title="Editar combinação">✏️</button>
+              <button class="btn btn-danger btn-sm" style="padding:0 6px;font-size:10px" onclick="deleteProduto(${v.id})" title="Excluir combinação">🗑️</button>
             </div>`).join('')}
-          </div>` : ''}
+            <div><button class="btn btn-ghost btn-sm" style="padding:1px 7px;font-size:10.5px;color:#6B3FA0;margin-top:3px" onclick="novaCombinacaoDe(${p.id})" title="Adicionar combinação">🔀 + Combinação</button></div>
+          </div>` : (p.tipoProd!=='conjunto' ? `<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="padding:1px 7px;font-size:10.5px;color:#6B3FA0" onclick="novaCombinacaoDe(${p.id})" title="Adicionar combinação">🔀 + Combinação</button></div>` : '')}
           ${p.obs ? `<div style="font-size:11px;color:#bbb;margin-top:2px">${p.obs}</div>` : ''}
         </td>
         <td data-label="Categoria">${p.cat ? `<span class="badge-cat" style="cursor:pointer" title="Filtrar por ${p.cat}" data-cat="${p.cat}" onclick="setFiltroCategoria(this.dataset.cat)">${p.cat}</span>` : '<span style="color:#ccc">—</span>'}</td>
@@ -2492,38 +2720,108 @@ let currentComponentes = [];
 
 function setTipoProduto(tipo) {
   const isCj  = tipo === 'conjunto';
-  const isVar = tipo === 'variacao';
-  document.getElementById('tipo-btn-simples').classList.toggle('active', !isCj && !isVar);
-  document.getElementById('tipo-btn-variacao').classList.toggle('active', isVar);
+  document.getElementById('tipo-btn-simples').classList.toggle('active', !isCj);
   document.getElementById('tipo-btn-conjunto').classList.toggle('active', isCj);
   document.getElementById('conj-picker-wrap').style.display = isCj ? '' : 'none';
-  document.getElementById('var-picker-wrap').style.display = isVar ? '' : 'none';
   const wp = document.getElementById('wrap-preco');
-  if(wp) wp.style.opacity = isCj ? '.4' : '1';   // variação tem preço próprio → editável
+  if(wp) wp.style.opacity = isCj ? '.4' : '1';
   const inp = document.getElementById('inp-preco');
   if(inp) inp.readOnly = isCj;
   if(isCj) renderCompList();
-  if(isVar) refreshVarEixosDatalist();
-  // Fotos de clientes são da família (produto principal) — somem nas variações
-  const grpCli  = document.getElementById('grupo-fotos-clientes');
-  const notaCli = document.getElementById('nota-clientes-variacao');
-  if (grpCli)  grpCli.style.display  = isVar ? 'none' : '';
-  if (notaCli) notaCli.style.display = isVar ? '' : 'none';
-  atualizarPreviewCodigoVar();
+  renderComboWrap();
 }
 
-// Mostra o código que será gerado para a variação enquanto o Nome é digitado
-function atualizarPreviewCodigoVar() {
-  const wrap = document.getElementById('var-codigo-preview');
-  const val  = document.getElementById('var-codigo-preview-val');
-  if (!wrap || !val) return;
-  const isVar = document.getElementById('tipo-btn-variacao').classList.contains('active');
-  const nome  = (document.getElementById('inp-nome').value || '').trim();
-  if (!isVar || !currentPaiId || !nome) { wrap.style.display = 'none'; return; }
-  const pai  = produtos.find(p => p.id === currentPaiId);
-  const base = pai ? (pai.codigo || pai.id) : currentPaiId;
-  val.textContent = gerarCodigoVariacao(base, nome);
-  wrap.style.display = '';
+// ── COMBINAÇÕES (eixos por categoria) ─────────────────────────────
+// Entra/sai do modo "combinação" (produto-filho de um principal).
+function setComboMode(paiId) {
+  currentPaiId = paiId || null;
+  const banner  = document.getElementById('combo-banner');
+  const tabs    = document.querySelector('.tipo-toggle');
+  const nomeInp = document.getElementById('inp-nome');
+  const nomeGrp = nomeInp ? nomeInp.closest('.form-group') : null;
+  const grpCli  = document.getElementById('grupo-fotos-clientes');
+  if (currentPaiId) {
+    const pai = produtos.find(p => p.id === currentPaiId);
+    document.getElementById('combo-banner-nome').textContent = pai ? pai.nome : '';
+    banner.style.display = 'flex';
+    if (tabs) tabs.style.display = 'none';
+    if (nomeGrp) nomeGrp.style.display = 'none';
+    if (grpCli) grpCli.style.display = 'none';   // fotos de cliente ficam no principal
+    if (pai && pai.cat) { const c=document.getElementById('inp-cat'); if(c){ c.value=pai.cat; renderFiltrosExtrasForm(); } }
+  } else {
+    banner.style.display = 'none';
+    if (tabs) tabs.style.display = '';
+    if (nomeGrp) nomeGrp.style.display = '';
+    if (grpCli) grpCli.style.display = '';
+  }
+  renderComboWrap();
+}
+
+// Renderiza um <select> por eixo da categoria. prefill = {Eixo:valor} opcional.
+function renderComboWrap(prefill) {
+  const wrap  = document.getElementById('combo-wrap');
+  const cont  = document.getElementById('combo-selects');
+  const label = document.getElementById('combo-label');
+  const hint  = document.getElementById('combo-hint');
+  if (!wrap || !cont) return;
+  const cat = document.getElementById('inp-cat').value.trim();
+  const eixos = eixosDef[cat] || [];
+  const isCombo = !!currentPaiId;
+  const isConjunto = document.getElementById('tipo-btn-conjunto').classList.contains('active');
+  if (!eixos.length || (isConjunto && !isCombo)) { wrap.style.display='none'; cont.innerHTML=''; return; }
+  // Preserva o que já está escolhido (se não veio prefill)
+  const sel = prefill || (() => {
+    const cur = {}; cont.querySelectorAll('select[data-eixo]').forEach(s => cur[s.dataset.eixo]=s.value); return cur;
+  })();
+  wrap.style.display = 'block';
+  label.textContent = isCombo ? '🔀 Valores desta combinação' : '🔀 Combinação padrão — o que este produto representa';
+  hint.textContent = isCombo
+    ? 'Escolha um valor por eixo. Esta combinação tem seu próprio preço, foto, medidas e 3D.'
+    : 'Marque o valor de cada eixo que o produto principal representa. As outras combinações você adiciona em "🔀 + Combinação".';
+  const escA = s => String(s).replace(/"/g,'&quot;');
+  cont.innerHTML = eixos.map(e => `
+    <div class="form-group" style="margin:0;min-width:130px;flex:1">
+      <label class="form-label" style="font-size:11px">${e.nome}</label>
+      <select class="form-input" data-eixo="${escA(e.nome)}" style="cursor:pointer">
+        ${(e.opcoes||[]).map(o => `<option value="${escA(o)}"${(sel[e.nome]===o)?' selected':''}>${o}</option>`).join('')}
+      </select>
+    </div>`).join('');
+}
+
+// Lê os selects de eixo no objeto combo {Eixo:valor}.
+function readCombo() {
+  const combo = {};
+  document.querySelectorAll('#combo-selects select[data-eixo]').forEach(s => { combo[s.dataset.eixo] = s.value; });
+  return combo;
+}
+
+// Código da combinação: BASE + tokens dos valores. Evita colisão exata.
+function codigoCombinacao(paiId, combo, excludeId) {
+  const pai = produtos.find(p => p.id === paiId);
+  const base = pai ? (pai.codigo || pai.id) : paiId;
+  let cod = gerarCodigoVariacao(base, Object.values(combo || {}));
+  const usados = new Set(produtos
+    .filter(p => p.ehVariacao && p.paiId===paiId && p.codigo && p.id != excludeId)
+    .map(p => String(p.codigo)));
+  if (usados.has(cod)) { let k=2; while(usados.has(`${cod}-${k}`)) k++; cod=`${cod}-${k}`; }
+  return cod;
+}
+
+// Abre o form pronto pra cadastrar uma combinação de um produto principal.
+function novaCombinacaoDe(paiId) {
+  const pai = produtos.find(p => p.id === paiId);
+  if (!pai) return;
+  if (!(eixosDef[pai.cat] || []).length) {
+    return alert('A categoria "'+(pai.cat||'—')+'" ainda não tem eixos de variação.\n\nDefina os eixos primeiro em "🗂️ Categorias e Filtros" → bloco "🔀 Eixos de variação".');
+  }
+  clearProdForm();
+  toggleProdForm(true);
+  populateCatSelect();
+  document.getElementById('inp-cat').value = pai.cat || '';
+  renderFiltrosExtrasForm();
+  setComboMode(paiId);          // mostra banner + selects de eixo
+  document.getElementById('prod-form-title').textContent = 'Nova Combinação';
+  document.getElementById('prod-form-panel').scrollIntoView({ behavior: 'smooth' });
 }
 
 function renderConjDropdown(q) {
@@ -2541,7 +2839,7 @@ function renderConjDropdown(q) {
   if(!res.length){ dd.classList.remove('open'); return; }
   dd.innerHTML = res.map(p=>{
     const disp = p.ehVariacao && nomePai(p) ? `${nomePai(p)} · ${p.nome}` : p.nome;
-    const sub  = p.ehVariacao ? ['🔀 '+(p.eixo||'variação'), p.codigo].filter(Boolean).join(' · ')
+    const sub  = p.ehVariacao ? ['🔀 '+(p.combo?Object.values(p.combo).join(' · '):(p.eixo||'combinação')), p.codigo].filter(Boolean).join(' · ')
                               : [p.cat,p.dim].filter(Boolean).join(' · ');
     return `
     <div class="conj-opt" onmousedown="addComponente(${p.id})">
@@ -2592,7 +2890,7 @@ function renderCompList() {
     total += p.preco||0;
     const pai = p.ehVariacao ? produtos.find(x=>x.id===p.paiId) : null;
     const dispNome = pai ? `${pai.nome} · ${p.nome}` : p.nome;
-    const dispSub = p.ehVariacao ? ['🔀 '+(p.eixo||'variação'), p.codigo].filter(Boolean).join(' · ') : [p.cat,p.dim].filter(Boolean).join(' · ');
+    const dispSub = p.ehVariacao ? ['🔀 '+(p.combo?Object.values(p.combo).join(' · '):(p.eixo||'combinação')), p.codigo].filter(Boolean).join(' · ') : [p.cat,p.dim].filter(Boolean).join(' · ');
     return `<div class="comp-row">
       ${p.foto?`<img src="${p.foto}" class="comp-row-img"/>`:`<div class="comp-row-img">${p.ehVariacao?'🔀':'📦'}</div>`}
       <div class="comp-row-info">
@@ -2608,93 +2906,9 @@ function renderCompList() {
   if(preco){ preco.value = total.toFixed(2); }
 }
 
-// ── VARIAÇÕES ────────────────────────────────────────────────────
-// Uma variação é um produto-filho (doc próprio) com paiId/ehVariacao/eixo.
-// Reaproveita 100% das fotos/3D/código. Na grade fica aninhada sob o pai;
-// na loja some; na página do produto vira opção selecionável.
+// ── COMBINAÇÕES — helpers de código ───────────────────────────────
+// currentPaiId guarda o produto principal quando se cadastra uma combinação.
 let currentPaiId = null;
-
-// Produtos que podem ser "pai" de uma variação: simples, sem pai, e não conjunto.
-function candidatosPai(eidExcluir) {
-  return produtos.filter(p =>
-    !p.ehVariacao && p.tipoProd !== 'conjunto' && String(p.id) !== String(eidExcluir)
-  );
-}
-
-function refreshVarEixosDatalist() {
-  const dl = document.getElementById('dl-var-eixos');
-  if (!dl) return;
-  const eixos = [...new Set(produtos.filter(p => p.ehVariacao && p.eixo).map(p => p.eixo))];
-  dl.innerHTML = eixos.map(e => `<option value="${e}">`).join('');
-}
-
-function renderVarPaiDropdown(q) {
-  const dd = document.getElementById('var-dropdown');
-  if (!dd) return;
-  if (!q.trim()) { dd.classList.remove('open'); return; }
-  const ql = q.toLowerCase();
-  const eid = document.getElementById('edit-prod-id').value;
-  const res = candidatosPai(eid).filter(p =>
-    p.nome.toLowerCase().includes(ql) || (p.cat||'').toLowerCase().includes(ql) ||
-    (p.dim||'').toLowerCase().includes(ql) || String(p.codigo||'').toLowerCase().includes(ql)
-  ).slice(0, 8);
-  if (!res.length) { dd.classList.remove('open'); return; }
-  dd.innerHTML = res.map(p => `
-    <div class="conj-opt" onmousedown="selecionarVarPai(${p.id})">
-      ${p.foto?`<img src="${p.foto}" class="conj-opt-img"/>`:`<div class="conj-opt-img" style="display:flex;align-items:center;justify-content:center;font-size:18px">📦</div>`}
-      <div class="conj-opt-info">
-        <div class="conj-opt-nome">${p.nome}</div>
-        <div class="conj-opt-sub">${[p.codigo,p.cat,p.dim].filter(Boolean).join(' · ')}</div>
-      </div>
-      <div class="conj-opt-preco">${fmtBRL(p.preco)}</div>
-    </div>`).join('');
-  dd.classList.add('open');
-}
-
-function closeVarDropdown() {
-  const dd = document.getElementById('var-dropdown');
-  if (dd) dd.classList.remove('open');
-  const inp = document.getElementById('var-search-inp');
-  if (inp) inp.value = '';
-}
-
-function selecionarVarPai(id) {
-  const p = produtos.find(x => x.id === id);
-  if (!p) return;
-  currentPaiId = id;
-  closeVarDropdown();
-  // Variação herda a categoria do pai (mantém filtros/loja coerentes)
-  const catSel = document.getElementById('inp-cat');
-  if (catSel && p.cat) { catSel.value = p.cat; renderFiltrosExtrasForm(); }
-  renderVarPaiSelected();
-}
-
-function limparVarPai() {
-  currentPaiId = null;
-  renderVarPaiSelected();
-}
-
-function renderVarPaiSelected() {
-  const box = document.getElementById('var-pai-selected');
-  const row = document.getElementById('var-search-row');
-  if (!box) return;
-  const p = currentPaiId ? produtos.find(x => x.id === currentPaiId) : null;
-  if (!p) {
-    box.style.display = 'none';
-    if (row) row.style.display = '';
-    return;
-  }
-  box.style.display = 'flex';
-  if (row) row.style.display = 'none';
-  const img = document.getElementById('var-pai-img');
-  if (img) {
-    if (p.foto) { img.src = p.foto; img.style.display = ''; }
-    else img.style.display = 'none';
-  }
-  document.getElementById('var-pai-nome').textContent = p.nome;
-  document.getElementById('var-pai-sub').textContent = [p.codigo, p.cat].filter(Boolean).join(' · ');
-  atualizarPreviewCodigoVar();
-}
 
 // Token a partir do valor do eixo: número puro p/ medidas, sigla curta p/ nomes.
 function tokenVariacao(valor) {
@@ -2705,32 +2919,10 @@ function tokenVariacao(valor) {
                  .toUpperCase().replace(/[^A-Z0-9]/g, '');
   return limpo.length <= 4 ? limpo : limpo.slice(0, 3);   // ILHA / NAO / PAR / MAD
 }
-// Código da variação: BASE + token(s). Aceita 1 valor ou vários (multi-eixo).
+// Código da combinação: BASE + token(s). Aceita 1 valor ou vários (multi-eixo).
 function gerarCodigoVariacao(codigoBase, valores) {
   const toks = (Array.isArray(valores) ? valores : [valores]).map(tokenVariacao).filter(Boolean);
   return toks.length ? `${codigoBase}-${toks.join('-')}` : String(codigoBase);
-}
-// Código da variação por VALOR (não sequencial). Determinístico; evita colisão exata.
-function proximoSufixoVariacao(paiId, valorNome, excludeId) {
-  const pai = produtos.find(p => p.id === paiId);
-  const base = pai ? (pai.codigo || pai.id) : paiId;
-  let cod = gerarCodigoVariacao(base, valorNome);
-  const usados = new Set(produtos
-    .filter(p => p.ehVariacao && p.paiId === paiId && p.codigo && p.id != excludeId)
-    .map(p => String(p.codigo)));
-  if (usados.has(cod)) { let k = 2; while (usados.has(`${cod}-${k}`)) k++; cod = `${cod}-${k}`; }
-  return cod;
-}
-
-// Abre o form já configurado como variação de um produto principal.
-function novaVariacaoDe(paiId) {
-  clearProdForm();
-  toggleProdForm(true);
-  setTipoProduto('variacao');
-  selecionarVarPai(paiId);
-  document.getElementById('prod-form-title').textContent = 'Nova Variação';
-  document.getElementById('prod-form-panel').scrollIntoView({ behavior: 'smooth' });
-  setTimeout(() => document.getElementById('inp-nome').focus(), 200);
 }
 
 // ── DRAG & DROP ─────────────────────────────────────────
