@@ -32,6 +32,9 @@
     user-select:none;-webkit-user-drag:none}
   #cv{position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}
   #cv:active{cursor:grabbing}
+  #cv.panMode{cursor:crosshair}
+  #cv.panMode:active{cursor:grabbing}
+  #frame{will-change:transform}
   #overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:10;touch-action:none}
   #empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     flex-direction:column;gap:14px;color:var(--mut);text-align:center;padding:24px}
@@ -177,7 +180,7 @@
 
   <aside id="panel">
     <div class="head">
-      <span class="dot"></span><h1>Compositor 3D</h1><span>v2</span>
+      <span class="dot"></span><h1>Compositor 3D</h1><span>v3</span>
     </div>
     <div class="body">
 
@@ -189,8 +192,22 @@
         </label>
       </div>
 
+      <div class="sec" id="zoomSec" style="display:none">
+        <h2>2 · Zoom da foto (ajuste fino)</h2>
+        <div class="row">
+          <label>Zoom</label>
+          <input type="range" id="sZoomView" min="1" max="4" step="0.05" value="1">
+          <output id="oZoomView">100%</output>
+        </div>
+        <div class="seg" style="grid-template-columns:1fr 1fr">
+          <button id="panModeBtn" title="Alternar entre orbitar a câmera e arrastar a foto ampliada">🖐 Mover foto</button>
+          <button id="zoomResetBtn">↺ 100%</button>
+        </div>
+        <div class="note">Aumente pra ver de perto um canto e ajustar o encaixe do 3D com precisão. Ative <b>Mover foto</b> pra arrastar a área visível (ou segure <b>Alt</b> ao arrastar). O 3D continua clicável e alinhado, mesmo ampliado.</div>
+      </div>
+
       <div class="sec">
-        <h2>2 · Modelo 3D (.glb)</h2>
+        <h2>3 · Modelo 3D (.glb)</h2>
         <div class="urlrow" style="margin-top:0;margin-bottom:9px;position:relative">
           <input id="prodCodigo" placeholder="Código ou nome (ex: FOG01, forno iglu)" autocomplete="off">
           <button id="prodBtn" class="go" style="flex:none">Puxar</button>
@@ -208,7 +225,7 @@
       </div>
 
       <div class="sec">
-        <h2>3 · Manipular produto</h2>
+        <h2>4 · Manipular produto</h2>
         <div class="seg">
           <button data-mode="translate" class="on">Mover</button>
           <button data-mode="rotate">Girar</button>
@@ -227,7 +244,7 @@
       </div>
 
       <div class="sec">
-        <h2>4 · Câmera & perspectiva</h2>
+        <h2>5 · Câmera & perspectiva</h2>
         <p style="font-size:11px;color:#e8743b;margin:0 0 10px;line-height:1.5">
           ⚠️ <b>Ajuste primeiro a câmera</b>, depois posicione o modelo
         </p>
@@ -261,7 +278,7 @@
       </div>
 
       <div class="sec">
-        <h2>5 · Luz & sombra</h2>
+        <h2>6 · Luz & sombra</h2>
         <div class="row">
           <label>Exposição</label>
           <input type="range" id="sExp" min="0.4" max="3" step="0.05" value="3">
@@ -606,8 +623,10 @@ function loadBgFromFile(f){
       frame.style.width  = 'auto';
       frame.style.height = '100%';
     }
+    resetZoomView();
     resize();
     $('bgLabel').classList.add('loaded'); $('bgLabel').querySelector('b').textContent='Foto carregada ✓';
+    $('zoomSec').style.display='block';
     toast('Foto carregada');
   };
   bgImg.src=url;
@@ -736,13 +755,87 @@ function aplicarLuzPadrao(){
 $('resetLuz').addEventListener('click',()=>{ aplicarLuzPadrao(); toast('Luz & sombra no padrão'); });
 
 // ---- resize ----
+// getBoundingClientRect() já reflete o zoom da foto (transform: scale), então
+// o WebGL renderiza na resolução ampliada e o 3D fica nítido no zoom — mas
+// limitamos um teto (tela grande + zoom 4× facilmente passaria de 8000px e
+// derrubaria o WebGL em celulares).
+const RESIZE_MAXR = 2600;
 function resize(){
   const r=frame.getBoundingClientRect();
   if(r.width<2) return;
-  renderer.setSize(r.width, r.height, false);
-  camera.aspect = r.width/r.height; camera.updateProjectionMatrix();
+  const k=Math.min(1, RESIZE_MAXR/Math.max(r.width,r.height));
+  const rw=r.width*k, rh=r.height*k;
+  renderer.setSize(rw, rh, false);
+  camera.aspect = rw/rh; camera.updateProjectionMatrix();
 }
-addEventListener('resize', resize);
+addEventListener('resize', ()=>{ resize(); clampPanView(); applyViewTransform(); });
+
+// ---- zoom da foto (ajuste fino de encaixe) ----
+// Zoom visual em CSS (transform: scale + translate) no #frame inteiro — foto,
+// canvas 3D e overlay juntos. Como o Three.js usa getBoundingClientRect() do
+// canvas pra converter clique em coordenada 3D, o modelo continua clicável e
+// alinhado com precisão mesmo ampliado; só muda o que aparece na tela.
+let zoomView=1, panX=0, panY=0, panMode=false, panDragging=false, panLast=null;
+
+function applyViewTransform(){
+  frame.style.transform = (zoomView<=1.001) ? '' : `scale(${zoomView}) translate(${panX}px, ${panY}px)`;
+  resize();
+}
+// não deixa arrastar a foto pra fora da vista, sobrando só o fundo quadriculado
+function clampPanView(){
+  if(zoomView<=1.001){ panX=0; panY=0; return; }
+  const stageR=$('stage').getBoundingClientRect();
+  const w0=frame.offsetWidth, h0=frame.offsetHeight;
+  if(!w0||!h0) return;
+  const maxX=Math.max(0,(zoomView*w0-stageR.width)/2)/zoomView;
+  const maxY=Math.max(0,(zoomView*h0-stageR.height)/2)/zoomView;
+  panX=Math.max(-maxX,Math.min(maxX,panX));
+  panY=Math.max(-maxY,Math.min(maxY,panY));
+}
+function resetZoomView(){
+  zoomView=1; panX=0; panY=0;
+  $('sZoomView').value=1; $('oZoomView').textContent='100%';
+  setPanMode(false);
+  applyViewTransform();
+}
+function setPanMode(on){
+  panMode=!!on;
+  $('panModeBtn').classList.toggle('on', panMode);
+  cv.classList.toggle('panMode', panMode);
+  orbit.enabled = !panMode;
+  tcontrols.enabled = !panMode;
+}
+bind('sZoomView','oZoomView', v=>{
+  zoomView=+v;
+  if(zoomView<=1.001) setPanMode(false);
+  clampPanView(); applyViewTransform();
+}, v=>Math.round(v*100)+'%');
+$('zoomResetBtn').addEventListener('click', ()=>{ resetZoomView(); toast('Zoom da foto em 100%'); });
+$('panModeBtn').addEventListener('click', ()=>{ setPanMode(!panMode); });
+
+// arrasta pra mover a área visível: ativo com o botão "Mover foto" OU
+// segurando Alt (atalho rápido sem sair do modo orbitar)
+cv.addEventListener('pointerdown', e=>{
+  if(zoomView<=1.001 || !(panMode || e.altKey)) return;
+  panDragging=true; panLast={x:e.clientX, y:e.clientY};
+  orbit.enabled=false; tcontrols.enabled=false;
+  try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+  e.preventDefault();
+});
+cv.addEventListener('pointermove', e=>{
+  if(!panDragging) return;
+  const dx=e.clientX-panLast.x, dy=e.clientY-panLast.y;
+  panLast={x:e.clientX, y:e.clientY};
+  panX += dx/zoomView; panY += dy/zoomView;
+  clampPanView(); applyViewTransform();
+});
+function endPanDrag(){
+  if(!panDragging) return;
+  panDragging=false;
+  orbit.enabled = !panMode; tcontrols.enabled = !panMode;
+}
+cv.addEventListener('pointerup', endPanDrag);
+cv.addEventListener('pointercancel', endPanDrag);
 
 // ---- export ----
 $('exportBtn').addEventListener('click',()=>{
