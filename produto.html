@@ -644,7 +644,10 @@ var ACN3D = (function() {
     }
 
     // Renderer
-    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    // preserveDrawingBuffer:true é obrigatório para canvas.captureStream() conseguir
+    // ler os frames renderizados (sem isso o WebGL limpa o buffer logo após cada
+    // frame e a gravação sai vazia/em branco — era a causa do "gravação saiu vazia").
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.NoToneMapping;   // sem tonemapping → look plano/matte do SketchUp
