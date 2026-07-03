@@ -8,9 +8,6 @@
 <meta property="og:description" content="Visualize seu orçamento da Aço Naval">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#f0f4f8;min-height:100vh;color:#111}
@@ -45,8 +42,9 @@ body{font-family:Arial,Helvetica,sans-serif;background:#f0f4f8;min-height:100vh;
 .info-value{font-weight:600;color:#111;font-size:15px}
 
 /* ITEM ROW - igual ao assinar */
-.item-row{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f0f0f0}
-.item-row:last-child{border-bottom:none}
+.item-card{padding:12px 0;border-bottom:1px solid #f0f0f0}
+.item-card:last-child{border-bottom:none}
+.item-row{display:flex;gap:12px;align-items:flex-start}
 .item-foto{width:72px;height:72px;object-fit:contain;border-radius:4px;background:#f5f5f5;flex-shrink:0;border:1px solid #eee}
 .item-foto-ph{width:72px;height:72px;border-radius:4px;background:#f0f4f8;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px}
 .item-info{flex:1}
@@ -55,6 +53,16 @@ body{font-family:Arial,Helvetica,sans-serif;background:#f0f4f8;min-height:100vh;
 .item-dim{font-size:13px;color:#666;margin-top:4px;line-height:1.5}
 .item-preco{font-size:16px;font-weight:700;color:#003366;margin-top:8px}
 .item-total-bar{background:#EAF3DE;border-radius:6px;padding:12px 14px;margin-top:12px;display:flex;justify-content:space-between;align-items:center}
+.item-projeto-preview{width:96px;height:96px;object-fit:cover;border-radius:8px;flex-shrink:0;cursor:pointer;background:#f5f5f5;border:1px solid #e0e8f0}
+.btn-abrir-projeto{width:100%;margin-top:10px;padding:10px;background:#f0f6ff;color:#1557a8;border:1px solid #1557a8;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+/* LIGHTBOX — visualizador de fotos do projeto em tela cheia (igual ao assinar) */
+.lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1000;display:flex;align-items:center;justify-content:center}
+.lightbox-img{max-width:92vw;max-height:78vh;object-fit:contain;border-radius:4px}
+.lightbox-close{position:absolute;top:16px;right:16px;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.lightbox-prev{left:10px}
+.lightbox-next{right:10px}
+.lightbox-counter{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;background:rgba(0,0,0,.4);padding:4px 12px;border-radius:12px}
 
 /* INFO CELLS */
 .info-cells{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -365,206 +373,15 @@ select.fform-input{cursor:pointer}
 
 </div>
 
-<script>
-// ── ACN3D: visualizador 3D Aço Naval (Three.js) ──────────────────
-// Idêntico ao teste-3d.html: fundo branco, grid sutil, arestas,
-// marca d'água aconaval.com, auto-rotação, iluminação clara.
-var ACN3D = (function() {
+<!-- LIGHTBOX — fotos do projeto em tela cheia -->
+<div class="lightbox-overlay" id="lightbox" style="display:none" onclick="if(event.target===this)fecharGaleria()">
+  <div class="lightbox-close" onclick="fecharGaleria()">✕</div>
+  <div class="lightbox-nav lightbox-prev" id="lb-prev" onclick="navegarGaleria(-1)">‹</div>
+  <img class="lightbox-img" id="lightbox-img" src="" alt="Foto do projeto"/>
+  <div class="lightbox-nav lightbox-next" id="lb-next" onclick="navegarGaleria(1)">›</div>
+  <div class="lightbox-counter" id="lightbox-counter" style="display:none"></div>
+</div>
 
-  function mount(container, url, opts) {
-    opts = opts || {};
-    container.innerHTML = '';
-    container.style.position = 'relative';
-
-    // Canvas
-    var canvas = document.createElement('canvas');
-    canvas.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
-    container.appendChild(canvas);
-
-    // Marca d'água central
-    var wm = document.createElement('div');
-    wm.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:10;display:flex;align-items:center;justify-content:center';
-    wm.innerHTML = '<span style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:16px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(0,0,0,0.13);user-select:none;white-space:nowrap;transform:rotate(-25deg)">aconaval.com</span>';
-    container.appendChild(wm);
-
-    // Overlay de loading
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:20';
-    overlay.innerHTML =
-      '<div style="width:40px;height:40px;border:4px solid rgba(0,0,0,.1);border-top:4px solid #1557a8;border-radius:50%;animation:acn3dspin 1s linear infinite"></div>' +
-      '<div class="acn3d-pct" style="font-size:20px;font-weight:700;color:#1557a8">0%</div>' +
-      '<div style="font-size:12px;color:#888">Carregando modelo 3D…</div>';
-    container.appendChild(overlay);
-    if (!document.getElementById('acn3d-style')) {
-      var st = document.createElement('style');
-      st.id = 'acn3d-style';
-      st.textContent = '@keyframes acn3dspin{to{transform:rotate(360deg)}}';
-      document.head.appendChild(st);
-    }
-
-    // Renderer
-    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.LinearToneMapping;
-    renderer.toneMappingExposure = 1.8;
-
-    var scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xffffff);
-
-    var camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
-    camera.position.set(0, 1, 3);
-
-    var controls = new THREE.OrbitControls(camera, canvas);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 1.2;
-
-    // Iluminação
-    scene.add(new THREE.AmbientLight(0xffffff, 1.4));
-    var d1 = new THREE.DirectionalLight(0xffffff, 0.8); d1.position.set(3, 6, 4);  scene.add(d1);
-    var d2 = new THREE.DirectionalLight(0xffffff, 0.6); d2.position.set(-4, 4, 3); scene.add(d2);
-    var d3 = new THREE.DirectionalLight(0xffffff, 0.5); d3.position.set(0, 2, 8);  scene.add(d3);
-
-    // Grid sutil
-    var grid = new THREE.GridHelper(20, 20, 0xdddddd, 0xeeeeee);
-    grid.material.opacity = 0.5;
-    grid.material.transparent = true;
-    scene.add(grid);
-
-    var destroyed = false;
-    var rafId = null;
-
-    function animate() {
-      if (destroyed) return;
-      rafId = requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    function resize() {
-      if (destroyed) return;
-      var w = container.clientWidth  || 300;
-      var h = container.clientHeight || 300;
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-    }
-    resize();
-    window.addEventListener('resize', resize);
-
-    // Carrega o GLB
-    var loader = new THREE.GLTFLoader();
-    loader.load(
-      url,
-      function(gltf) {
-        if (destroyed) return;
-        var model = gltf.scene;
-
-        // Centraliza e escala
-        var box    = new THREE.Box3().setFromObject(model);
-        var center = box.getCenter(new THREE.Vector3());
-        var size   = box.getSize(new THREE.Vector3());
-        var maxDim = Math.max(size.x, size.y, size.z);
-        var scale  = 2.5 / maxDim;
-        model.position.sub(center.multiplyScalar(scale));
-        model.scale.setScalar(scale);
-        var box2 = new THREE.Box3().setFromObject(model);
-        model.position.y -= box2.min.y;
-        scene.add(model);
-
-        // Arestas sutis
-        model.traverse(function(n) {
-          if (n.isMesh && n.geometry) {
-            var edges = new THREE.EdgesGeometry(n.geometry, 18);
-            var line  = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
-              color: 0x000000, transparent: true, opacity: 0.18, depthTest: true
-            }));
-            n.add(line);
-          }
-        });
-
-        // Câmera próxima (igual teste-3d)
-        var camDist = maxDim * scale * 2;
-        camera.position.set(camDist * 0.52, camDist * 0.35, camDist * 0.52);
-        controls.target.set(0, (size.y * scale) / 2, 0);
-        controls.update();
-
-        overlay.style.display = 'none';
-        resize();
-      },
-      function(xhr) {
-        if (xhr.total) {
-          var pct = Math.round(xhr.loaded / xhr.total * 100);
-          var el = overlay.querySelector('.acn3d-pct');
-          if (el) el.textContent = pct + '%';
-        }
-      },
-      function(err) {
-        console.error('ACN3D:', err);
-        overlay.innerHTML = '<div style="font-size:13px;color:#a32d2d;padding:16px;text-align:center">❌ Não foi possível carregar o modelo 3D.</div>';
-      }
-    );
-
-    // Clique duplo centraliza
-    canvas.addEventListener('dblclick', function(e) {
-      var rect = canvas.getBoundingClientRect();
-      var mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width)  * 2 - 1,
-       -((e.clientY - rect.top)  / rect.height) * 2 + 1
-      );
-      var ray = new THREE.Raycaster();
-      ray.setFromCamera(mouse, camera);
-      var hits = ray.intersectObjects(scene.children, true);
-      for (var i = 0; i < hits.length; i++) {
-        if (hits[i].object.isMesh) { controls.target.copy(hits[i].point); controls.update(); break; }
-      }
-    });
-
-    return {
-      destroy: function() {
-        destroyed = true;
-        if (rafId) cancelAnimationFrame(rafId);
-        window.removeEventListener('resize', resize);
-        controls.dispose();
-        scene.traverse(function(n) {
-          if (n.geometry) n.geometry.dispose();
-          if (n.material) {
-            (Array.isArray(n.material) ? n.material : [n.material]).forEach(function(m) {
-              if (m.map) m.map.dispose();
-              m.dispose();
-            });
-          }
-        });
-        renderer.dispose();
-        container.innerHTML = '';
-      }
-    };
-  }
-
-  return { mount: mount };
-})();
-
-// ── Toggle do visualizador 3D por item ───────────────────────────
-var _acn3dViewers = {};
-function toggle3d(itemIdx, url) {
-  var box = document.getElementById('acn3d-box-' + itemIdx);
-  var btn = document.getElementById('acn3d-btn-' + itemIdx);
-  if (!box) return;
-  if (box.style.display === 'none' || !box.style.display) {
-    box.style.display = 'block';
-    if (btn) btn.textContent = '✕ Fechar 3D';
-    _acn3dViewers[itemIdx] = ACN3D.mount(box, url);
-  } else {
-    box.style.display = 'none';
-    if (btn) btn.textContent = '🧊 Ver em 3D';
-    if (_acn3dViewers[itemIdx]) { _acn3dViewers[itemIdx].destroy(); delete _acn3dViewers[itemIdx]; }
-  }
-}
-
-</script>
 <script>
 // ── GOOGLE APPS SCRIPT — URL do webhook de emails ────────────────
 // Cole aqui a URL gerada após publicar o script no Google Apps Script
@@ -611,24 +428,27 @@ function buildItemHtml(item, idx) {
     ? '<div class="item-dim">' + dims + '</div>'
     : '';
   var numStr = (idx + 1 < 10 ? '0' : '') + (idx + 1);
-  var modelo3d = item.prodId ? prodModelos[String(item.prodId)] : '';
-  var btn3d = modelo3d
-    ? '<button id="acn3d-btn-' + idx + '" onclick="toggle3d(' + idx + ',\'' + modelo3d + '\')" style="margin-top:8px;padding:7px 14px;border:1px solid #1557a8;background:#f0f6ff;color:#1557a8;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🧊 Ver em 3D</button>'
+  var fotosProj = itemsFotosProjetoAtual[idx] || [];
+  var temGaleria = fotosProj.length > 0;
+  var previewHtml = temGaleria
+    ? '<img class="item-projeto-preview" src="' + fotosProj[0] + '" onclick="abrirGaleria(' + idx + ',0)"/>'
     : '';
-  var box3d = modelo3d
-    ? '<div id="acn3d-box-' + idx + '" style="display:none;width:100%;height:380px;border-radius:8px;overflow:hidden;border:1px solid #e0e8f0;margin-top:8px"></div>'
+  var btnProjeto = temGaleria
+    ? '<button class="btn-abrir-projeto" onclick="abrirGaleria(' + idx + ',0)">📐 Abrir projeto</button>'
     : '';
-  return '<div class="item-row">'
+  return '<div class="item-card">'
+    + '<div class="item-row">'
     + fotoHtml
     + '<div class="item-info">'
     + '<div class="item-num">Item ' + numStr + '</div>'
     + '<div class="item-nome">' + nome + '</div>'
     + dimsHtml
     + precoHtml
-    + btn3d
     + '</div>'
+    + previewHtml
     + '</div>'
-    + box3d;
+    + btnProjeto
+    + '</div>';
 }
 
 function renderOrcamento(o) {
@@ -662,6 +482,9 @@ function renderOrcamento(o) {
   }
 
   // Itens — flex rows, sem tabela
+  itemsFotosProjetoAtual = (o.items || []).map(function(item) {
+    return (item.prodId ? prodFotosProjeto[String(item.prodId)] : []) || [];
+  });
   var itemsHtml = '';
   for (var i = 0; i < o.items.length; i++) {
     itemsHtml += buildItemHtml(o.items[i], i);
@@ -671,22 +494,6 @@ function renderOrcamento(o) {
     + '<span style="font-size:16px;font-weight:700;color:#1a7a44">' + fmtBRL(o.subtotal) + '</span>'
     + '</div>';
   document.getElementById('items-body').innerHTML = itemsHtml;
-
-  // Auto-abre visualizadores 3D de todos os itens que tiverem modelo
-  setTimeout(function() {
-    for (var ai = 0; ai < o.items.length; ai++) {
-      var am = o.items[ai].prodId ? prodModelos[String(o.items[ai].prodId)] : '';
-      if (am) {
-        var abox = document.getElementById('acn3d-box-' + ai);
-        var abtn = document.getElementById('acn3d-btn-' + ai);
-        if (abox && (!_acn3dViewers[ai])) {
-          abox.style.display = 'block';
-          _acn3dViewers[ai] = ACN3D.mount(abox, am);
-          if (abtn) abtn.textContent = '✕ Fechar 3D';
-        }
-      }
-    }
-  }, 100);
 
   // Obs
   if (o.obs) {
@@ -726,7 +533,57 @@ function renderOrcamento(o) {
 
 // Mapa prodId -> foto, preenchido ao carregar
 var prodFotos = {};
-var prodModelos = {}; // mapa prodId -> URL do modelo 3D (GLB)
+// Mapa prodId -> [fotos do PROJETO específico, vindas de acn_prod_fotos] — mesma lógica do assinar.html
+var prodFotosProjeto = {};
+var itemsFotosProjetoAtual = []; // array paralelo a o.items: fotos do projeto de cada item, pra abrir no lightbox
+var galeriaAtual = []; // fotos do item aberto no momento no lightbox
+var galeriaIdx = 0;
+
+function abrirGaleria(itemIdx, fotoIdx) {
+  galeriaAtual = itemsFotosProjetoAtual[itemIdx] || [];
+  if (!galeriaAtual.length) return;
+  galeriaIdx = fotoIdx || 0;
+  mostrarFotoGaleria();
+  document.getElementById('lightbox').style.display = 'flex';
+}
+function fecharGaleria() {
+  document.getElementById('lightbox').style.display = 'none';
+}
+function navegarGaleria(dir) {
+  if (!galeriaAtual.length) return;
+  galeriaIdx = (galeriaIdx + dir + galeriaAtual.length) % galeriaAtual.length;
+  mostrarFotoGaleria();
+}
+function mostrarFotoGaleria() {
+  document.getElementById('lightbox-img').src = galeriaAtual[galeriaIdx];
+  var multi = galeriaAtual.length > 1;
+  document.getElementById('lb-prev').style.display = multi ? 'flex' : 'none';
+  document.getElementById('lb-next').style.display = multi ? 'flex' : 'none';
+  var counter = document.getElementById('lightbox-counter');
+  counter.style.display = multi ? 'block' : 'none';
+  if (multi) counter.textContent = (galeriaIdx + 1) + ' / ' + galeriaAtual.length;
+}
+
+// Mesma lógica usada no sistema comercial e no assinar.html: cada foto do
+// projeto fica em documento separado (acn_prod_fotos/{prodId}_f{i}) para
+// não estourar 1MB.
+async function carregarFotosProjeto(prodId) {
+  if (!prodId) return [];
+  try {
+    var snap = await db.collection('acn_prod_fotos').doc(String(prodId)).get();
+    if (!snap.exists) return [];
+    var data = snap.data();
+    if (Array.isArray(data.fotos) && data.fotos.length) return data.fotos; // formato antigo
+    var count = data.fotoCount || 0;
+    if (!count) return [];
+    var snaps = await Promise.all(
+      Array.from({ length: count }, function(_, i) {
+        return db.collection('acn_prod_fotos').doc(prodId + '_f' + i).get().catch(function(){ return null; });
+      })
+    );
+    return snaps.map(function(s){ return s && s.exists ? s.data().foto : null; }).filter(Boolean);
+  } catch (e) { return []; }
+}
 
 (async function() {
   var params = new URLSearchParams(location.search);
@@ -741,7 +598,7 @@ var prodModelos = {}; // mapa prodId -> URL do modelo 3D (GLB)
         ids.map(function(pid) { return db.collection('acn_produtos').doc(String(pid)).get(); })
       );
       prodSnaps.forEach(function(s) {
-        if (s.exists) { var d = s.data(); if (d.id && d.foto) prodFotos[String(d.id)] = d.foto; if (d.id && d.modelo3d) prodModelos[String(d.id)] = d.modelo3d; }
+        if (s.exists) { var d = s.data(); if (d.id && d.foto) prodFotos[String(d.id)] = d.foto; }
       });
     }
 
@@ -750,6 +607,12 @@ var prodModelos = {}; // mapa prodId -> URL do modelo 3D (GLB)
     var lista = snap.data().lista || [];
     var orc = lista.find(function(o){ return String(o.id) === String(id); });
     if (!orc) { showError(); return; }
+
+    // Carrega as fotos REAIS do projeto (acn_prod_fotos) de cada item, não a foto genérica do produto
+    var prodIdsItens = Array.from(new Set((orc.items || []).map(function(it){ return it.prodId; }).filter(Boolean)));
+    var fotosProjetoSnaps = await Promise.all(prodIdsItens.map(function(pid){ return carregarFotosProjeto(pid); }));
+    prodIdsItens.forEach(function(pid, i) { prodFotosProjeto[String(pid)] = fotosProjetoSnaps[i]; });
+
     renderOrcamento(orc);
   } catch(e) {
     console.error(e);
