@@ -451,7 +451,8 @@ function showScreen(name) {
 
 function renderPedido(p) {
   document.getElementById('p-num').textContent = String(p.num).padStart(3,'0');
-  document.getElementById('p-date').innerHTML = `Data do Pedido<br><strong>${fmtDate(p.data)}</strong>`;
+  document.getElementById('p-date').innerHTML = `Data do Pedido<br><strong>${fmtDate(p.data)}</strong>`
+    + (p.vendedorNome ? `<div style="font-size:10px;opacity:.8;margin-top:3px">👤 Vendedor: ${p.vendedorNome}</div>` : '');
   document.getElementById('p-nome').textContent = p.nome||'—';
   document.getElementById('p-fone').textContent = p.fone||'—';
 
@@ -575,6 +576,8 @@ function clearCanvas() {
 
 // ── CONFIRMAR ─────────────────────────────────────────────────────
 // ── ENVIA PEDIDO PARA SISTEMA DE GESTÃO ─────────────────────────
+const MS_GESTAO = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
 async function enviarParaGestao(pedido, nomeAssinante) {
   try {
     const snap = await GESTAO_REF.once('value');
@@ -587,8 +590,17 @@ async function enviarParaGestao(pedido, nomeAssinante) {
       return;
     }
 
+    // Proteção contra duplicidade: se este pedido já foi enviado antes
+    // (ex.: retry de rede, assinatura repetida), não lança de novo.
+    const numStrDup = String(pedido.num).padStart(3, '0');
+    const jaEnviado = ps.some(p => p && p.origem === 'orcamentos' && String(p.num) === numStrDup);
+    if (jaEnviado) {
+      console.warn('Gestão: pedido ' + numStrDup + ' já havia sido enviado — ignorando duplicata.');
+      return;
+    }
+
     const agora = new Date();
-    const mes   = agora.getMonth() + 1;
+    const mes   = MS_GESTAO[agora.getMonth()]; // nome em português — padrão da Gestão (nunca número)
     const ano   = agora.getFullYear();
     const gid   = Date.now();
 
@@ -611,8 +623,26 @@ async function enviarParaGestao(pedido, nomeAssinante) {
     }
     const prodId = prodMatch ? prodMatch.id : null;
 
-    // Cria uma entrada por vendedor (todos por padrão)
-    const novosPedidos = vs.map((v, i) => ({
+    // ── VENDEDOR VINCULADO ────────────────────────────────────────
+    // Se o pedido tem um vendedor vinculado (definido no sistema comercial),
+    // a comissão vai SÓ para ele. Sem vínculo, mantém o comportamento
+    // antigo (uma entrada por vendedor) para não sumir com comissões legadas.
+    let alvos = vs;
+    if (pedido.vendedorId != null && pedido.vendedorId !== '') {
+      let vSel = vs.find(x => String(x.id) === String(pedido.vendedorId));
+      if (!vSel && pedido.vendedorNome) {
+        const nAlvo = String(pedido.vendedorNome).toLowerCase().trim();
+        vSel = vs.find(x => (x.nome || '').toLowerCase().trim() === nAlvo);
+      }
+      if (vSel) {
+        alvos = [vSel];
+      } else {
+        console.warn('Gestão: vendedor vinculado (' + pedido.vendedorId + ' / ' + (pedido.vendedorNome || '?') + ') não encontrado — creditando todos (comportamento legado).');
+      }
+    }
+
+    // Cria uma entrada por vendedor alvo
+    const novosPedidos = alvos.map((v, i) => ({
       id:   gid + i,
       gid,
       num:  String(pedido.num).padStart(3, '0'),
@@ -621,6 +651,7 @@ async function enviarParaGestao(pedido, nomeAssinante) {
       uf:   pedido.estado || '',
       val,
       vid:  v.id,
+      vendedorNome: v.nome || '',
       mes,
       ano,
       meia: false,
@@ -632,9 +663,14 @@ async function enviarParaGestao(pedido, nomeAssinante) {
       origem:      'orcamentos'
     }));
 
-    dados.ps = [...ps, ...novosPedidos];
-    await GESTAO_REF.set(dados);
-    console.log('✅ Pedido enviado para Gestão:', novosPedidos.length, 'registros');
+    // Grava SÓ em dados/ps via transaction — nunca sobrescreve o banco
+    // inteiro (vs, ads, bonus, transfs...). Isso elimina a race condition
+    // em que uma assinatura simultânea a uma edição no ADM apagava dados.
+    await GESTAO_REF.child('ps').transaction(cur => {
+      const lista = Array.isArray(cur) ? cur : (cur ? Object.values(cur) : []);
+      return [...lista, ...novosPedidos];
+    });
+    console.log('✅ Pedido enviado para Gestão:', novosPedidos.length, 'registro(s) — vendedor(es):', alvos.map(v=>v.nome).join(', '));
   } catch(e) {
     console.warn('⚠️ Erro ao enviar para Gestão (não crítico):', e.message);
     // Não bloqueia a assinatura se a gestão falhar
@@ -643,10 +679,12 @@ async function enviarParaGestao(pedido, nomeAssinante) {
 
 async function confirmarPedido() {
   const nome = document.getElementById('sign-nome').value.trim();
+  const email = document.getElementById('sign-email').value.trim();
   const check = document.getElementById('sign-check').checked;
   const statusEl = document.getElementById('status-msg');
 
   if (!nome) { statusEl.textContent='⚠️ Digite seu nome completo.'; statusEl.className='status-msg erro'; return; }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { statusEl.textContent='⚠️ Informe um email válido.'; statusEl.className='status-msg erro'; document.getElementById('sign-email').focus(); return; }
   if (!hasSignature) { statusEl.textContent='⚠️ Por favor, assine no campo acima.'; statusEl.className='status-msg erro'; return; }
   if (!check) { statusEl.textContent='⚠️ Marque a caixa de confirmação.'; statusEl.className='status-msg erro'; return; }
 
@@ -661,13 +699,14 @@ async function confirmarPedido() {
     await db.collection('acn_assinaturas').doc(String(pedidoAtual.id)).set({
       pedidoId: pedidoAtual.id,
       nome,
+      email,
       imagem: signImg,
       data: dataAssinatura
     });
 
     // Atualiza o documento individual do pedido (novo formato acn_pedidos/{id})
     await db.collection('acn_pedidos').doc(String(pedidoAtual.id)).update({
-      assinatura: { nome, data: dataAssinatura, ip: 'cliente' },
+      assinatura: { nome, email, data: dataAssinatura, ip: 'cliente' },
       status: 'assinado'
     });
 
@@ -691,7 +730,7 @@ async function confirmarPedido() {
           tipo: 'assinatura',
           num: String(pedidoAtual.num).padStart(3, '0'),
           assinadoPor: nome,
-          emailCliente: pedidoAtual.email || '',
+          emailCliente: pedidoAtual.email || email || '',
           total: pedidoAtual.subtotal || 0
         })
       }).catch(() => {});

@@ -456,7 +456,8 @@ function renderOrcamento(o) {
   document.title = 'ORCAMENTO ' + num + ' — ' + o.cliente.toUpperCase();
 
   document.getElementById('doc-num-badge').textContent = '#' + num;
-  document.getElementById('orc-date-block').innerHTML = 'Data do Orçamento<br><strong>' + fmtDate(o.data) + '</strong>';
+  document.getElementById('orc-date-block').innerHTML = 'Data do Orçamento<br><strong>' + fmtDate(o.data) + '</strong>'
+    + (o.vendedorNome ? '<div style="font-size:10px;opacity:.8;margin-top:3px">👤 Vendedor: ' + o.vendedorNome + '</div>' : '');
   document.getElementById('doc-cliente').textContent = o.cliente;
 
   if (o.fone) {
@@ -525,6 +526,8 @@ function renderOrcamento(o) {
 
   currentOrcId  = o.id;
   currentOrcNum = o.num;
+  currentOrcVendedorId   = (o.vendedorId != null ? o.vendedorId : null);
+  currentOrcVendedorNome = o.vendedorNome || '';
 
   document.getElementById('screen-loading').style.display = 'none';
   document.getElementById('screen-doc').style.display     = 'block';
@@ -623,6 +626,8 @@ async function carregarFotosProjeto(prodId) {
 var fDocTipo = 'cpf';
 var currentOrcId = null;
 var currentOrcNum = null;
+var currentOrcVendedorId = null;
+var currentOrcVendedorNome = '';
 
 function showForm() {
   document.getElementById('form-section').style.display = 'block';
@@ -704,9 +709,14 @@ async function enviarSolicitacao() {
   btn.disabled = true; btn.textContent = '⏳ Enviando...'; setFStatus('');
 
   try {
-    var countSnap = await db.collection('acn').doc('solicitacoes_count').get();
-    var count = countSnap.exists ? (countSnap.data().total || 0) + 1 : 1;
-    await db.collection('acn').doc('solicitacoes_count').set({ total: count });
+    // Transaction: dois clientes enviando ao mesmo tempo nunca recebem o mesmo número
+    var countRef = db.collection('acn').doc('solicitacoes_count');
+    var count = await db.runTransaction(async function(tx) {
+      var cs = await tx.get(countRef);
+      var total = (cs.exists ? (cs.data().total || 0) : 0) + 1;
+      tx.set(countRef, { total: total });
+      return total;
+    });
 
     var sol = {
       id:       Date.now(),
@@ -725,6 +735,8 @@ async function enviarSolicitacao() {
       status:   'aguardando',
       orcId:    currentOrcId,
       orcNum:   currentOrcNum,
+      vendedorId:   currentOrcVendedorId,
+      vendedorNome: currentOrcVendedorNome,
       criadoEm: new Date().toISOString()
     };
 
