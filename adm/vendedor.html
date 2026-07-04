@@ -62,6 +62,8 @@ tr:last-child td{border-bottom:none}
 .val-td{text-align:right;font-weight:600}
 .com-td{text-align:right;font-weight:700;color:#185FA5}
 .badge-meia{background:#f0f2f5;color:#555;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;vertical-align:middle}
+.badge-venda{background:#E6F1FB;color:#0C447C;font-size:13px;padding:3px 9px;border-radius:8px;font-weight:800;letter-spacing:.3px;display:inline-block}
+.badge-cat{background:#EEEDFE;color:#534AB7;font-size:11px;padding:2px 8px;border-radius:12px;font-weight:600;white-space:nowrap;display:inline-block}
 
 /* SEÇÕES */
 .sec-titulo{font-size:12px;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px;padding-top:14px;border-top:1px solid #f0f2f5}
@@ -201,11 +203,76 @@ function transferenciaSaida(mes,ano){return transfs.find(t=>t.oMes===mes&&t.oAno
 
 /* Estorno da comissão recalculado pela % atual do vendedor (igual à regra dos pedidos).
    Usa valOrig do pedido cancelado; cai p/ o com gravado se valOrig não existir. */
+function comDoPedido(p){
+  if(p.com!=null&&!isNaN(Number(p.com)))return Number(p.com);
+  return parseFloat((Number(p.val)*vendedor.perc/100*(p.meia?0.5:1)).toFixed(2));
+}
 function comDoEstorno(e){
   const fator=e.meia?0.5:1;
   if(e.valOrig!=null&&vendedor)return -parseFloat((Number(e.valOrig)*vendedor.perc/100*fator).toFixed(2));
   return -Math.abs(Number(e.com)||0);
 }
+/* ===== NUMERAÇÃO PRÓPRIA DE VENDAS ===========================
+   Cada vendedor tem a SUA sequência: Venda 1, 2, 3... que ZERA todo
+   mês. O número real do pedido da fábrica nunca aparece aqui (evita
+   sequência "falhada" e não expõe o volume total da empresa). */
+let numVenda={};
+function calcularNumerosVenda(){
+  numVenda={};
+  const porMes={};
+  pedidos.slice().sort((a,b)=>(Number(a.gid)||Number(a.id)||0)-(Number(b.gid)||Number(b.id)||0)).forEach(p=>{
+    const c=ck(p.mes,p.ano);
+    porMes[c]=(porMes[c]||0)+1;
+    numVenda[p.gid]=porMes[c];
+  });
+}
+function categoriaDoPedido(p){
+  const pr=produtos.find(x=>x.id===p.prod);
+  return pr?pr.nome:'';
+}
+function primeiroNome(p){
+  return (p.clienteNome||'').trim().split(/\s+/)[0]||'';
+}
+
+/* ===== VIRADA VIRTUAL DE SALDO ================================
+   Espelha (sem gravar nada) a virada automática do ADM: saldo de
+   meses encerrados — crédito ou dívida — segue em cadeia até o mês
+   atual. Assim o vendedor vê o saldo correto mesmo antes do ADM
+   registrar a transferência oficial. Idempotente: meses que já têm
+   transferência real são pulados. */
+function saldoDoMes(mes,ano){
+  const cm=pedidos.filter(p=>p.mes===mes&&p.ano===ano).reduce((s,p)=>s+comDoPedido(p),0);
+  const em=estornos.filter(e=>e.mes===mes&&e.ano===ano).reduce((s,e)=>s+comDoEstorno(e),0);
+  const bm=bonusLista.filter(b=>b.mes===mes&&b.ano===ano).reduce((s,b)=>s+(Number(b.val)||0),0);
+  const am=adiantamentos.filter(a=>a.mes===mes&&a.ano===ano).reduce((s,a)=>s+(Number(a.val)||0),0);
+  return cm+em+bm-am+saldoTransferidoEntra(mes,ano);
+}
+function aplicarViradasVirtuais(){
+  const keys=[];
+  const add=(m,a)=>{if(MS.indexOf(m)<0||!a)return;const c=ck(m,a);if(!keys.includes(c))keys.push(c);};
+  pedidos.forEach(p=>add(p.mes,p.ano));
+  estornos.forEach(e=>add(e.mes,e.ano));
+  adiantamentos.forEach(a=>add(a.mes,a.ano));
+  bonusLista.forEach(b=>add(b.mes,b.ano));
+  transfs.forEach(t=>add(t.dMes,t.dAno));
+  if(!keys.length)return;
+  keys.sort((a,b)=>ord(a)-ord(b));
+  const hj=new Date();
+  const atualOrd=ord(ck(MS[hj.getMonth()],hj.getFullYear()));
+  let [m,aStr]=keys[0].split('_');let a=parseInt(aStr);
+  let guard=0;
+  while(ord(ck(m,a))<atualOrd&&guard++<240){
+    if(!transferenciaSaida(m,a)){
+      const net=saldoDoMes(m,a);
+      if(Math.abs(net)>0.005){
+        const prox=proximoMes(m,a);
+        transfs.push({id:'virt_'+m+'_'+a,vid:vendedor.id,oMes:m,oAno:a,dMes:prox.mes,dAno:prox.ano,val:parseFloat(net.toFixed(2)),virtual:true});
+      }
+    }
+    const nx=proximoMes(m,a);m=nx.mes;a=nx.ano;
+  }
+}
+
 function saudacao(){
   const h=new Date().getHours();
   if(h>=5&&h<12)return'Bom dia,';
@@ -227,7 +294,7 @@ if(!nomeUrl){
 
     produtos=d.prods||[];
     const vs=d.vs||[];
-    vendedor=vs.find(v=>v.nome.toLowerCase()===nomeUrl);
+    vendedor=vs.find(v=>(v.nome||'').toLowerCase().trim()===nomeUrl);
     if(!vendedor){mostrarErro();return;}
 
     const todosPs=normalizarPedidos(d.ps,vs);
@@ -239,21 +306,35 @@ if(!nomeUrl){
       if(visto[p.gid])return false;
       visto[p.gid]=true;
       return true;
-    }).sort((a,b)=>parseInt(b.num)-parseInt(a.num));
+    }).sort((a,b)=>{
+      const om=ord(ck(b.mes,b.ano))-ord(ck(a.mes,a.ano));
+      if(om!==0)return om;
+      return (Number(b.gid)||0)-(Number(a.gid)||0);
+    });
 
     estornos=todosPs.filter(p=>p.vid===vendedor.id&&p.tipo==='estorno')
       .sort((a,b)=>parseInt(b.num)-parseInt(a.num));
 
     adiantamentos=(d.ads||[]).filter(a=>a.vid===vendedor.id);
     bonusLista=(d.bonus||[]).filter(b=>b.vid===vendedor.id);
-    transfs=(d.transfs||[]).filter(t=>t.vid===vendedor.id);
+    const vistoT={};
+    transfs=(d.transfs||[]).filter(t=>t&&t.vid===vendedor.id).filter(t=>{
+      const k=t.oMes+'_'+t.oAno; // uma saída por mês de origem
+      if(vistoT[k])return false;vistoT[k]=true;return true;
+    });
 
-    // Preenche filtro
+    // Numeração própria: Venda 1, 2, 3... zerando a cada mês
+    calcularNumerosVenda();
+    // Saldo dos meses encerrados segue automaticamente para o mês atual
+    aplicarViradasVirtuais();
+
+    // Preenche filtro (inclui meses que só têm saldo transferido)
     const ks=[];
     pedidos.forEach(p=>{const c=ck(p.mes,p.ano);if(ks.indexOf(c)<0)ks.push(c);});
     adiantamentos.forEach(a=>{const c=ck(a.mes,a.ano);if(ks.indexOf(c)<0)ks.push(c);});
     bonusLista.forEach(b=>{const c=ck(b.mes,b.ano);if(ks.indexOf(c)<0)ks.push(c);});
     estornos.forEach(e=>{const c=ck(e.mes,e.ano);if(ks.indexOf(c)<0)ks.push(c);});
+    transfs.forEach(t=>{const c=ck(t.dMes,t.dAno);if(MS.indexOf(t.dMes)>=0&&ks.indexOf(c)<0)ks.push(c);});
     ks.sort((x,y)=>ord(y)-ord(x));
     const sel=document.getElementById('f-mes');
     ks.forEach(c=>{const p=c.split('_');const o=document.createElement('option');o.value=c;o.textContent=p[0]+' '+p[1];sel.appendChild(o);});
@@ -284,7 +365,7 @@ function renderConteudo(){
   let mbs=f?bonusLista.filter(b=>ck(b.mes,b.ano)===f):bonusLista;
   let mest=f?estornos.filter(e=>ck(e.mes,e.ano)===f):estornos;
 
-  const tcPed=mps.reduce((s,p)=>s+parseFloat((p.val*vendedor.perc/100*(p.meia?0.5:1)).toFixed(2)),0);
+  const tcPed=mps.reduce((s,p)=>s+comDoPedido(p),0);
   const test=mest.reduce((s,e)=>s+comDoEstorno(e),0);
   const tc=tcPed+test;
   const tb=mbs.reduce((s,b)=>s+b.val,0);
@@ -303,7 +384,7 @@ function renderConteudo(){
 
   // Métricas
   let mh='';
-  mh+='<div class="metric"><div class="val">'+mps.length+'</div><div class="lbl">Pedidos</div></div>';
+  mh+='<div class="metric"><div class="val">'+mps.length+'</div><div class="lbl">Venda'+(mps.length===1?'':'s')+'</div></div>';
   mh+='<div class="metric azul"><div class="val">'+fmt(tcPed)+'</div><div class="lbl">Comissão ('+vendedor.perc+'%)</div></div>';
   if(test<-0.005){mh+='<div class="metric" style="background:#FCEBEB"><div class="val" style="color:#A32D2D">'+fmt(test)+'</div><div class="lbl">Estornos (cancel.)</div></div>';}
   if(tb>0){mh+='<div class="metric roxo" style="background:#F5F3FF"><div class="val" style="color:#534AB7">'+fmt(tb)+'</div><div class="lbl">Bônus números</div></div>';}
@@ -323,34 +404,47 @@ function renderConteudo(){
   const topoSub=document.getElementById('topo-vendas-sub');
   if(topoDiv){
     topoDiv.style.display='block';
-    topoLbl.textContent=f?'Vendas — '+f.replace('_',' '):'Vendas — todos os meses';
-    topoVal.textContent=fmt(tv);
-    topoSub.textContent='';
+    const qtdV=mps.length;
+    if(qtdV>0){
+      topoLbl.textContent='🎉 Parabéns! Você fechou '+qtdV+' venda'+(qtdV===1?'':'s')+(f?' em '+f.replace('_',' '):'');
+      topoVal.textContent=fmt(tv);
+      topoSub.textContent=f?'vendido em '+f.replace('_',' '):'vendido no total';
+    } else {
+      topoLbl.textContent=f?'Vendas — '+f.replace('_',' '):'Vendas — todos os meses';
+      topoVal.textContent=fmt(0);
+      topoSub.textContent=f?'Nenhuma venda ainda em '+f.replace('_',' ')+'. Bora fechar a primeira! 💪':'';
+    }
   }
 
   // Tabela — apenas Nº, Cidade/UF, Valor, Comissão
   let tp='';
   if(!mps.length){
-    tp='<p class="empty">Nenhum pedido em '+lbl+'.</p>';
+    tp='<p class="empty">Nenhuma venda em '+lbl+'.</p>';
   } else {
     tp='<div class="tabela-wrap">';
     tp+='<table><thead><tr>';
-    tp+='<th>Nº</th>';
-    tp+='<th>Cidade / UF</th>';
+    tp+='<th>Venda</th>';
+    tp+='<th>Cliente / Cidade</th>';
+    tp+='<th>Categoria</th>';
     tp+='<th style="text-align:right">Valor</th>';
     tp+='<th style="text-align:right">Comissão</th>';
     tp+='</tr></thead><tbody>';
     mps.forEach(p=>{
-      const com=parseFloat((p.val*vendedor.perc/100*(p.meia?0.5:1)).toFixed(2));
+      const com=comDoPedido(p);
+      const nv=numVenda[p.gid]||'—';
+      const nomeCli=primeiroNome(p);
+      const cat=categoriaDoPedido(p);
+      const mesTag=f?'':' <span style="font-size:10px;color:#aaa;font-weight:400">('+p.mes.substring(0,3)+'/'+p.ano+')</span>';
       tp+='<tr>';
-      tp+='<td class="num">'+p.num+'</td>';
-      tp+='<td class="cidade">'+p.cid+' <strong>'+p.uf+'</strong></td>';
+      tp+='<td class="num"><span class="badge-venda">#'+nv+'</span>'+mesTag+'</td>';
+      tp+='<td class="cidade">'+(nomeCli?'<strong style="color:#222">'+nomeCli+'</strong><br>':'')+'<span style="font-size:12px;color:#777">'+p.cid+' — '+p.uf+'</span></td>';
+      tp+='<td>'+(cat?'<span class="badge-cat">'+cat+'</span>':'<span style="color:#ccc">—</span>')+'</td>';
       tp+='<td class="val-td">'+fmt(p.val)+'</td>';
       tp+='<td class="com-td">'+fmt(com)+(p.meia?' <span class="badge-meia">½</span>':'')+'</td>';
       tp+='</tr>';
     });
-    const totComissao=mps.reduce((s,p)=>s+parseFloat((p.val*vendedor.perc/100*(p.meia?0.5:1)).toFixed(2)),0);
-    tp+='<tr class="total-row"><td colspan="2">Total</td>';
+    const totComissao=mps.reduce((s,p)=>s+comDoPedido(p),0);
+    tp+='<tr class="total-row"><td colspan="3">Total</td>';
     tp+='<td class="val-td">'+fmt(tv)+'</td>';
     tp+='<td class="com-td">'+fmt(totComissao)+'</td>';
     tp+='</tr></tbody></table></div>';
@@ -391,7 +485,7 @@ function renderConteudo(){
     ex+='<div class="titulo">🚫 Cancelamentos (estornos)</div>';
     mest.forEach(e=>{
       ex+='<div class="item-row">';
-      ex+='<div class="desc">Cancelamento do pedido <strong>'+e.num+'</strong>'+(e.cid?' <span style="font-size:11px;color:#888">('+e.cid+'/'+e.uf+')</span>':'')+'</div>';
+      ex+='<div class="desc">Cancelamento de venda'+(e.cid?' — <strong>'+e.cid+'/'+e.uf+'</strong>':'')+' <span style="font-size:11px;color:#888">('+e.mes.substring(0,3)+'/'+e.ano+')</span></div>';
       ex+='<div class="val vermelho">'+fmt(comDoEstorno(e))+'</div>';
       ex+='</div>';
     });
