@@ -34,7 +34,7 @@
   #cv:active{cursor:grabbing}
   #cv.panMode{cursor:crosshair}
   #cv.panMode:active{cursor:grabbing}
-  #frame{will-change:transform}
+  #frame{will-change:transform;touch-action:none}
   #overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:10;touch-action:none}
   #empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     flex-direction:column;gap:14px;color:var(--mut);text-align:center;padding:24px}
@@ -187,7 +187,7 @@
 
   <aside id="panel">
     <div class="head">
-      <span class="dot"></span><h1>Compositor 3D</h1><span>v4</span>
+      <span class="dot"></span><h1>Compositor 3D</h1><span>v5</span>
     </div>
     <div class="body">
 
@@ -393,9 +393,11 @@ const orbit = new OrbitControls(camera, renderer.domElement);
 orbit.enableDamping=true; orbit.dampingFactor=0.08;
 orbit.target.set(0,0.5,0);
 // no toque: 1 dedo orbita a câmera; 2 dedos (pinça) ficam RESERVADOS pro
-// zoom/arrasto da foto (implementado mais abaixo) — o valor 99 cai no
-// default do OrbitControls e desliga o dolly de 2 dedos dele
-orbit.touches = { ONE: THREE.TOUCH.ROTATE, TWO: 99 };
+// zoom/arrasto da foto. A defesa principal é o stopPropagation no
+// pointerdown do 2º dedo (mais abaixo) — isso aqui é só uma segunda camada:
+// mesmo que o evento escape, o OrbitControls não tem um modo de "dolly"
+// mapeado pra 2 dedos, então na pior hipótese ele só re-orbita (inofensivo).
+orbit.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.ROTATE };
 
 const tcontrols = new TransformControls(camera, renderer.domElement);
 tcontrols.addEventListener('dragging-changed', e=> orbit.enabled = !e.value && !panMode);
@@ -780,9 +782,10 @@ $('resetLuz').addEventListener('click',()=>{ aplicarLuzPadrao(); toast('Luz & so
 const RESIZE_MAXR = 2600;
 function resize(){
   const r=frame.getBoundingClientRect();
-  if(r.width<2) return;
+  if(r.width<2 || r.height<2) return;
   const k=Math.min(1, RESIZE_MAXR/Math.max(r.width,r.height));
-  const rw=r.width*k, rh=r.height*k;
+  const rw=Math.max(1,Math.round(r.width*k)), rh=Math.max(1,Math.round(r.height*k));
+  if(!isFinite(rw) || !isFinite(rh)) return; // nunca deixa o WebGL receber lixo
   renderer.setSize(rw, rh, false);
   camera.aspect = rw/rh; camera.updateProjectionMatrix();
 }
@@ -793,7 +796,8 @@ addEventListener('resize', ()=>{ if(bgImg.naturalWidth) fitFrame(); else resize(
 // canvas 3D e overlay juntos. Como o Three.js usa getBoundingClientRect() do
 // canvas pra converter clique em coordenada 3D, o modelo continua clicável e
 // alinhado com precisão mesmo ampliado; só muda o que aparece na tela.
-let zoomView=1, panX=0, panY=0, panMode=false, panDragging=false, panLast=null;
+let zoomView=1, panX=0, panY=0, panMode=false;
+const ZOOM_MAX=8;
 
 function applyViewTransform(){
   frame.style.transform = (zoomView<=1.001) ? '' : `scale(${zoomView}) translate(${panX}px, ${panY}px)`;
@@ -816,13 +820,20 @@ function resetZoomView(){
   setPanMode(false);
   applyViewTransform();
 }
+// limpa qualquer gesto "pendurado" (dedo/mouse que soltou fora do canvas,
+// toggle clicado no meio de um arrasto etc.) — chamado sempre que o estado
+// de zoom/modo muda, pra nunca deixar o 3D travado por engano
+function resetGestureState(){
+  panDragging=false; panLast=null; pinchPrev=null; ptrs.clear();
+  orbit.enabled = !panMode && !tcontrols.dragging;
+}
 function setPanMode(on){
   panMode=!!on;
   $('panModeBtn').classList.toggle('on', panMode);
   cv.classList.toggle('panMode', panMode);
   // só o ORBITAR é trocado pelo mover-foto; o gizmo do 3D continua ativo:
   // arrastar NO gizmo mexe no modelo, arrastar FORA dele move a foto
-  orbit.enabled = !panMode;
+  resetGestureState();
 }
 bind('sZoomView','oZoomView', v=>{
   zoomView=+v;
@@ -831,8 +842,6 @@ bind('sZoomView','oZoomView', v=>{
 }, v=>Math.round(v*100)+'%');
 $('zoomResetBtn').addEventListener('click', ()=>{ resetZoomView(); toast('Zoom da foto em 100%'); });
 $('panModeBtn').addEventListener('click', ()=>{ setPanMode(!panMode); });
-
-const ZOOM_MAX=8;
 
 // núcleo de todo zoom (slider, Ctrl+scroll, pinça, duplo-toque): amplia
 // mantendo o ponto (clientX, clientY) parado na tela.
@@ -853,88 +862,105 @@ function zoomAtPoint(clientX, clientY, zNew){
   clampPanView(); applyViewTransform();
 }
 
-// ---- mouse/desktop: arrastar pra mover a área visível ----
-// Ativo com o botão "Mover foto" OU segurando Alt. Se o ponteiro estiver
-// sobre uma alça do gizmo, o arrasto é do 3D — o TransformControls roda
-// antes (foi registrado primeiro) e marca axis/dragging.
-cv.addEventListener('pointerdown', e=>{
-  if(e.pointerType==='touch') return; // toque tem tratamento próprio abaixo
-  if(zoomView<=1.001) return;
-  if(tcontrols.dragging || tcontrols.axis) return; // gizmo tem prioridade
-  if(!(panMode || e.altKey)) return;
-  panDragging=true; panLast={x:e.clientX, y:e.clientY};
-  orbit.enabled=false;
-  try{ cv.setPointerCapture(e.pointerId); }catch(_){}
-  e.preventDefault();
-});
-cv.addEventListener('pointermove', e=>{
-  if(!panDragging || e.pointerType==='touch') return;
-  const dx=e.clientX-panLast.x, dy=e.clientY-panLast.y;
-  panLast={x:e.clientX, y:e.clientY};
-  panX += dx/zoomView; panY += dy/zoomView;
-  clampPanView(); applyViewTransform();
-});
-function endPanDrag(e){
-  if(e && e.pointerType==='touch') return;
-  if(!panDragging) return;
-  panDragging=false;
-  orbit.enabled = !panMode;
-}
-cv.addEventListener('pointerup', endPanDrag);
-cv.addEventListener('pointercancel', endPanDrag);
-
-// ---- celular: pinça = zoom da foto · 2 dedos arrastando = mover a foto ·
-// ---- duplo-toque = alterna 100% ↔ 250% no ponto tocado ----
-// 1 dedo continua orbitando a câmera (ou movendo o 3D pelo gizmo).
-const ptrs=new Map();          // dedos ativos no canvas
-let pinchPrev=null;            // {d: distância, mx/my: ponto médio} do frame anterior
+// ============================================================
+// GESTOS DA FOTO (mouse + toque) — arquitetura "não atrapalha":
+//
+// Os listeners ficam no #frame (pai do canvas 3D), em fase de CAPTURA,
+// ou seja, rodam ANTES do evento chegar no <canvas> onde o OrbitControls
+// e o TransformControls escutam. Regra de ouro:
+//   • se NÃO temos certeza de que o gesto é da FOTO, não fazemos nada —
+//     o evento segue pro 3D exatamente como se nosso código não existisse
+//     (isso corrige o bug de "não consigo mexer o 3D" com zoom ligado)
+//   • se temos certeza (2º dedo tocou = pinça), chamamos stopPropagation
+//     ANTES do OrbitControls saber que existe um 2º ponteiro — ele nunca
+//     tenta interpretar a pinça como zoom da câmera 3D (esse era o motivo
+//     do "3D some": os dois sistemas mexiam na câmera ao mesmo tempo)
+// ============================================================
+const ptrs=new Map();              // ponteiros ativos (mouse ou dedo)
+let panDragging=false, panLast=null, panPointerId=null;
+let pinchPrev=null;                // {d,mx,my} do frame anterior da pinça
 let tapLast=0, tapX=0, tapY=0, tapDown=null;
 
-cv.addEventListener('pointerdown', e=>{
-  if(e.pointerType!=='touch') return;
-  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+function noGizmo(){ return !tcontrols.dragging && !tcontrols.axis; }
+
+frame.addEventListener('pointerdown', e=>{
+  ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY, type:e.pointerType});
+
   if(ptrs.size===1){
     tapDown={x:e.clientX,y:e.clientY};
-    // "Mover foto" ligado: 1 dedo arrasta a foto em vez de orbitar —
-    // mas o gizmo continua com prioridade (dedo numa seta mexe o 3D)
-    if(panMode && zoomView>1.001 && !tcontrols.dragging && !tcontrols.axis){
-      panDragging=true; panLast={x:e.clientX,y:e.clientY};
+    // só decide iniciar arrasto da foto se já dá pra saber que não é gizmo
+    // (o próprio pointerdown ainda vai chegar no canvas normalmente depois,
+    // já que não paramos a propagação aqui)
+    if((panMode || e.altKey) && zoomView>1.001 && noGizmo() && e.pointerType!=='touch'){
+      panDragging=true; panLast={x:e.clientX,y:e.clientY}; panPointerId=e.pointerId;
     }
-  }
-  if(ptrs.size===2 && !tcontrols.dragging){
+  } else if(ptrs.size===2){
+    // 2º dedo tocou = pinça. Se o 1º dedo já estava arrastando o gizmo,
+    // ignora o 2º dedo por completo (deixa o gizmo continuar sozinho).
+    if(tcontrols.dragging) { ptrs.delete(e.pointerId); return; }
     const [a,b]=[...ptrs.values()];
     pinchPrev={d:Math.hypot(a.x-b.x,a.y-b.y), mx:(a.x+b.x)/2, my:(a.y+b.y)/2};
-    panDragging=false;       // pinça cancela o arrasto de 1 dedo
-    orbit.enabled=false;     // e o orbitar, enquanto durar
-    tapDown=null;
+    panDragging=false; tapDown=null;
+    orbit.enabled=false;         // impede o OrbitControls de "ver" a pinça
+    e.stopPropagation();         // ...e de processar o 2º ponteiro
+    e.preventDefault();
+  } else {
+    // 3º dedo em diante: ignora, mas não deixa vazar pro 3D pra não confundir
+    e.stopPropagation();
   }
-});
-cv.addEventListener('pointermove', e=>{
-  if(e.pointerType!=='touch' || !ptrs.has(e.pointerId)) return;
-  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(ptrs.size===2 && pinchPrev){
+}, {capture:true});
+
+frame.addEventListener('pointermove', e=>{
+  if(!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY, type:e.pointerType});
+
+  if(ptrs.size>=2 && pinchPrev){
     const [a,b]=[...ptrs.values()];
     const d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
     if(pinchPrev.d>4) zoomAtPoint(mx, my, zoomView*(d/pinchPrev.d));
-    // mover os 2 dedos juntos arrasta a área visível
-    if(zoomView>1.001){
+    if(zoomView>1.001){ // mover os 2 dedos juntos arrasta a área visível
       panX+=(mx-pinchPrev.mx)/zoomView; panY+=(my-pinchPrev.my)/zoomView;
       clampPanView(); applyViewTransform();
     }
     pinchPrev={d,mx,my};
-    e.preventDefault();
-  } else if(panDragging && ptrs.size===1){
+    e.stopPropagation(); e.preventDefault();
+    return;
+  }
+
+  // mouse: parou de segurar o botão sem soltar corretamente sobre o canvas?
+  // trata como se tivesse soltado, em vez de deixar a foto "grudada" no mouse
+  if(panDragging && e.pointerType!=='touch' && e.buttons===0){
+    resetGestureState(); return;
+  }
+
+  if(panDragging && e.pointerId===panPointerId){
     const dx=e.clientX-panLast.x, dy=e.clientY-panLast.y;
-    panLast={x:e.clientX,y:e.clientY};
+    panLast={x:e.clientX, y:e.clientY};
     panX+=dx/zoomView; panY+=dy/zoomView;
     clampPanView(); applyViewTransform();
+    e.stopPropagation();
+    return;
   }
-});
-function endTouch(e){
-  if(e.pointerType!=='touch') return;
+
+  // toque, "Mover foto" ligado, 1 dedo só: só agora (no move, não no down)
+  // dá pra confirmar com certeza que o gizmo NÃO pegou o dedo — o pointerdown
+  // já terminou de percorrer o canvas antes do primeiro move acontecer
+  if(ptrs.size===1 && e.pointerType==='touch' && panMode && zoomView>1.001 && noGizmo()){
+    if(!panDragging){ panDragging=true; panLast={x:e.clientX,y:e.clientY}; panPointerId=e.pointerId; orbit.enabled=false; return; }
+    if(e.pointerId===panPointerId){
+      const dx=e.clientX-panLast.x, dy=e.clientY-panLast.y;
+      panLast={x:e.clientX,y:e.clientY};
+      panX+=dx/zoomView; panY+=dy/zoomView;
+      clampPanView(); applyViewTransform();
+      e.stopPropagation();
+    }
+  }
+}, {capture:true});
+
+function endGesturePointer(e){
   // duplo-toque: dois taps rápidos, quase no mesmo lugar, sem arrastar
-  if(ptrs.size===1 && tapDown && Math.hypot(e.clientX-tapDown.x, e.clientY-tapDown.y)<12){
+  if(e.pointerType==='touch' && ptrs.size===1 && tapDown &&
+     Math.hypot(e.clientX-tapDown.x, e.clientY-tapDown.y)<12){
     const agora=performance.now();
     if(agora-tapLast<330 && Math.hypot(e.clientX-tapX, e.clientY-tapY)<48){
       zoomAtPoint(e.clientX, e.clientY, zoomView>1.2 ? 1 : 2.5);
@@ -943,13 +969,13 @@ function endTouch(e){
   }
   ptrs.delete(e.pointerId);
   tapDown=null;
-  if(ptrs.size<2){
-    pinchPrev=null;
-    if(ptrs.size===0){ panDragging=false; orbit.enabled = !panMode && !tcontrols.dragging; }
-  }
+  if(ptrs.size<2) pinchPrev=null;
+  if(ptrs.size===0) resetGestureState();
 }
-cv.addEventListener('pointerup', endTouch);
-cv.addEventListener('pointercancel', endTouch);
+// no window (não só no frame): garante que soltar o dedo/mouse fora da
+// área do 3D também encerra o gesto — é a causa mais comum de "3D travado"
+addEventListener('pointerup', endGesturePointer, {capture:true});
+addEventListener('pointercancel', endGesturePointer, {capture:true});
 
 // ---- desktop: Ctrl+scroll em cima da foto = zoom ancorado no cursor ----
 // (scroll normal continua controlando a distância da câmera 3D; a pinça do
