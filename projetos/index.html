@@ -187,7 +187,7 @@
 
   <aside id="panel">
     <div class="head">
-      <span class="dot"></span><h1>Compositor 3D</h1><span>v5</span>
+      <span class="dot"></span><h1>Compositor 3D</h1><span>v6</span>
     </div>
     <div class="body">
 
@@ -225,10 +225,6 @@
           <b>Escolher arquivo</b>ou carregue um GLB do computador
           <input type="file" id="glbFile" accept=".glb,.gltf,model/gltf-binary">
         </label>
-        <div class="urlrow">
-          <input id="glbUrl" placeholder="ou cole URL do Firebase Storage">
-          <button id="glbUrlBtn">Abrir</button>
-        </div>
       </div>
 
       <div class="sec">
@@ -461,9 +457,6 @@ function loadGLB(url, revoke){
 $('glbFile').addEventListener('change', e=>{
   const f=e.target.files[0]; if(!f) return;
   loadGLB(URL.createObjectURL(f), true);
-});
-$('glbUrlBtn').addEventListener('click', ()=>{
-  const u=$('glbUrl').value.trim(); if(u) loadGLB(u,false);
 });
 
 // ---- INTEGRAÇÃO COM PRODUTOS (Firebase) ----
@@ -798,6 +791,13 @@ addEventListener('resize', ()=>{ if(bgImg.naturalWidth) fitFrame(); else resize(
 // alinhado com precisão mesmo ampliado; só muda o que aparece na tela.
 let zoomView=1, panX=0, panY=0, panMode=false;
 const ZOOM_MAX=8;
+// estado dos gestos — precisa vir ANTES de qualquer função que possa ser
+// chamada durante a inicialização da página (o bind() dos sliders roda o
+// callback uma vez de cara, pra sincronizar o valor inicial)
+const ptrs=new Map();              // ponteiros ativos (mouse ou dedo)
+let panDragging=false, panLast=null, panPointerId=null;
+let pinchPrev=null;                // {d,mx,my} do frame anterior da pinça
+let tapLast=0, tapX=0, tapY=0, tapDown=null;
 
 function applyViewTransform(){
   frame.style.transform = (zoomView<=1.001) ? '' : `scale(${zoomView}) translate(${panX}px, ${panY}px)`;
@@ -876,11 +876,6 @@ function zoomAtPoint(clientX, clientY, zNew){
 //     tenta interpretar a pinça como zoom da câmera 3D (esse era o motivo
 //     do "3D some": os dois sistemas mexiam na câmera ao mesmo tempo)
 // ============================================================
-const ptrs=new Map();              // ponteiros ativos (mouse ou dedo)
-let panDragging=false, panLast=null, panPointerId=null;
-let pinchPrev=null;                // {d,mx,my} do frame anterior da pinça
-let tapLast=0, tapX=0, tapY=0, tapDown=null;
-
 function noGizmo(){ return !tcontrols.dragging && !tcontrols.axis; }
 
 frame.addEventListener('pointerdown', e=>{
