@@ -86,9 +86,13 @@ h3{font-size:14px;font-weight:600;margin-bottom:12px;color:#555}
 .badge-prod{background:#EEEDFE;color:#534AB7;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
 .badge-meia{background:#f0f2f5;color:#555;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
 .badge-vend{background:#E1F5EE;color:#0F6E56;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;white-space:nowrap}
+.badge-fixo{background:#E6F1FB;color:#0C447C;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;white-space:nowrap}
+.badge-var{background:#FAEEDA;color:#854F0B;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;white-space:nowrap}
 .total-row{background:#f5f7fa;font-weight:600}
 .diff-pos{color:#3B6D11;font-weight:600}
 .diff-neg{color:#A32D2D;font-weight:600}
+.btn-voltar-com{display:inline-flex;align-items:center;gap:5px;text-decoration:none;font-size:13px;font-weight:700;color:#fff;background:#185FA5;padding:8px 16px;border-radius:999px;white-space:nowrap;transition:background .15s;flex-shrink:0}
+.btn-voltar-com:hover{background:#0C447C}
 .save-info{position:fixed;bottom:20px;right:20px;background:#3B6D11;color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;opacity:0;transition:opacity 0.3s;pointer-events:none}
 .save-info.show{opacity:1}
 .check-row{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:13px;color:#444}
@@ -333,8 +337,13 @@ textarea{font-family:inherit}
 </head>
 <body>
 <div class="container">
-  <h1>AÇO NAVAL</h1>
-  <p class="subtitle">Gestão de Comissões e Vendas Mensais</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    <div>
+      <h1>AÇO NAVAL</h1>
+      <p class="subtitle">Gestão de Comissões e Vendas Mensais</p>
+    </div>
+    <a href="/comercial/" class="btn-voltar-com" title="Voltar para o Comercial">← Comercial</a>
+  </div>
 
   <div class="header-mes">
     <span class="lbl">📅 Mês de referência:</span>
@@ -424,7 +433,7 @@ textarea{font-family:inherit}
       <div class="row" style="align-items:center">
         <div class="field"><div class="label">Vendedor</div>
           <select id="p-vend">
-            <option value="todos">Todos os vendedores</option>
+            <option value="">Só fixos</option>
           </select>
         </div>
         <div style="padding-bottom:2px">
@@ -519,6 +528,12 @@ textarea{font-family:inherit}
         <div class="field"><div class="label">Nome</div><input type="text" id="v-nome" placeholder="Ex: Valdo"/></div>
         <div class="field"><div class="label">Comissão (%)</div><input type="number" id="v-perc" step="0.1" min="0" placeholder="Ex: 1"/></div>
         <div class="field"><div class="label">Bônus por nº (R$)</div><input type="number" id="v-bonus" step="0.01" min="0" placeholder="Ex: 0,50"/></div>
+        <div class="field"><div class="label">Tipo</div>
+          <select id="v-tipo">
+            <option value="fixo">Fixo (recebe sempre)</option>
+            <option value="variavel">Variável (por venda)</option>
+          </select>
+        </div>
         <button class="btn btn-primary" onclick="addVendedor()">+ Adicionar</button>
       </div>
       <div id="lista-v" style="margin-top:12px"><p class="empty">Nenhum vendedor cadastrado.</p></div>
@@ -579,6 +594,15 @@ textarea{font-family:inherit}
         <input type="number" id="ev-bonus" step="0.01" min="0" placeholder="Ex: 0,50"/>
       </div>
     </div>
+    <div class="row" style="margin-top:12px;margin-bottom:0">
+      <div class="field">
+        <div class="label">Tipo de comissão</div>
+        <select id="ev-tipo">
+          <option value="fixo">Fixo (recebe sempre em toda venda)</option>
+          <option value="variavel">Variável (só nas vendas atribuídas a ele)</option>
+        </select>
+      </div>
+    </div>
     <div style="display:flex;gap:10px;margin-top:20px">
       <button class="btn btn-primary" style="flex:1;font-size:15px;padding:12px" onclick="salvarEditVendedor()">✅ Salvar</button>
       <button class="btn btn-danger" style="flex:1;font-size:15px;padding:12px" onclick="fecharEditVendedor()">Cancelar</button>
@@ -636,7 +660,7 @@ textarea{font-family:inherit}
 
     <div class="row" style="margin-bottom:0;margin-top:10px">
       <div class="field"><div class="label">Valor (R$)</div><input type="number" id="ep-val" step="0.01" min="0" placeholder="Ex: 5000"/></div>
-      <div class="field"><div class="label">Vendedor</div><select id="ep-vend"><option value="todos">Todos os vendedores</option></select></div>
+      <div class="field"><div class="label">Vendedor</div><select id="ep-vend"><option value="">Só fixos</option></select></div>
     </div>
 
     <div class="check-row" style="margin-top:12px">
@@ -892,10 +916,11 @@ function addVendedor(){
   const n=document.getElementById('v-nome').value.trim();
   const pc=parseFloat(document.getElementById('v-perc').value);
   const bn=parseFloat(document.getElementById('v-bonus').value)||0;
+  const tp=(document.getElementById('v-tipo')||{}).value==='variavel'?'variavel':'fixo';
   if(!n||isNaN(pc)||pc<=0){alert('Preencha nome e % de comissão.');return;}
   if(vs.find(v=>v.nome.toLowerCase()===n.toLowerCase())){alert('Vendedor já cadastrado.');return;}
-  vs.push({id:Date.now(),nome:n,perc:pc,bonus:bn});
-  document.getElementById('v-nome').value='';document.getElementById('v-perc').value='';document.getElementById('v-bonus').value='';
+  vs.push({id:Date.now(),nome:n,perc:pc,bonus:bn,tipo:tp});
+  document.getElementById('v-nome').value='';document.getElementById('v-perc').value='';document.getElementById('v-bonus').value='';if(document.getElementById('v-tipo'))document.getElementById('v-tipo').value='fixo';
   salvar();renderV();renderLinksVendedores();renderSel();renderTabs();
 }
 function delV(id){
@@ -909,10 +934,14 @@ function delV(id){
 function renderV(){
   const el=document.getElementById('lista-v');
   if(!vs.length){el.innerHTML='<p class="empty">Nenhum vendedor cadastrado.</p>';return;}
-  let h='<table><thead><tr><th>Nome</th><th>Comissão</th><th>Bônus/nº</th><th>Pedidos</th><th></th></tr></thead><tbody>';
+  let h='<table><thead><tr><th>Nome</th><th>Tipo</th><th>Comissão</th><th>Bônus/nº</th><th>Pedidos</th><th></th></tr></thead><tbody>';
   vs.forEach(v=>{
     const q=uniquePedidos(ps.filter(p=>p.vid===v.id)).length;
-    h+='<tr><td><strong>'+v.nome+'</strong></td><td>'+v.perc+'%</td>';
+    const ehFixo=(v.tipo||'fixo')==='fixo';
+    const tipoBadge=ehFixo
+      ?'<span class="badge-fixo">📌 Fixo</span>'
+      :'<span class="badge-var">🎯 Variável</span>';
+    h+='<tr><td><strong>'+v.nome+'</strong></td><td>'+tipoBadge+'</td><td>'+v.perc+'%</td>';
     h+='<td>'+(v.bonus>0?fmt(v.bonus)+'/nº':'—')+'</td>';
     h+='<td><span class="badge-ok">'+q+' pedido'+(q!==1?'s':'')+'</span></td>';
     h+='<td style="text-align:right;display:flex;gap:6px;justify-content:flex-end">';
@@ -929,6 +958,7 @@ function editarVendedor(id){
   document.getElementById('ev-nome').textContent=v.nome;
   document.getElementById('ev-perc').value=v.perc;
   document.getElementById('ev-bonus').value=v.bonus||'';
+  if(document.getElementById('ev-tipo'))document.getElementById('ev-tipo').value=(v.tipo||'fixo');
   const overlay=document.getElementById('ev-overlay');
   const panel=document.getElementById('ev-panel');
   overlay.style.display='block';
@@ -951,7 +981,8 @@ function salvarEditVendedor(){
   if(isNaN(pc)||pc<=0){alert('Percentual inválido.');return;}
   const v=vs.find(x=>x.id===id);if(!v)return;
   v.perc=pc;v.bonus=bn;
-  salvar();renderV();renderRel();
+  if(document.getElementById('ev-tipo'))v.tipo=document.getElementById('ev-tipo').value==='variavel'?'variavel':'fixo';
+  salvar();renderV();renderRel();renderSel();
   fecharEditVendedor();
 }
 
@@ -999,9 +1030,41 @@ function copiarLink(id,btn){
   btn.textContent='✅ Copiado!';btn.style.background='#EAF3DE';btn.style.color='#3B6D11';btn.style.borderColor='#63b922';
   setTimeout(()=>{btn.textContent=orig;btn.style.background='';btn.style.color='';btn.style.borderColor='';},2000);
 }
+/* FIXOS recebem em toda venda; VARIÁVEIS só quando atribuídos.
+   vidSel: id do variável escolhido, ''/'todos' = nenhum variável (só fixos),
+   ou 'todos_var' = todos os variáveis (uso interno/legado). */
+function fixos(){return vs.filter(v=>(v.tipo||'fixo')==='fixo');}
+function variaveis(){return vs.filter(v=>(v.tipo||'fixo')==='variavel');}
+function alvosComissao(vidSel){
+  const fx=fixos();
+  if(vidSel==='todos'||vidSel==='todos_var'){
+    // legado: credita todos (fixos + variáveis)
+    return vs.slice();
+  }
+  if(vidSel==null||vidSel===''){
+    return fx.slice(); // só os fixos
+  }
+  const vv=vs.find(v=>String(v.id)===String(vidSel));
+  if(!vv)return fx.slice();
+  if((vv.tipo||'fixo')==='fixo')return fx.slice(); // escolheu um fixo: fixos já cobrem
+  // variável escolhido: fixos + ele (sem duplicar)
+  return [...fx, vv];
+}
+function pushVenda(gid,base,alvos){
+  alvos.forEach((v,i)=>{
+    const fator=base.meia?0.5:1;
+    ps.push(Object.assign({},base,{
+      id:gid+i,gid,vid:v.id,vendedorNome:v.nome,
+      com:parseFloat((Number(base.val)*v.perc/100*fator).toFixed(2))
+    }));
+  });
+}
+
 function renderSel(){
-  let h='<option value="todos">Todos os vendedores</option>';
-  vs.forEach(v=>{h+='<option value="'+v.id+'">'+v.nome+' ('+v.perc+'%)</option>';});
+  const fx=fixos(),vr=variaveis();
+  const fixLbl=fx.length?('Só fixos: '+fx.map(v=>v.nome).join(', ')):'Nenhum fixo cadastrado';
+  let h='<option value="">📌 '+fixLbl+'</option>';
+  vr.forEach(v=>{h+='<option value="'+v.id+'">🎯 '+v.nome+' ('+v.perc+'%) + fixos</option>';});
   document.getElementById('p-vend').innerHTML=h;
   let h2='<option value="">Selecione...</option>';
   vs.forEach(v=>{h2+='<option value="'+v.id+'">'+v.nome+'</option>';});
@@ -1140,12 +1203,9 @@ function addPed(){
   if(!num||!cid||!uf||isNaN(val)||val<=0){alert('Preencha número, cidade, UF e valor.');return;}
   const mes=refMes(),ano=refAno();
   const gid=Date.now();
-  const alvos=vidSel==='todos'?vs:vs.filter(v=>v.id===parseInt(vidSel));
-  if(!alvos.length){alert('Cadastre vendedores antes de lançar pedidos.');return;}
-  alvos.forEach((v,i)=>{
-    const fator=meia?0.5:1;
-    ps.push({id:gid+i,gid,num,prod,cid,uf,val,vid:v.id,mes,ano,meia,com:parseFloat((val*v.perc/100*fator).toFixed(2))});
-  });
+  const alvos=alvosComissao(vidSel);
+  if(!alvos.length){alert('Cadastre pelo menos um vendedor (fixo ou variável) antes de lançar pedidos.');return;}
+  pushVenda(gid,{num,prod,cid,uf,val,mes,ano,meia},alvos);
   lp();salvar();renderV();renderRel();renderF();if(document.getElementById('page-pedidos').classList.contains('active'))renderPedidos();
 }
 function delPedidoGid(gid){
@@ -1173,14 +1233,17 @@ function editarPedido(gid){
   prods.forEach(p=>{hp+=`<option value="${p.id}"${p.id===ref.prod?' selected':''}>${p.nome}</option>`;});
   document.getElementById('ep-prod').innerHTML=hp;
 
-  // Preenche select de vendedor — detecta se é "todos" ou vendedor único
-  const gidRegs=ps.filter(p=>p.gid===gid);
-  let hv='<option value="todos">Todos os vendedores</option>';
-  vs.forEach(v=>{hv+=`<option value="${v.id}">${v.nome} (${v.perc}%)</option>`;});
+  // Preenche select de vendedor (mesmo modelo: fixos automáticos + cada variável)
+  const gidRegs=ps.filter(p=>p.gid===gid&&p.tipo!=='estorno');
+  const fx=fixos(),vr=variaveis();
+  const fixLbl=fx.length?('Só fixos: '+fx.map(v=>v.nome).join(', ')):'Nenhum fixo cadastrado';
+  let hv='<option value="">📌 '+fixLbl+'</option>';
+  vr.forEach(v=>{hv+=`<option value="${v.id}">🎯 ${v.nome} (${v.perc}%) + fixos</option>`;});
   document.getElementById('ep-vend').innerHTML=hv;
-  if(gidRegs.length===1){
-    document.getElementById('ep-vend').value=String(gidRegs[0].vid);
-  }
+  // Detecta se há um variável atualmente vinculado a este pedido
+  const vidsAtuais=gidRegs.map(p=>p.vid);
+  const varVinc=vr.find(v=>vidsAtuais.includes(v.id));
+  document.getElementById('ep-vend').value=varVinc?String(varVinc.id):'';
 
   // Abre painel
   document.getElementById('ped-overlay').style.display='block';
@@ -1213,17 +1276,19 @@ function salvarEditPedido(){
   if(!num||!cid||!uf||isNaN(val)||val<=0){alert('Preencha número, cidade, UF e valor.');return;}
   if(isNaN(ano)||ano<2020){alert('Ano inválido.');return;}
 
-  // Decide quais registros atualizar
-  const alvos=vidSel==='todos'
-    ?ps.filter(p=>p.gid===gid)
-    :ps.filter(p=>p.gid===gid&&p.vid===parseInt(vidSel));
+  // Preserva metadados de integração (origem/cliente) do registro atual
+  const antigos=ps.filter(p=>p.gid===gid&&p.tipo!=='estorno');
+  const meta=antigos[0]||{};
+  const alvosNovos=alvosComissao(vidSel);
+  if(!alvosNovos.length){alert('Nenhum vendedor válido para este pedido.');return;}
 
-  alvos.forEach(p=>{
-    p.num=num;p.mes=mes;p.ano=ano;p.prod=prod;
-    p.cid=cid;p.uf=uf;p.val=val;p.meia=meia;
-    const v=vs.find(x=>x.id===p.vid);
-    if(v)p.com=parseFloat((val*v.perc/100*(meia?0.5:1)).toFixed(2));
-  });
+  // Remove os registros antigos (não-estorno) e recria conforme a seleção.
+  // Isso permite REALMENTE trocar quem recebe (o bug anterior só editava
+  // campos, então o vínculo nunca mudava).
+  ps=ps.filter(p=>!(p.gid===gid&&p.tipo!=='estorno'));
+  const base={num,prod,cid,uf,val,mes,ano,meia,
+    clienteNome:meta.clienteNome,origem:meta.origem,assinadoPor:meta.assinadoPor,assinadoEm:meta.assinadoEm};
+  pushVenda(gid,base,alvosNovos);
 
   salvar();renderV();renderRel();renderF();renderPedidos();
   fecharEditPedido();
