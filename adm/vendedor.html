@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aço Naval — Minhas Comissões</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<meta name="theme-color" content="#003366">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Aço Naval">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+body{background:#f5f7fa;color:#222;min-height:100vh}
+
+/* TOPO */
+.topo{background:linear-gradient(135deg,#003366 0%,#185FA5 100%);padding:20px 20px 24px;position:relative;overflow:hidden}
+.topo::after{content:'';position:absolute;bottom:-30px;left:0;right:0;height:60px;background:#f5f7fa;border-radius:50% 50% 0 0/30px 30px 0 0}
+.topo-logo{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.topo-logo img{width:40px;height:40px;border-radius:8px;object-fit:contain;background:rgba(255,255,255,0.1);padding:4px}
+.topo-logo span{color:#fff;font-size:16px;font-weight:700;letter-spacing:0.5px}
+.saudacao{color:rgba(255,255,255,0.85);font-size:13px;margin-bottom:4px}
+.nome-vend{color:#fff;font-size:22px;font-weight:700}
+
+/* CONTAINER */
+.container{max-width:600px;margin:0 auto;padding:0 14px 32px;position:relative;z-index:1}
+
+/* CARD */
+.card{background:#fff;border:1px solid #e0e4e8;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+
+/* MÉTRICAS */
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.metric{background:#f5f7fa;border-radius:10px;padding:12px 14px}
+.metric.full{grid-column:1/-1}
+.metric.verde{background:#EAF3DE}
+.metric .val{font-size:18px;font-weight:700;color:#222;line-height:1.2}
+.metric.azul .val{color:#185FA5}
+.metric.laranja .val{color:#854F0B}
+.metric.verde .val{color:#3B6D11}
+.metric.roxo .val{color:#534AB7}
+.metric .lbl{font-size:11px;color:#888;margin-top:3px;text-transform:uppercase;letter-spacing:0.3px}
+
+/* FILTRO */
+.filtro{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.filtro label{font-size:13px;color:#666;font-weight:500;flex-shrink:0}
+select{font-size:14px;padding:8px 10px;border:1px solid #d0d4d8;border-radius:8px;background:#fff;color:#222;flex:1;min-width:0}
+.btn{font-size:13px;padding:9px 16px;border-radius:8px;border:1px solid #d0d4d8;background:#fff;color:#222;cursor:pointer;font-weight:500;flex-shrink:0}
+.btn-primary{background:#185FA5;color:#fff;border-color:#185FA5}
+
+/* TABELA OTIMIZADA */
+.tabela-wrap{overflow-x:auto;margin:0 -16px;padding:0 16px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{background:#f5f7fa;color:#666;font-weight:600;text-align:left;padding:10px 10px;border-bottom:1px solid #e0e4e8;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap}
+td{padding:12px 10px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.total-row td{background:#f5f7fa;font-weight:700;border-bottom:none}
+.num{font-weight:700;color:#003366;font-size:15px}
+.cidade{font-size:13px;color:#444}
+.val-td{text-align:right;font-weight:600}
+.com-td{text-align:right;font-weight:700;color:#185FA5}
+.badge-meia{background:#f0f2f5;color:#555;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;vertical-align:middle}
+.badge-venda{background:#E6F1FB;color:#0C447C;font-size:13px;padding:3px 9px;border-radius:8px;font-weight:800;letter-spacing:.3px;display:inline-block}
+.badge-cat{background:#EEEDFE;color:#534AB7;font-size:11px;padding:2px 8px;border-radius:12px;font-weight:600;white-space:nowrap;display:inline-block}
+
+/* SEÇÕES */
+.sec-titulo{font-size:12px;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px;padding-top:14px;border-top:1px solid #f0f2f5}
+.sec-titulo.roxo{color:#534AB7}
+.sec-titulo.laranja{color:#854F0B}
+
+/* RESUMO LÍQUIDO */
+.resumo-liq{background:#EAF3DE;border-radius:10px;padding:14px 16px;margin-top:14px}
+.resumo-linha{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;color:#555}
+.resumo-linha.roxo{color:#534AB7}
+.resumo-linha.laranja{color:#854F0B}
+.resumo-total{display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid #c5e0ab;margin-top:4px}
+.resumo-total .label{font-size:14px;font-weight:700;color:#3B6D11}
+.resumo-total .valor{font-size:22px;font-weight:800;color:#3B6D11}
+
+/* BONUS/ADT */
+.bonus-card{background:#F5F3FF;border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.bonus-card .titulo{font-size:12px;color:#534AB7;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.3px}
+.adt-card{background:#FFF4E0;border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.adt-card .titulo{font-size:12px;color:#854F0B;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.3px}
+.item-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.05);font-size:13px}
+.item-row:last-child{border-bottom:none}
+.item-row .desc{color:#444;flex:1}
+.item-row .val{font-weight:700;flex-shrink:0;margin-left:10px}
+.item-row .val.roxo{color:#534AB7}
+.item-row .val.laranja{color:#854F0B}
+.item-row .val.vermelho{color:#A32D2D}
+.est-card{background:#FCEBEB;border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.est-card .titulo{font-size:12px;color:#A32D2D;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.3px}
+.resumo-linha.vermelho{color:#A32D2D}
+
+/* LOADING/ERRO */
+.loading{text-align:center;padding:80px 20px;color:#666}
+.spinner{width:40px;height:40px;border:3px solid #e0e4e8;border-top-color:#185FA5;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.erro{text-align:center;padding:80px 20px;color:#A32D2D}
+
+/* EMPTY */
+.empty{color:#999;font-size:13px;text-align:center;padding:28px 0;font-style:italic}
+
+/* VENDAS TOPO */
+.topo-vendas{margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.2)}
+.topo-vendas-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.65);margin-bottom:4px}
+.topo-vendas-val{font-size:28px;font-weight:800;color:#fff;line-height:1.1;letter-spacing:-0.5px}
+.topo-vendas-sub{font-size:12px;color:rgba(255,255,255,0.6);margin-top:3px}
+</style>
+</head>
+<body>
+
+<div class="topo">
+  <div class="topo-logo">
+    <img src="icon-180.png" alt="Aço Naval"/>
+    <span>AÇO NAVAL</span>
+  </div>
+  <div class="saudacao" id="saudacao">Carregando...</div>
+  <div class="nome-vend" id="nome-vend"></div>
+  <div class="topo-vendas" id="topo-vendas" style="display:none">
+    <div class="topo-vendas-lbl" id="topo-vendas-lbl">Vendas do mês</div>
+    <div class="topo-vendas-val" id="topo-vendas-val">—</div>
+    <div class="topo-vendas-sub" id="topo-vendas-sub"></div>
+  </div>
+</div>
+
+<div class="container">
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Carregando suas comissões...</p>
+  </div>
+  <div id="erro" class="erro" style="display:none">
+    <h2>❌ Vendedor não encontrado</h2>
+    <p>Verifique o link com o responsável.</p>
+  </div>
+  <div id="conteudo" style="display:none">
+    <div class="filtro" style="margin-top:16px">
+      <label>Mês:</label>
+      <select id="f-mes" onchange="renderConteudo()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div id="metrics-wrap" class="metrics-grid"></div>
+    <div class="card">
+      <div id="tabela-pedidos"></div>
+      <div id="extras"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAb46YPuZDtuGitlySCxKXJjy0WEy0xPMI",
+  authDomain: "aco-naval-gestao.firebaseapp.com",
+  databaseURL: "https://aco-naval-gestao-default-rtdb.firebaseio.com",
+  projectId: "aco-naval-gestao",
+  storageBucket: "aco-naval-gestao.firebasestorage.app",
+  messagingSenderId: "359027216116",
+  appId: "1:359027216116:web:af8df148f57e7c3fb398a1"
+};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.database();
+
+const MS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const fmt=v=>'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const ck=(m,a)=>m+'_'+a;
+const ord=c=>{const p=c.split('_');return parseInt(p[1])*100+MS.indexOf(p[0]);};
+
+let vendedor=null,pedidos=[],adiantamentos=[],produtos=[],bonusLista=[],transfs=[],estornos=[];
+
+/* Normaliza pedidos vindos de qualquer origem (manual ou integração assinar.html).
+   Garante que NOVAS VENDAS apareçam: mes(número->nome), ano/val/gid normalizados,
+   meia(bool) e vid (string ou NOME do vendedor -> id numérico). */
+function nomeParaVid(x,vsList){
+  const s=String(x).toLowerCase().trim();
+  const v=(vsList||[]).find(v=>v.nome&&v.nome.toLowerCase().trim()===s);
+  return v?v.id:null;
+}
+function normalizarPedidos(lista,vsList){
+  return (lista||[]).map(p=>{
+    const q=Object.assign({},p);
+    if(typeof q.mes==='number'){q.mes=MS[q.mes-1]||String(q.mes);}
+    else if(typeof q.mes==='string'&&/^\d{1,2}$/.test(q.mes.trim())){q.mes=MS[parseInt(q.mes,10)-1]||q.mes;}
+    if(typeof q.ano==='string'&&/^\d+$/.test(q.ano.trim())){q.ano=parseInt(q.ano,10);}
+    if(typeof q.val==='string'){const n=parseFloat(q.val.replace(',','.'));if(!isNaN(n))q.val=n;}
+    q.meia=(q.meia===true||q.meia==='true'||q.meia===1||q.meia==='1');
+    if(typeof q.gid==='string'&&/^\d+$/.test(q.gid.trim())){q.gid=parseInt(q.gid,10);}
+    if(q.vid!=null&&typeof q.vid==='string'){
+      const t=q.vid.trim();
+      if(/^\d+$/.test(t)){q.vid=parseInt(t,10);}
+      else{const v2=nomeParaVid(t,vsList);if(v2!=null)q.vid=v2;}
+    }
+    return q;
+  });
+}
+function proximoMes(mes,ano){const i=MS.indexOf(mes);if(i<0)return {mes,ano};return i===11?{mes:MS[0],ano:ano+1}:{mes:MS[i+1],ano};}
+function mesAnterior(mes,ano){const i=MS.indexOf(mes);if(i<0)return {mes,ano};return i===0?{mes:MS[11],ano:ano-1}:{mes:MS[i-1],ano};}
+function saldoTransferidoEntra(mes,ano){return transfs.filter(t=>t.dMes===mes&&t.dAno===ano).reduce((s,t)=>s+t.val,0);}
+function transferenciaSaida(mes,ano){return transfs.find(t=>t.oMes===mes&&t.oAno===ano)||null;}
+
+/* Estorno da comissão recalculado pela % atual do vendedor (igual à regra dos pedidos).
+   Usa valOrig do pedido cancelado; cai p/ o com gravado se valOrig não existir. */
+function comDoPedido(p){
+  if(p.com!=null&&!isNaN(Number(p.com)))return Number(p.com);
+  return parseFloat((Number(p.val)*vendedor.perc/100*(p.meia?0.5:1)).toFixed(2));
+}
+function comDoEstorno(e){
+  const fator=e.meia?0.5:1;
+  if(e.valOrig!=null&&vendedor)return -parseFloat((Number(e.valOrig)*vendedor.perc/100*fator).toFixed(2));
+  return -Math.abs(Number(e.com)||0);
+}
+/* ===== NUMERAÇÃO PRÓPRIA DE VENDAS ===========================
+   Cada vendedor tem a SUA sequência: Venda 1, 2, 3... que ZERA todo
+   mês. O número real do pedido da fábrica nunca aparece aqui (evita
+   sequência "falhada" e não expõe o volume total da empresa). */
+let numVenda={};
+function calcularNumerosVenda(){
+  numVenda={};
+  const porMes={};
+  pedidos.slice().sort((a,b)=>(Number(a.gid)||Number(a.id)||0)-(Number(b.gid)||Number(b.id)||0)).forEach(p=>{
+    const c=ck(p.mes,p.ano);
+    porMes[c]=(porMes[c]||0)+1;
+    numVenda[p.gid]=porMes[c];
+  });
+}
+function categoriaDoPedido(p){
+  const pr=produtos.find(x=>x.id===p.prod);
+  return pr?pr.nome:'';
+}
+function primeiroNome(p){
+  return (p.clienteNome||'').trim().split(/\s+/)[0]||'';
+}
+
+/* ===== VIRADA VIRTUAL DE SALDO ================================
+   Espelha (sem gravar nada) a virada automática do ADM: saldo de
+   meses encerrados — crédito ou dívida — segue em cadeia até o mês
+   atual. Assim o vendedor vê o saldo correto mesmo antes do ADM
+   registrar a transferência oficial. Idempotente: meses que já têm
+   transferência real são pulados. */
+function saldoDoMes(mes,ano){
+  const cm=pedidos.filter(p=>p.mes===mes&&p.ano===ano).reduce((s,p)=>s+comDoPedido(p),0);
+  const em=estornos.filter(e=>e.mes===mes&&e.ano===ano).reduce((s,e)=>s+comDoEstorno(e),0);
+  const bm=bonusLista.filter(b=>b.mes===mes&&b.ano===ano).reduce((s,b)=>s+(Number(b.val)||0),0);
+  const am=adiantamentos.filter(a=>a.mes===mes&&a.ano===ano).reduce((s,a)=>s+(Number(a.val)||0),0);
+  return cm+em+bm-am+saldoTransferidoEntra(mes,ano);
+}
+function aplicarViradasVirtuais(){
+  const keys=[];
+  const add=(m,a)=>{if(MS.indexOf(m)<0||!a)return;const c=ck(m,a);if(!keys.includes(c))keys.push(c);};
+  pedidos.forEach(p=>add(p.mes,p.ano));
+  estornos.forEach(e=>add(e.mes,e.ano));
+  adiantamentos.forEach(a=>add(a.mes,a.ano));
+  bonusLista.forEach(b=>add(b.mes,b.ano));
+  transfs.forEach(t=>add(t.dMes,t.dAno));
+  if(!keys.length)return;
+  keys.sort((a,b)=>ord(a)-ord(b));
+  const hj=new Date();
+  const atualOrd=ord(ck(MS[hj.getMonth()],hj.getFullYear()));
+  let [m,aStr]=keys[0].split('_');let a=parseInt(aStr);
+  let guard=0;
+  while(ord(ck(m,a))<atualOrd&&guard++<240){
+    if(!transferenciaSaida(m,a)){
+      const net=saldoDoMes(m,a);
+      if(Math.abs(net)>0.005){
+        const prox=proximoMes(m,a);
+        transfs.push({id:'virt_'+m+'_'+a,vid:vendedor.id,oMes:m,oAno:a,dMes:prox.mes,dAno:prox.ano,val:parseFloat(net.toFixed(2)),virtual:true});
+      }
+    }
+    const nx=proximoMes(m,a);m=nx.mes;a=nx.ano;
+  }
+}
+
+function saudacao(){
+  const h=new Date().getHours();
+  if(h>=5&&h<12)return'Bom dia,';
+  if(h>=12&&h<18)return'Boa tarde,';
+  return'Boa noite,';
+}
+
+const params=new URLSearchParams(window.location.search);
+const nomeUrl=(params.get('v')||'').toLowerCase().trim();
+
+if(!nomeUrl){
+  document.getElementById('loading').style.display='none';
+  document.getElementById('erro').style.display='block';
+  document.getElementById('erro').innerHTML='<h2>⚠️ Link inválido</h2><p>Acesse o link correto fornecido pelo responsável.</p>';
+} else {
+  db.ref('dados').once('value').then(snap=>{
+    const d=snap.val();
+    if(!d){mostrarErro();return;}
+
+    produtos=d.prods||[];
+    const vs=d.vs||[];
+    vendedor=vs.find(v=>(v.nome||'').toLowerCase().trim()===nomeUrl);
+    if(!vendedor){mostrarErro();return;}
+
+    const todosPs=normalizarPedidos(d.ps,vs);
+    const visto={};
+    pedidos=todosPs.filter(p=>{
+      if(p.vid!==vendedor.id)return false;
+      if(p.cancelado)return false;        /* pedido arquivado: fora da contabilidade/vendas */
+      if(p.tipo==='estorno')return false; /* estornos vão para lista separada */
+      if(visto[p.gid])return false;
+      visto[p.gid]=true;
+      return true;
+    }).sort((a,b)=>{
+      const om=ord(ck(b.mes,b.ano))-ord(ck(a.mes,a.ano));
+      if(om!==0)return om;
+      return (Number(b.gid)||0)-(Number(a.gid)||0);
+    });
+
+    estornos=todosPs.filter(p=>p.vid===vendedor.id&&p.tipo==='estorno')
+      .sort((a,b)=>parseInt(b.num)-parseInt(a.num));
+
+    adiantamentos=(d.ads||[]).filter(a=>a.vid===vendedor.id);
+    bonusLista=(d.bonus||[]).filter(b=>b.vid===vendedor.id);
+    const vistoT={};
+    transfs=(d.transfs||[]).filter(t=>t&&t.vid===vendedor.id).filter(t=>{
+      const k=t.oMes+'_'+t.oAno; // uma saída por mês de origem
+      if(vistoT[k])return false;vistoT[k]=true;return true;
+    });
+
+    // Numeração própria: Venda 1, 2, 3... zerando a cada mês
+    calcularNumerosVenda();
+    // Saldo dos meses encerrados segue automaticamente para o mês atual
+    aplicarViradasVirtuais();
+
+    // Preenche filtro (inclui meses que só têm saldo transferido)
+    const ks=[];
+    pedidos.forEach(p=>{const c=ck(p.mes,p.ano);if(ks.indexOf(c)<0)ks.push(c);});
+    adiantamentos.forEach(a=>{const c=ck(a.mes,a.ano);if(ks.indexOf(c)<0)ks.push(c);});
+    bonusLista.forEach(b=>{const c=ck(b.mes,b.ano);if(ks.indexOf(c)<0)ks.push(c);});
+    estornos.forEach(e=>{const c=ck(e.mes,e.ano);if(ks.indexOf(c)<0)ks.push(c);});
+    transfs.forEach(t=>{const c=ck(t.dMes,t.dAno);if(MS.indexOf(t.dMes)>=0&&ks.indexOf(c)<0)ks.push(c);});
+    ks.sort((x,y)=>ord(y)-ord(x));
+    const sel=document.getElementById('f-mes');
+    ks.forEach(c=>{const p=c.split('_');const o=document.createElement('option');o.value=c;o.textContent=p[0]+' '+p[1];sel.appendChild(o);});
+    const hoje=new Date();
+    const mesAtual=ck(MS[hoje.getMonth()],hoje.getFullYear());
+    if(ks.includes(mesAtual))sel.value=mesAtual;
+
+    // Saudação
+    document.getElementById('saudacao').textContent=saudacao();
+    document.getElementById('nome-vend').textContent=vendedor.nome+'!';
+    document.title='Comissões — '+vendedor.nome;
+
+    document.getElementById('loading').style.display='none';
+    document.getElementById('conteudo').style.display='block';
+    renderConteudo();
+  }).catch(()=>mostrarErro());
+}
+
+function mostrarErro(){
+  document.getElementById('loading').style.display='none';
+  document.getElementById('erro').style.display='block';
+}
+
+function renderConteudo(){
+  const f=document.getElementById('f-mes').value;
+  let mps=f?pedidos.filter(p=>ck(p.mes,p.ano)===f):pedidos;
+  let mas=f?adiantamentos.filter(a=>ck(a.mes,a.ano)===f):adiantamentos;
+  let mbs=f?bonusLista.filter(b=>ck(b.mes,b.ano)===f):bonusLista;
+  let mest=f?estornos.filter(e=>ck(e.mes,e.ano)===f):estornos;
+
+  const tcPed=mps.reduce((s,p)=>s+comDoPedido(p),0);
+  const test=mest.reduce((s,e)=>s+comDoEstorno(e),0);
+  const tc=tcPed+test;
+  const tb=mbs.reduce((s,b)=>s+b.val,0);
+  const tv=mps.reduce((s,p)=>s+p.val,0);
+  const ta=mas.reduce((s,a)=>s+a.val,0);
+  const tl=tc+tb-ta;
+  const lbl=f?f.replace('_',' '):'todos os meses';
+  // Saldo transferido entre meses (somente leitura para o vendedor)
+  const fMes=f?f.split('_')[0]:null,fAno=f?parseInt(f.split('_')[1]):null;
+  const entra=f?saldoTransferidoEntra(fMes,fAno):0;
+  const saida=f?transferenciaSaida(fMes,fAno):null;
+  const net=tl+entra;
+  const saldoFinal=saida?(net-saida.val):net;
+  const ant=f?mesAnterior(fMes,fAno):null;
+  const temTransf=f&&(Math.abs(entra)>0.005||saida);
+
+  // Métricas
+  let mh='';
+  mh+='<div class="metric"><div class="val">'+mps.length+'</div><div class="lbl">Venda'+(mps.length===1?'':'s')+'</div></div>';
+  mh+='<div class="metric azul"><div class="val">'+fmt(tcPed)+'</div><div class="lbl">Comissão ('+vendedor.perc+'%)</div></div>';
+  if(test<-0.005){mh+='<div class="metric" style="background:#FCEBEB"><div class="val" style="color:#A32D2D">'+fmt(test)+'</div><div class="lbl">Estornos (cancel.)</div></div>';}
+  if(tb>0){mh+='<div class="metric roxo" style="background:#F5F3FF"><div class="val" style="color:#534AB7">'+fmt(tb)+'</div><div class="lbl">Bônus números</div></div>';}
+  if(ta>0){mh+='<div class="metric laranja" style="background:#FFF4E0"><div class="val">'+fmt(ta)+'</div><div class="lbl">Adiantamentos</div></div>';}
+  if(f&&(temTransf||tb>0||ta>0||test<-0.005)){
+    const neg=saldoFinal<-0.005;
+    mh+='<div class="metric verde full"'+(neg?' style="background:#FCEBEB"':'')+'><div class="val"'+(neg?' style="color:#A32D2D"':'')+'>'+fmt(saldoFinal)+'</div><div class="lbl">'+(saida?'Saldo do mês (transferido)':(neg?'⚠️ Saldo negativo':'💰 A receber (líquido)'))+'</div></div>';
+  } else if(tb>0||ta>0||test<-0.005){
+    mh+='<div class="metric verde full"><div class="val">'+fmt(tl)+'</div><div class="lbl">💰 A receber (líquido)</div></div>';
+  }
+  document.getElementById('metrics-wrap').innerHTML=mh;
+
+  // Atualiza total de vendas no topo
+  const topoDiv=document.getElementById('topo-vendas');
+  const topoVal=document.getElementById('topo-vendas-val');
+  const topoLbl=document.getElementById('topo-vendas-lbl');
+  const topoSub=document.getElementById('topo-vendas-sub');
+  if(topoDiv){
+    topoDiv.style.display='block';
+    const qtdV=mps.length;
+    if(qtdV>0){
+      topoLbl.textContent='🎉 Parabéns! Você fechou '+qtdV+' venda'+(qtdV===1?'':'s')+(f?' em '+f.replace('_',' '):'');
+      topoVal.textContent=fmt(tv);
+      topoSub.textContent=f?'vendido em '+f.replace('_',' '):'vendido no total';
+    } else {
+      topoLbl.textContent=f?'Vendas — '+f.replace('_',' '):'Vendas — todos os meses';
+      topoVal.textContent=fmt(0);
+      topoSub.textContent=f?'Nenhuma venda ainda em '+f.replace('_',' ')+'. Bora fechar a primeira! 💪':'';
+    }
+  }
+
+  // Tabela — apenas Nº, Cidade/UF, Valor, Comissão
+  let tp='';
+  if(!mps.length){
+    tp='<p class="empty">Nenhuma venda em '+lbl+'.</p>';
+  } else {
+    tp='<div class="tabela-wrap">';
+    tp+='<table><thead><tr>';
+    tp+='<th>Venda</th>';
+    tp+='<th>Cliente / Cidade</th>';
+    tp+='<th>Categoria</th>';
+    tp+='<th style="text-align:right">Valor</th>';
+    tp+='<th style="text-align:right">Comissão</th>';
+    tp+='</tr></thead><tbody>';
+    mps.forEach(p=>{
+      const com=comDoPedido(p);
+      const nv=numVenda[p.gid]||'—';
+      const nomeCli=primeiroNome(p);
+      const cat=categoriaDoPedido(p);
+      const mesTag=f?'':' <span style="font-size:10px;color:#aaa;font-weight:400">('+p.mes.substring(0,3)+'/'+p.ano+')</span>';
+      tp+='<tr>';
+      tp+='<td class="num"><span class="badge-venda">#'+nv+'</span>'+mesTag+'</td>';
+      tp+='<td class="cidade">'+(nomeCli?'<strong style="color:#222">'+nomeCli+'</strong><br>':'')+'<span style="font-size:12px;color:#777">'+p.cid+' — '+p.uf+'</span></td>';
+      tp+='<td>'+(cat?'<span class="badge-cat">'+cat+'</span>':'<span style="color:#ccc">—</span>')+'</td>';
+      tp+='<td class="val-td">'+fmt(p.val)+'</td>';
+      tp+='<td class="com-td">'+fmt(com)+(p.meia?' <span class="badge-meia">½</span>':'')+'</td>';
+      tp+='</tr>';
+    });
+    const totComissao=mps.reduce((s,p)=>s+comDoPedido(p),0);
+    tp+='<tr class="total-row"><td colspan="3">Total</td>';
+    tp+='<td class="val-td">'+fmt(tv)+'</td>';
+    tp+='<td class="com-td">'+fmt(totComissao)+'</td>';
+    tp+='</tr></tbody></table></div>';
+  }
+  document.getElementById('tabela-pedidos').innerHTML=tp;
+
+  // Extras: bônus + adiantamentos + resumo
+  let ex='';
+
+  if(mbs.length>0){
+    ex+='<div class="bonus-card">';
+    ex+='<div class="titulo">Bônus por números que entraram</div>';
+    mbs.forEach(b=>{
+      ex+='<div class="item-row">';
+      ex+='<div class="desc">'+b.obs+' <span style="font-size:11px;color:#888">('+b.mes.substring(0,3)+'/'+b.ano+')</span> — '+b.qtd.toLocaleString('pt-BR')+' nºs</div>';
+      ex+='<div class="val roxo">'+fmt(b.val)+'</div>';
+      ex+='</div>';
+    });
+    ex+='<div class="item-row"><div class="desc" style="font-weight:700">Total bônus</div><div class="val roxo">'+fmt(tb)+'</div></div>';
+    ex+='</div>';
+  }
+
+  if(mas.length>0){
+    ex+='<div class="adt-card">';
+    ex+='<div class="titulo">Adiantamentos recebidos</div>';
+    mas.forEach(a=>{
+      ex+='<div class="item-row">';
+      ex+='<div class="desc">'+a.obs+' <span style="font-size:11px;color:#888">('+a.mes.substring(0,3)+'/'+a.ano+')</span></div>';
+      ex+='<div class="val laranja">− '+fmt(a.val)+'</div>';
+      ex+='</div>';
+    });
+    ex+='<div class="item-row"><div class="desc" style="font-weight:700">Total adiantado</div><div class="val laranja">− '+fmt(ta)+'</div></div>';
+    ex+='</div>';
+  }
+
+  if(mest.length>0){
+    ex+='<div class="est-card">';
+    ex+='<div class="titulo">🚫 Cancelamentos (estornos)</div>';
+    mest.forEach(e=>{
+      ex+='<div class="item-row">';
+      ex+='<div class="desc">Cancelamento de venda'+(e.cid?' — <strong>'+e.cid+'/'+e.uf+'</strong>':'')+' <span style="font-size:11px;color:#888">('+e.mes.substring(0,3)+'/'+e.ano+')</span></div>';
+      ex+='<div class="val vermelho">'+fmt(comDoEstorno(e))+'</div>';
+      ex+='</div>';
+    });
+    ex+='<div class="item-row"><div class="desc" style="font-weight:700">Total estornos</div><div class="val vermelho">'+fmt(test)+'</div></div>';
+    ex+='</div>';
+  }
+
+  if(tb>0||ta>0||temTransf||test<-0.005){
+    const neg=saldoFinal<-0.005;
+    ex+='<div class="resumo-liq"'+(neg?' style="background:#FCEBEB"':'')+'>';
+    ex+='<div class="resumo-linha">Comissão pedidos <span>'+fmt(tcPed)+'</span></div>';
+    if(test<-0.005){ex+='<div class="resumo-linha vermelho">− Cancelamentos (estornos) <span>'+fmt(Math.abs(test))+'</span></div>';}
+    if(tb>0){ex+='<div class="resumo-linha roxo">+ Bônus números <span>'+fmt(tb)+'</span></div>';}
+    if(ta>0){ex+='<div class="resumo-linha laranja">− Adiantamentos <span>'+fmt(ta)+'</span></div>';}
+    if(Math.abs(entra)>0.005){ex+='<div class="resumo-linha" style="color:'+(entra>=0?'#1D7A53':'#A32D2D')+'">'+(entra>=0?'+':'−')+' Saldo transferido de '+ant.mes+' '+ant.ano+' <span>'+fmt(Math.abs(entra))+'</span></div>';}
+    if(saida){ex+='<div class="resumo-linha" style="color:#185FA5">→ Transferido p/ '+saida.dMes+' '+saida.dAno+' <span>'+fmt(Math.abs(saida.val))+'</span></div>';}
+    const lblTot=saida?'SALDO DO MÊS':(neg?'⚠️ VOCÊ DEVE':'💰 A RECEBER');
+    const corTot=neg?'#A32D2D':'#3B6D11';
+    ex+='<div class="resumo-total"><span class="label" style="color:'+corTot+'">'+lblTot+'</span><span class="valor" style="color:'+corTot+'">'+fmt(Math.abs(saldoFinal))+'</span></div>';
+    ex+='</div>';
+  }
+
+  document.getElementById('extras').innerHTML=ex;
+}
+</script>
+</body>
+</html>
