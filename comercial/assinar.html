@@ -493,7 +493,7 @@ function renderPedido(p) {
 
   // Financeiro — usa p.total (já com desconto) se existir
   const totalPag = (p.total != null ? p.total : p.subtotal) || 0;
-  const avista = p.avistaVal != null ? p.avistaVal : totalPag * 0.90;
+  const avista = (p.avistaVal != null && p.avistaVal > 0) ? p.avistaVal : totalPag * 0.90;
   const _parcN = p.parcelas || 12;
   const parc = Math.ceil(totalPag / _parcN * 100) / 100;
   document.getElementById('p-subtotal').textContent = fmtBRL(p.subtotal||0);
@@ -606,7 +606,7 @@ async function enviarParaGestao(pedido, nomeAssinante) {
 
     // Valor à vista (não o de cartão) — mesma lógica usada na exibição do pedido
     const totalPag = (pedido.total != null ? pedido.total : pedido.subtotal) || 0;
-    const valAvista = pedido.avistaVal != null ? pedido.avistaVal : totalPag * 0.90;
+    const valAvista = (pedido.avistaVal != null && pedido.avistaVal > 0) ? pedido.avistaVal : totalPag * 0.90;
     const val = Math.round(valAvista * 100) / 100;
 
     // Categoria do primeiro produto do pedido, casada com a lista de produtos da Gestão
@@ -623,23 +623,31 @@ async function enviarParaGestao(pedido, nomeAssinante) {
     }
     const prodId = prodMatch ? prodMatch.id : null;
 
-    // ── VENDEDOR VINCULADO ────────────────────────────────────────
-    // Se o pedido tem um vendedor vinculado (definido no sistema comercial),
-    // a comissão vai SÓ para ele. Sem vínculo, mantém o comportamento
-    // antigo (uma entrada por vendedor) para não sumir com comissões legadas.
-    let alvos = vs;
+    // ── COMISSIONAMENTO: FIXOS sempre + o VARIÁVEL vinculado ──────
+    // Vendedores 'fixo' recebem em TODA venda. O vendedor variável escolhido
+    // no comercial (pedido.vendedorId) também recebe. Se um vendedor não tem
+    // 'tipo' definido (base antiga), é tratado como fixo para não perder
+    // comissões legadas.
+    const ehFixo = v => (v.tipo || 'fixo') === 'fixo';
+    const fixos = vs.filter(ehFixo);
+    let variavelVinc = null;
     if (pedido.vendedorId != null && pedido.vendedorId !== '') {
-      let vSel = vs.find(x => String(x.id) === String(pedido.vendedorId));
-      if (!vSel && pedido.vendedorNome) {
+      variavelVinc = vs.find(x => String(x.id) === String(pedido.vendedorId));
+      if (!variavelVinc && pedido.vendedorNome) {
         const nAlvo = String(pedido.vendedorNome).toLowerCase().trim();
-        vSel = vs.find(x => (x.nome || '').toLowerCase().trim() === nAlvo);
+        variavelVinc = vs.find(x => (x.nome || '').toLowerCase().trim() === nAlvo);
       }
-      if (vSel) {
-        alvos = [vSel];
-      } else {
-        console.warn('Gestão: vendedor vinculado (' + pedido.vendedorId + ' / ' + (pedido.vendedorNome || '?') + ') não encontrado — creditando todos (comportamento legado).');
+      if (!variavelVinc) {
+        console.warn('Gestão: vendedor vinculado (' + pedido.vendedorId + ' / ' + (pedido.vendedorNome || '?') + ') não encontrado.');
       }
     }
+    // Monta a lista final sem duplicar (caso o vinculado já seja fixo)
+    const alvosMap = {};
+    fixos.forEach(v => { alvosMap[v.id] = v; });
+    if (variavelVinc) alvosMap[variavelVinc.id] = variavelVinc;
+    let alvos = Object.values(alvosMap);
+    // Fallback: se não há fixos nem vinculado, credita todos (legado)
+    if (!alvos.length) alvos = vs.slice();
 
     // Cria uma entrada por vendedor alvo
     const novosPedidos = alvos.map((v, i) => ({

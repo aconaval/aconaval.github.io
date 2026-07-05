@@ -316,9 +316,12 @@ tbody tr:hover{background:#fafbfc}
   /* estado vazio / "nenhum produto" ocupa o card inteiro */
   #page-produtos tbody tr:has(td[colspan]){display:block;grid-template-columns:none;background:transparent!important;border:none;box-shadow:none;padding:0}
   #page-produtos td[colspan]{display:block}
-  /* Quote cards */
-  .quote-card{flex-wrap:wrap;gap:8px;padding:10px}
-  .quote-card>div:first-child{flex:1;min-width:0}
+  /* Quote cards — no mobile empilha tudo pra o valor não sobrepor os botões */
+  .quote-card{flex-wrap:wrap;gap:8px;padding:12px}
+  .quote-card>div:first-child{flex:1 1 100%;min-width:0}
+  .quote-total{flex:1 1 100%;margin-right:0;text-align:left;font-size:16px;order:2}
+  .quote-card>div:last-child{flex:1 1 100%;order:3}
+  .quote-card>div:last-child .btn{flex:1;justify-content:center;min-width:0}
   .quote-num{min-width:auto}
   /* Modais em tela cheia (bottom sheet) */
   .modal-overlay{align-items:flex-end;padding:0}
@@ -643,7 +646,7 @@ tbody tr:hover{background:#fafbfc}
           <div class="form-group" style="margin-bottom:0"><label class="form-label">Nome do Cliente</label><input class="form-input" id="oc-cliente" placeholder="Nome completo ou empresa" oninput="updatePreview()"/></div>
           <div class="form-group" style="margin-bottom:0"><label class="form-label">Telefone</label><input class="form-input" id="oc-fone" placeholder="(51) 99999-9999"/></div>
           <div class="form-group" style="margin-bottom:0"><label class="form-label">Data do Pedido</label><input class="form-input" id="oc-data" type="date" oninput="updatePreview()"/></div>
-          <div class="form-group" style="margin-bottom:0"><label class="form-label">👤 Vendedor</label><select class="form-input" id="oc-vendedor" style="cursor:pointer"><option value="">Sem vendedor</option></select></div>
+          <div class="form-group" style="margin-bottom:0"><label class="form-label">👤 Vendedor</label><select class="form-input" id="oc-vendedor" style="cursor:pointer"><option value="">Sem vendedor específico</option></select><div id="oc-vendedor-hint" style="display:none;font-size:10px;color:#999;margin-top:3px">Cadastre vendedores "variáveis" no Administrativo</div></div>
         </div>
       </div>
 
@@ -796,7 +799,7 @@ tbody tr:hover{background:#fafbfc}
             <input class="form-input" id="pd-doc" placeholder="000.000.000-00" oninput="maskDoc(this)" onpaste="setTimeout(()=>maskDoc(this),0)" inputmode="numeric" maxlength="18"/>
           </div>
           <div class="form-group" style="margin-bottom:0"><label class="form-label">Telefone</label><input class="form-input" id="pd-fone" onchange="buscarEmailSolicitacao()" placeholder="(51) 99999-9999" oninput="maskFone(this)" onpaste="setTimeout(()=>maskFone(this),0)" inputmode="tel" maxlength="15"/></div>
-          <div class="form-group" style="margin-bottom:0"><label class="form-label">👤 Vendedor</label><select class="form-input" id="pd-vendedor" style="cursor:pointer"><option value="">Sem vendedor</option></select></div>
+          <div class="form-group" style="margin-bottom:0"><label class="form-label">👤 Vendedor</label><select class="form-input" id="pd-vendedor" style="cursor:pointer"><option value="">Sem vendedor específico</option></select><div id="pd-vendedor-hint" style="display:none;font-size:10px;color:#999;margin-top:3px">Cadastre vendedores "variáveis" no Administrativo</div></div>
         </div>
     <div class="form-group">
       <label for="pd-email">Email do Cliente</label>
@@ -1092,22 +1095,37 @@ try {
   if (firebase.database) gestaoDb = gestaoApp.database();
 } catch(e) { console.warn('Gestão init:', e); }
 
-async function carregarVendedores() {
-  if (!gestaoDb) return;
+async function carregarVendedores(tentativa) {
+  if (!gestaoDb) { popularSelectsVendedor(); return; }
   try {
     const snap = await gestaoDb.ref('dados/vs').once('value');
     vendedores = snap.val() || [];
     popularSelectsVendedor();
-  } catch(e) { console.warn('Não foi possível carregar vendedores da Gestão:', e); }
+    // Se veio vazio na 1ª tentativa, tenta de novo em 1.5s (RTDB pode
+    // demorar a autenticar/carregar) — evita o select ficar "vazio".
+    if (!vendedores.length && !tentativa) setTimeout(() => carregarVendedores(1), 1500);
+  } catch(e) {
+    console.warn('Não foi possível carregar vendedores da Gestão:', e);
+    popularSelectsVendedor();
+  }
+}
+// No comercial só aparecem os vendedores VARIÁVEIS — os fixos recebem
+// automaticamente em toda venda e não precisam ser escolhidos aqui.
+function vendedoresVariaveis() {
+  return (vendedores || []).filter(v => (v.tipo || 'fixo') === 'variavel');
 }
 function popularSelectsVendedor() {
+  const vars = vendedoresVariaveis();
   ['oc-vendedor','pd-vendedor'].forEach(id => {
     const sel = document.getElementById(id); if (!sel) return;
     const atual = sel.value;
-    let h = '<option value="">Sem vendedor</option>';
-    vendedores.forEach(v => { h += `<option value="${v.id}">${v.nome} (${v.perc}%)</option>`; });
+    let h = '<option value="">Sem vendedor específico</option>';
+    vars.forEach(v => { h += `<option value="${v.id}">${v.nome} (${v.perc}%)</option>`; });
     sel.innerHTML = h;
     if (atual) sel.value = atual;
+    // Dica visual quando não há vendedores variáveis cadastrados
+    const hint = document.getElementById(id + '-hint');
+    if (hint) hint.style.display = vars.length ? 'none' : 'block';
   });
 }
 function nomeVendedorPorId(id) {
@@ -4040,17 +4058,30 @@ function buscarEmailSolicitacao() {
   const sol = solicitacoes.find(x => (x.fone || '').replace(/\D/g, '') === foneDigitos && x.email);
   if (sol) emailEl.value = sol.email;
 }
-function enviarLinkAssinatura(id, num) {
+function montarMsgAssinatura(id) {
   const base = location.href.replace(/\/[^\/]*$/, '/');
   const link = `${base}assinar.html?id=${id}`;
   const ped = pedidos.find(p => String(p.id) === String(id));
   const primeiroNome = ped ? (ped.nome || '').split(' ')[0] : '';
-  const msg = `Oii ${primeiroNome} tudo bem? 😄🔥
+  return `Oii ${primeiroNome} tudo bem? 😄🔥
 Segue o link para você conferir e assinar o pedido:
 
 ${link}
 
 Assim que você assinar, já encaminhamos seu pedido para o setor de produção e criamos um grupo para ir te atualizando sobre todos os detalhes até a entrega.`;
+}
+// Copia o link automaticamente (usado logo após gerar o pedido).
+async function copiarLinkAssinaturaAuto(id) {
+  try {
+    await navigator.clipboard.writeText(montarMsgAssinatura(id));
+    setPS('✅ Pedido salvo! Link de assinatura copiado — é só colar no WhatsApp do cliente.', 'ok');
+  } catch(e) {
+    // Clipboard pode falhar sem gesto do usuário; não bloqueia nada.
+    console.warn('Não foi possível copiar o link automaticamente:', e);
+  }
+}
+function enviarLinkAssinatura(id, num) {
+  const msg = montarMsgAssinatura(id);
   navigator.clipboard.writeText(msg).then(() => {
     const btn = document.querySelector(`button[onclick*="enviarLinkAssinatura(${id}"]`);
     if (btn) {
@@ -4634,20 +4665,23 @@ async function gerarPedido() {
     if (btnGerar) { btnGerar.disabled = true; btnGerar.textContent = '💾 Salvando…'; }
     await savePedidos().catch(e => console.warn('Save:', e));
     if (btnGerar) { btnGerar.disabled = false; btnGerar.textContent = txtBtnOriginal; }
+    // #7 — copia o link de assinatura automaticamente ao gerar
+    await copiarLinkAssinaturaAuto(pedido.id);
     showPedido(pedido.id);
   }
 }
 
+// Status global do formulário de pedido (usado por save e pela cópia do link)
+function setPS(msg, tipo) {
+  const statusEl = document.getElementById('status-msg-pedido');
+  if (!statusEl) return;
+  statusEl.textContent = msg;
+  statusEl.style.color = tipo === 'erro' ? '#c0392b' : tipo === 'ok' ? '#1a7a44' : '#555';
+  statusEl.style.display = 'block';
+  if (tipo === 'ok') setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+}
 // ── SAVE/LOAD PEDIDOS ────────────────────────────────────────────
 async function savePedidos() {
-  const statusEl = document.getElementById('status-msg-pedido');
-  function setPS(msg, tipo) {
-    if (!statusEl) return;
-    statusEl.textContent = msg;
-    statusEl.style.color = tipo === 'erro' ? '#c0392b' : tipo === 'ok' ? '#1a7a44' : '#555';
-    statusEl.style.display = 'block';
-    if (tipo === 'ok') setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
-  }
   try {
     setPS('💾 Salvando pedido…');
     // Salva cada pedido como documento individual em acn_pedidos/{id}.
@@ -4684,7 +4718,26 @@ function renderListaPedidos(){
     (p.nome||'').toLowerCase().includes(busca)||
     (p.cidade||'').toLowerCase().includes(busca)
   );
-  if(!lista.length){el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><p>Nenhum pedido encontrado.</p></div>';return;}
+
+  // Por padrão mostra só o MÊS ATUAL — deixa a página clean. Meses
+  // anteriores só aparecem ao buscar ou clicar em "Ver todos os meses".
+  // A busca sempre varre todos os meses.
+  let ocultosCount = 0;
+  if(!busca && !verTodosMeses){
+    const agora = new Date();
+    const mAtual = agora.getMonth(), aAtual = agora.getFullYear();
+    const doMes = lista.filter(p=>{ const d=p.data?new Date(p.data):null; return d && d.getMonth()===mAtual && d.getFullYear()===aAtual; });
+    ocultosCount = lista.length - doMes.length;
+    lista = doMes;
+  }
+
+  if(!lista.length){
+    if(!busca && ocultosCount>0){
+      el.innerHTML=`<div class="empty"><div class="empty-icon">📭</div><p>Nenhum pedido neste mês.</p><button class="btn btn-ghost btn-sm" style="margin-top:10px;border-radius:20px" onclick="mostrarTodosMeses()">📅 Ver todos os ${ocultosCount} pedido(s) de outros meses</button></div>`;
+      return;
+    }
+    el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><p>Nenhum pedido encontrado.</p></div>';return;
+  }
   const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const grupos={};
   lista.forEach(p=>{
@@ -4729,12 +4782,18 @@ function renderListaPedidos(){
       </div>
     </div>`;
   };
-  el.innerHTML=Object.entries(grupos).map(([mes,itens])=>
+  let htmlLista=Object.entries(grupos).map(([mes,itens])=>
     `<div style="margin-bottom:6px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#aaa;padding:10px 4px 6px">${mes} (${itens.length} pedido${itens.length>1?'s':''})</div>
       ${itens.map(cardHTML).join('')}
     </div>`
   ).join('');
+  if(!busca && !verTodosMeses && ocultosCount>0){
+    htmlLista+=`<div style="text-align:center;padding:14px 0"><button class="btn btn-ghost btn-sm" style="border-radius:20px" onclick="mostrarTodosMeses()">📅 Ver mais ${ocultosCount} pedido(s) de meses anteriores</button></div>`;
+  } else if(verTodosMeses && !busca){
+    htmlLista+=`<div style="text-align:center;padding:14px 0"><button class="btn btn-ghost btn-sm" style="border-radius:20px" onclick="mostrarSoMesAtual()">📅 Mostrar só o mês atual</button></div>`;
+  }
+  el.innerHTML=htmlLista;
 }
 function deletePedido(id){
   showConfirm('Excluir Pedido','Deseja excluir este pedido permanentemente?', async () => {
@@ -4747,6 +4806,9 @@ function deletePedido(id){
   });
 }
 let filtroAtivo = 'todos';
+let verTodosMeses = false;
+function mostrarTodosMeses(){ verTodosMeses = true; renderListaPedidos(); }
+function mostrarSoMesAtual(){ verTodosMeses = false; renderListaPedidos(); }
 function filtrarPedidos(tipo) {
   filtroAtivo = tipo;
   ['todos','aguardando','assinado'].forEach(t => {

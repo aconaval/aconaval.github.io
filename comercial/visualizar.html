@@ -504,7 +504,7 @@ function renderOrcamento(o) {
 
   // Pagamento — usa o.total (já com desconto) se existir
   var totalPag = (o.total != null ? o.total : o.subtotal);
-  var avista   = o.avistaVal != null ? o.avistaVal : totalPag * 0.90;
+  var avista   = (o.avistaVal != null && o.avistaVal > 0) ? o.avistaVal : totalPag * 0.90;
   var parcela  = Math.ceil(totalPag / 12 * 100) / 100;
 
   document.getElementById('pay-cartao').textContent   = fmtBRL(totalPag);
@@ -514,7 +514,7 @@ function renderOrcamento(o) {
   // Texto do desconto à vista
   var descAvistaEl = document.getElementById('pay-destaque-avista');
   if (descAvistaEl) {
-    if (o.avistaVal != null && totalPag > 0) {
+    if (o.avistaVal != null && o.avistaVal > 0 && totalPag > 0) {
       var pctReal = Math.round((1 - o.avistaVal / totalPag) * 1000) / 10;
       descAvistaEl.innerHTML = pctReal > 0
         ? 'Desconto de ' + pctReal.toFixed(pctReal % 1 === 0 ? 0 : 1).replace('.',',') + '% pagando à vista'
