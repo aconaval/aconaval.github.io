@@ -26,27 +26,30 @@ if('serviceWorker' in navigator){
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
-body{background:#f5f7fa;color:#222;padding:24px;min-height:100vh}
-.container{max-width:960px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);padding:28px}
+body{background:linear-gradient(160deg,#f2f5f9 0%,#e9eef5 100%);color:#222;padding:24px;min-height:100vh}
+.container{max-width:960px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(16,42,76,.07);padding:28px}
 h1{color:#003366;font-size:22px;margin-bottom:6px}
 .subtitle{color:#888;font-size:13px;margin-bottom:20px}
 .header-mes{background:#E6F1FB;border:1px solid #85B7EB;border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .header-mes .lbl{font-size:12px;color:#0C447C;font-weight:600}
 .header-mes select,.header-mes input{padding:6px 10px;border:1px solid #85B7EB;border-radius:6px;background:#fff;color:#0C447C;font-weight:500;font-size:14px}
 .nav{display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid #e0e4e8;padding-bottom:10px;flex-wrap:wrap}
-.nav-tab{padding:8px 18px;border-radius:8px;font-size:14px;cursor:pointer;border:1px solid transparent;color:#666;background:none}
+.nav-tab{padding:8px 18px;border-radius:8px;font-size:14px;cursor:pointer;border:1px solid transparent;color:#666;background:none;transition:background .15s,color .15s}
+.nav-tab:hover{background:#f0f4f9;color:#0C447C}
 .nav-tab.active{background:#E6F1FB;color:#0C447C;border-color:#85B7EB;font-weight:600}
 .nav-ico{display:none}
 .nav-lbl{display:inline}
 .page{display:none}.page.active{display:block}
-.card{background:#fff;border:1px solid #e0e4e8;border-radius:10px;padding:16px 20px;margin-bottom:16px}
+.card{background:#fff;border:1px solid #e0e4e8;border-radius:12px;padding:16px 20px;margin-bottom:16px;transition:box-shadow .2s}
+.card:hover{box-shadow:0 3px 14px rgba(16,42,76,.06)}
 .label{font-size:12px;color:#666;margin-bottom:4px;font-weight:500}
 .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px}
 .field{flex:1;min-width:110px}
 input[type=text],input[type=number],select{font-size:14px;padding:8px 10px;border:1px solid #d0d4d8;border-radius:6px;background:#fff;color:#222;width:100%}
 input:focus,select:focus{outline:none;border-color:#185FA5;box-shadow:0 0 0 2px rgba(24,95,165,0.15)}
-.btn{font-size:13px;padding:8px 16px;border-radius:6px;border:1px solid #d0d4d8;background:#fff;color:#222;cursor:pointer;font-weight:500}
-.btn:hover{background:#f5f7fa}
+.btn{font-size:13px;padding:8px 16px;border-radius:7px;border:1px solid #d0d4d8;background:#fff;color:#222;cursor:pointer;font-weight:500;transition:background .15s,transform .1s,box-shadow .15s}
+.btn:hover{background:#f5f7fa;box-shadow:0 1px 6px rgba(16,42,76,.08)}
+.btn:active{transform:scale(.97)}
 .btn-primary{background:#185FA5;color:#fff;border-color:#185FA5}
 .btn-primary:hover{background:#0C447C}
 .btn-danger{color:#A32D2D;border-color:#f09595}
@@ -104,9 +107,23 @@ h3{font-size:14px;font-weight:600;margin-bottom:12px;color:#555}
 .anuncio-pct.ok{color:#3B6D11}
 .section-lbl{font-size:11px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 8px;border-top:1px solid #f0f2f5;padding-top:12px}
 textarea{font-family:inherit}
+.status-sel{border-radius:20px;font-weight:600;font-size:12px;padding:6px 10px;cursor:pointer;transition:box-shadow .15s}
+.status-sel:focus{box-shadow:0 0 0 3px rgba(24,95,165,.18)}
 .status-sel.aguardando{background:#f5f5f5;color:#555;border-color:#d0d4d8}
 .status-sel.em_rota{background:#FAEEDA;color:#854F0B;border-color:#EF9F27}
 .status-sel.entregue{background:#EAF3DE;color:#3B6D11;border-color:#63b922}
+.pg-input{font-size:12px;padding:6px 9px;border:1px solid #e0e4e8;border-radius:6px;width:100%;min-width:130px;background:#fafbfc;transition:border-color .15s,box-shadow .15s}
+.pg-input:focus{outline:none;border-color:#185FA5;background:#fff;box-shadow:0 0 0 2px rgba(24,95,165,.12)}
+/* ===== APROVAÇÕES ===== */
+.badge-pend{position:absolute;top:2px;right:6px;background:#D85A30;color:#fff;font-size:10px;font-weight:700;border-radius:20px;min-width:17px;height:17px;padding:0 4px;align-items:center;justify-content:center;line-height:1;box-shadow:0 1px 4px rgba(216,90,48,.4);animation:pend-pulse 2s ease-in-out infinite}
+@keyframes pend-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.card-aprovacoes{background:#FFFBF3;border:1px solid #EF9F27;box-shadow:0 2px 10px rgba(239,159,39,.12)}
+.pend-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid #f0e4c8;border-radius:10px;padding:12px 14px;margin-bottom:8px;animation:pend-in .25s ease}
+@keyframes pend-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.btn-aprovar{width:auto;font-size:12px;padding:7px 14px;border-color:#63b922;color:#3B6D11;background:#F4FAEC}
+.btn-aprovar:hover{background:#EAF3DE}
+.btn-recusar{width:auto;font-size:12px;padding:7px 14px;border-color:#f09595;color:#A32D2D;background:#fff}
+.btn-recusar:hover{background:#FCEBEB}
 .ent-table th{padding:10px 14px;font-size:11px}
 .ent-table td{padding:10px 14px}
 .ent-table tr.ag td{background:#fff}
@@ -313,6 +330,11 @@ textarea{font-family:inherit}
   .card-table td[data-label=""] {justify-content:flex-end}
   /* Entregas — status select full width */
   .card-table .status-sel{width:100%;margin-top:0}
+  .card-table .pg-input{width:100%}
+  .badge-pend{top:1px;right:calc(50% - 26px)}
+  .pend-row{flex-direction:column;align-items:stretch}
+  .pend-row>div:last-child{justify-content:stretch}
+  .pend-row .btn-aprovar,.pend-row .btn-recusar{flex:1}
   /* Oculta colunas menos importantes no card */
   .card-table td[data-label="UF"]{display:none}
   /* Linha de separação de grupo (entregas) */
@@ -358,7 +380,7 @@ textarea{font-family:inherit}
 
   <div class="nav">
     <div class="nav-tab active" id="nav-dash" onclick="setPage('dashboard')"><span class="nav-ico">🏠</span><span class="nav-lbl">Dashboard</span></div>
-    <div class="nav-tab" id="nav-ent" onclick="setPage('entregas')"><span class="nav-ico">📦</span><span class="nav-lbl">Entregas</span></div>
+    <div class="nav-tab" id="nav-ent" onclick="setPage('entregas')" style="position:relative"><span class="nav-ico">📦</span><span class="nav-lbl">Entregas</span><span id="badge-pend" class="badge-pend" style="display:none">0</span></div>
     <div class="nav-tab" id="nav-ped" onclick="setPage('pedidos')"><span class="nav-ico">🧾</span><span class="nav-lbl">Pedidos</span></div>
     <div class="nav-tab" id="nav-com" onclick="setPage('comissoes')"><span class="nav-ico">💰</span><span class="nav-lbl">Comissões</span></div>
 
@@ -477,6 +499,7 @@ textarea{font-family:inherit}
 
   <!-- ENTREGAS -->
   <div class="page" id="page-entregas">
+    <div class="card card-aprovacoes" id="card-aprovacoes" style="display:none"></div>
     <div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between">
       <div>
         <h2 style="margin:0">Controle de Entregas</h2>
@@ -728,6 +751,8 @@ function normalizarPedidos(lista){
 }
 const HEXCORES=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75'];
 let vs=[],ps=[],ads=[],prods=[],anus=[],sts={},bonus=[],transfs=[],ta=null;
+let pgtos={};   // condição de pagamento aprovada por pedido (gid -> texto)
+let pends={};   // alterações pendentes de aprovação vindas do painel de entregas
 
 // ===== FIREBASE CONFIG =====
 const firebaseConfig = {
@@ -761,8 +786,11 @@ db.ref('.info/connected').on('value', snap => {
 });
 
 function salvar() {
-  const dados = {vs, ps, ads, prods, anus, sts, bonus, transfs};
-  REF.set(dados)
+  // update() em vez de set(): grava só as chaves listadas e PRESERVA o nó
+  // 'pends' (aprovações do painel de entregas), que é gerenciado por
+  // operações child() dos dois lados — evita sobrescrever dados de terceiros.
+  const dados = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos};
+  REF.update(dados)
     .then(() => {
       const si = document.getElementById('save-info');
       si.textContent = '✓ Salvo na nuvem';
@@ -774,7 +802,7 @@ function salvar() {
       console.error('Erro ao salvar:', e);
       // fallback localStorage (backup completo, sem eval)
       try {
-        const mapa = {vs, ps, ads, prods, anus, sts, bonus, transfs};
+        const mapa = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos};
         Object.keys(mapa).forEach(k => localStorage.setItem('an_'+k, JSON.stringify(mapa[k])));
       } catch(_) {}
       const si = document.getElementById('save-info');
@@ -802,13 +830,15 @@ function carregar() {
         sts = d.sts || {};
         bonus = d.bonus || [];
         transfs = dedupTransfs(d.transfs || []);
+        pgtos = d.pgtos || {};
+        pends = d.pends || {};
       } else {
         // Tenta recuperar do localStorage se Firebase estiver vazio
         try {
           const ler = (k, atual) => { const x = localStorage.getItem('an_'+k); return x ? JSON.parse(x) : atual; };
           vs = ler('vs', vs); ps = ler('ps', ps); ads = ler('ads', ads);
           prods = ler('prods', prods); anus = ler('anus', anus); sts = ler('sts', sts);
-          bonus = ler('bonus', bonus); transfs = ler('transfs', transfs);
+          bonus = ler('bonus', bonus); transfs = ler('transfs', transfs); pgtos = ler('pgtos', pgtos);
           // Se tinha dados locais, migra pro Firebase
           if (vs.length || ps.length) salvar();
         } catch(_) {}
@@ -818,7 +848,7 @@ function carregar() {
       // Virada automática de saldo dos meses encerrados (antes de renderizar)
       autoTransferirSaldos();
       // Renderiza tudo após carregar
-      renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+      renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
     })
     .catch(e => {
       console.error('Erro ao carregar:', e);
@@ -827,14 +857,14 @@ function carregar() {
         const ler = (k, atual) => { const x = localStorage.getItem('an_'+k); return x ? JSON.parse(x) : atual; };
         vs = ler('vs', vs); ps = ler('ps', ps); ads = ler('ads', ads);
         prods = ler('prods', prods); anus = ler('anus', anus); sts = ler('sts', sts);
-        bonus = ler('bonus', bonus); transfs = ler('transfs', transfs);
+        bonus = ler('bonus', bonus); transfs = ler('transfs', transfs); pgtos = ler('pgtos', pgtos);
       } catch(_) {}
       document.querySelector('.container').style.opacity = '1';
       document.querySelector('.container').style.pointerEvents = 'auto';
-      renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+      renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
     });
 
-  // Escuta mudanças em tempo real (outro computador salvou)
+  // Escuta mudanças em tempo real (outro computador / painel de entregas salvou)
   REF.on('value', snap => {
     const d = snap.val();
     if (!d) return;
@@ -846,9 +876,17 @@ function carregar() {
     sts = d.sts || {};
     bonus = d.bonus || [];
     transfs = dedupTransfs(d.transfs || []);
-    renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
-    if (document.getElementById('page-entregas').classList.contains('active')) renderEntregas();
-    if (document.getElementById('page-pedidos').classList.contains('active')) renderPedidos();
+    pgtos = d.pgtos || {};
+    pends = d.pends || {};
+    // Se o usuário está digitando em algum campo (ex.: pagamento na tabela de
+    // entregas ou busca), adia o re-render dessa área para não perder o texto.
+    const ae = document.activeElement;
+    const digitando = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT') && ae.closest('.page');
+    renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+    if (!digitando) {
+      if (document.getElementById('page-entregas').classList.contains('active')) renderEntregas();
+      if (document.getElementById('page-pedidos').classList.contains('active')) renderPedidos();
+    }
   });
 }
 
@@ -1009,7 +1047,15 @@ function renderLinksVendedores(){
 
   if(elSis){
     const linkSec=base+'secretaria.html';
-    elSis.innerHTML='<div style="background:#f5f7fa;border-radius:8px;padding:12px 14px">'
+    const linkEnt=base+'entregas.html';
+    elSis.innerHTML='<div style="background:#f5f7fa;border-radius:8px;padding:12px 14px;margin-bottom:10px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+      +'<strong>📦 Entregas — Painel da colaboradora</strong><span style="font-size:12px;color:#888">Status e pagamento com aprovação</span></div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+      +'<input type="text" value="'+linkEnt+'" readonly style="flex:1;font-size:12px;background:#fff;color:#185FA5;min-width:0;padding:7px 10px;border:1px solid #d0d4d8;border-radius:6px" onclick="this.select()" id="l-ent"/>'
+      +'<button class="btn" style="white-space:nowrap;font-size:12px;padding:6px 12px;width:auto;flex-shrink:0" onclick="copiarLink(\'l-ent\',this)">📋 Copiar</button>'
+      +'</div></div>'
+      +'<div style="background:#f5f7fa;border-radius:8px;padding:12px 14px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
       +'<strong>🗂️ Secretaria — Solicitações</strong><span style="font-size:12px;color:#888">Link da Mari</span></div>'
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
@@ -1109,6 +1155,12 @@ function comEstornoRegistro(e){
   if(e.valOrig!=null&&vv)return -parseFloat((Number(e.valOrig)*vv.perc/100*fator).toFixed(2));
   return -Math.abs(Number(e.com)||0);
 }
+/* Soma de comissões com regra ÚNICA em todo o sistema:
+   estornos são recalculados (valOrig × % atual, mesma regra do relatório do
+   vendedor e do vendedor.html) e registros sem `com` não geram NaN. */
+function somaComissoes(lista){
+  return (lista||[]).reduce((s,p)=>s+(p.tipo==='estorno'?comEstornoRegistro(p):(Number(p.com)||0)),0);
+}
 /* Nome(s) de vendedor vinculados a um gid — 'Todos' quando é venda coletiva */
 function vendedoresDoGid(gid){
   const vids=[...new Set(ps.filter(p=>p.gid===gid&&p.tipo!=='estorno').map(p=>p.vid))];
@@ -1195,7 +1247,7 @@ function renderCancelados(){
 function addPed(){
   const num=document.getElementById('p-num').value.trim();
   const prod=parseInt(document.getElementById('p-prod').value)||null;
-  const cid=document.getElementById('p-cid').value.trim();
+  const cid=document.getElementById('p-cid').value.trim().toUpperCase();
   const uf=document.getElementById('p-uf').value.trim();
   const val=parseFloat(document.getElementById('p-val').value);
   const meia=document.getElementById('p-meia').checked;
@@ -1547,12 +1599,12 @@ function renderRel(){
   let ma=ads.filter(a=>a.vid===v.id);if(f)ma=ma.filter(a=>ck(a.mes,a.ano)===f);
   let mb=bonus.filter(b=>b.vid===v.id);if(f)mb=mb.filter(b=>ck(b.mes,b.ano)===f);
   const unique=uniquePedidos(mp);
-  const tcPed=mp.reduce((s,p)=>s+p.com,0);
+  const tcPed=mp.reduce((s,p)=>s+(Number(p.com)||0),0);
   const test=mest.reduce((s,p)=>s+comEstornoRegistro(p),0);
   const tc=tcPed+test;
-  const tb=mb.reduce((s,b)=>s+b.val,0);
+  const tb=mb.reduce((s,b)=>s+(Number(b.val)||0),0);
   const tv=unique.reduce((s,p)=>s+p.val,0);
-  const ta2=ma.reduce((s,a)=>s+a.val,0);
+  const ta2=ma.reduce((s,a)=>s+(Number(a.val)||0),0);
   const totalBruto=tc+tb;
   const tl=totalBruto-ta2;
   const lbl=f?f.replace('_',' '):'todos os meses';
@@ -1661,12 +1713,12 @@ function pdfVendedor(vid){
   let ma=ads.filter(a=>a.vid===vid);if(f)ma=ma.filter(a=>ck(a.mes,a.ano)===f);
   let mb=bonus.filter(b=>b.vid===vid);if(f)mb=mb.filter(b=>ck(b.mes,b.ano)===f);
   const uniq=uniquePedidos(mp);
-  const tcPed=mp.reduce((s,p)=>s+p.com,0);
+  const tcPed=mp.reduce((s,p)=>s+(Number(p.com)||0),0);
   const test=mest.reduce((s,p)=>s+comEstornoRegistro(p),0);
   const tc=tcPed+test;
-  const tb=mb.reduce((s,b)=>s+b.val,0);
+  const tb=mb.reduce((s,b)=>s+(Number(b.val)||0),0);
   const tv=uniq.reduce((s,p)=>s+p.val,0);
-  const ta2=ma.reduce((s,a)=>s+a.val,0);
+  const ta2=ma.reduce((s,a)=>s+(Number(a.val)||0),0);
   const totalBruto=tc+tb;
   const tl=totalBruto-ta2;
   const r=f?f.replace('_',' '):'Todos os meses';
@@ -1770,9 +1822,101 @@ const STATUS_LABEL={'aguardando':'⏳ Aguardando','em_rota':'🚚 Em rota','entr
 const STATUS_ORD={'aguardando':0,'em_rota':1,'entregue':2};
 
 function getSt(gid){return sts[String(gid)]||'aguardando';}
-function setSt(gid,val){sts[String(gid)]=val;salvar();renderEntregas();}
+function setSt(gid,val){
+  sts[String(gid)]=val;
+  removerPendDe(gid,'status'); // alteração direta do admin supera proposta pendente
+  salvar();renderEntregas();
+}
+function getPg(gid){return pgtos[String(gid)]||'';}
+function setPg(gid,val){
+  val=String(val||'').trim();
+  if(val)pgtos[String(gid)]=val;else delete pgtos[String(gid)];
+  removerPendDe(gid,'pagamento');
+  salvar();
+}
+
+/* ========== APROVAÇÕES (painel de entregas da colaboradora) ==========
+   As propostas ficam em dados/pends/{p<gid>_<campo>} — uma por campo por
+   pedido (a mais recente substitui a anterior). Só entram em vigor (sts/pgtos)
+   quando o administrador aprova aqui. */
+function pendKey(gid,campo){return 'p'+gid+'_'+campo;}
+function removerPendDe(gid,campo){
+  const k=pendKey(gid,campo);
+  if(pends[k]){delete pends[k];REF.child('pends/'+k).remove().catch(()=>{});atualizarBadgePend();}
+}
+function listaPends(){
+  return Object.keys(pends).map(k=>Object.assign({key:k},pends[k]))
+    .sort((a,b)=>String(b.em||'').localeCompare(String(a.em||'')));
+}
+function atualizarBadgePend(){
+  const n=Object.keys(pends||{}).length;
+  const b=document.getElementById('badge-pend');
+  if(b){b.textContent=n;b.style.display=n?'inline-flex':'none';}
+  renderAprovacoes();
+}
+function renderAprovacoes(){
+  const el=document.getElementById('card-aprovacoes');if(!el)return;
+  const lista=listaPends();
+  if(!lista.length){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='block';
+  let h='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px">'
+    +'<h3 style="margin:0;color:#854F0B">🔔 Aprovações pendentes <span style="background:#D85A30;color:#fff;border-radius:20px;padding:1px 9px;font-size:12px">'+lista.length+'</span></h3>'
+    +'<button class="btn inline" style="width:auto;font-size:12px;padding:6px 12px;border-color:#63b922;color:#3B6D11" onclick="aprovarTodas()">✅ Aprovar todas</button></div>';
+  lista.forEach(p=>{
+    const dt=p.em?new Date(p.em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+    let desc;
+    if(p.campo==='status'){
+      const de=STATUS_LABEL[p.anterior]||'⏳ Aguardando';
+      const para=STATUS_LABEL[p.valor]||p.valor;
+      desc='Status: <span style="color:#888">'+de+'</span> <strong style="color:#0C447C">→ '+para+'</strong>';
+    }else{
+      desc='Pagamento: <strong style="color:#0C447C">'+String(p.valor||'—').replace(/</g,'&lt;')+'</strong>'
+        +(p.anterior?' <span style="color:#aaa;font-size:11px">(antes: '+String(p.anterior).replace(/</g,'&lt;')+')</span>':'');
+    }
+    h+='<div class="pend-row">'
+      +'<div style="flex:1;min-width:200px"><strong>Pedido Nº '+(p.num||'?')+'</strong>'
+      +(p.cid?' <span style="color:#888;font-size:12px">— '+p.cid+(p.uf?'/'+p.uf:'')+'</span>':'')
+      +'<div style="font-size:13px;margin-top:3px">'+desc+'</div>'
+      +'<div style="font-size:11px;color:#aaa;margin-top:2px">'+(p.quem||'Painel de entregas')+(dt?' • '+dt:'')+'</div></div>'
+      +'<div style="display:flex;gap:6px;flex-shrink:0">'
+      +'<button class="btn inline btn-aprovar" onclick="aprovarPend(\''+p.key+'\')">✅ Aprovar</button>'
+      +'<button class="btn inline btn-recusar" onclick="recusarPend(\''+p.key+'\')">✕ Recusar</button>'
+      +'</div></div>';
+  });
+  el.innerHTML=h;
+}
+function aprovarPend(key,silencioso){
+  const p=pends[key];if(!p)return;
+  if(p.campo==='status')sts[String(p.gid)]=p.valor;
+  else if(p.campo==='pagamento'){
+    const v=String(p.valor||'').trim();
+    if(v)pgtos[String(p.gid)]=v;else delete pgtos[String(p.gid)];
+  }
+  delete pends[key];
+  REF.child('pends/'+key).remove().catch(()=>{});
+  if(!silencioso){
+    salvar();atualizarBadgePend();
+    if(document.getElementById('page-entregas').classList.contains('active'))renderEntregas();
+    if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+  }
+}
+function recusarPend(key){
+  if(!pends[key])return;
+  delete pends[key];
+  REF.child('pends/'+key).remove().catch(()=>{});
+  atualizarBadgePend();
+}
+function aprovarTodas(){
+  const ks=Object.keys(pends);
+  if(!ks.length)return;
+  if(!confirm('Aprovar todas as '+ks.length+' alterações pendentes?'))return;
+  ks.forEach(k=>aprovarPend(k,true));
+  salvar();atualizarBadgePend();
+  if(document.getElementById('page-entregas').classList.contains('active'))renderEntregas();
+}
 
 function renderEntregas(){
+  renderAprovacoes();
   const fSt=document.getElementById('e-f-status').value;
   const selAno=document.getElementById('e-f-ano');
   const fAno=selAno.value||String(new Date().getFullYear());
@@ -1826,6 +1970,7 @@ function renderEntregas(){
   let h='<table class="ent-table"><thead><tr>'
     +'<th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th>UF</th>'
     +'<th style="text-align:right">Valor</th><th style="text-align:center">Status</th>'
+    +'<th>Pagamento</th>'
     +'</tr></thead><tbody>';
 
   let lastSt='';
@@ -1840,7 +1985,7 @@ function renderEntregas(){
       const stN=st==='aguardando'?nAg:st==='em_rota'?nRt:nEn;
       const bgCl=st==='aguardando'?'#f0f2f5':st==='em_rota'?'#FFF4E0':'#EAF3DE';
       const txCl=st==='aguardando'?'#555':st==='em_rota'?'#854F0B':'#3B6D11';
-      h+='<tr><td colspan="7" style="background:'+bgCl+';color:'+txCl+';font-weight:700;font-size:12px;padding:8px 14px;letter-spacing:0.3px">'
+      h+='<tr><td colspan="8" style="background:'+bgCl+';color:'+txCl+';font-weight:700;font-size:12px;padding:8px 14px;letter-spacing:0.3px">'
         +STATUS_LABEL[st].toUpperCase()+' — '+stN+' pedido'+(stN!==1?'s':'')+' — '+fmt(stVal)+'</td></tr>';
       lastSt=st;
     }
@@ -1855,13 +2000,16 @@ function renderEntregas(){
       +'<option value="aguardando"'+(st==='aguardando'?' selected':'')+'>⏳ Aguardando</option>'
       +'<option value="em_rota"'+(st==='em_rota'?' selected':'')+'>🚚 Em rota</option>'
       +'<option value="entregue"'+(st==='entregue'?' selected':'')+'>✅ Entregue</option>'
-      +'</select></td></tr>';
+      +'</select></td>';
+    const pg=getPg(p.gid).replace(/"/g,'&quot;');
+    h+='<td><input type="text" class="pg-input" value="'+pg+'" placeholder="Ex: 50% entrada + 50%"'
+      +' onchange="setPg('+p.gid+',this.value)"/></td></tr>';
   });
 
   // totais gerais
   const tvTotal=lista.reduce((s,p)=>s+p.val,0);
   h+='<tr style="background:#003366"><td colspan="5" style="color:#fff;font-weight:700;font-size:12px;letter-spacing:0.3px">TOTAL'+(fSt?' — '+STATUS_LABEL[fSt]:'')+'</td>'
-    +'<td style="text-align:right;color:#fff;font-weight:700">'+fmt(tvTotal)+'</td><td></td></tr>';
+    +'<td style="text-align:right;color:#fff;font-weight:700">'+fmt(tvTotal)+'</td><td></td><td></td></tr>';
   el.innerHTML=h+'</tbody></table>';
   applyCardLabels('tabela-entregas');
 }
@@ -1869,7 +2017,9 @@ function renderEntregas(){
 /* ========== PDF ENTREGAS ========== */
 function pdfEntregas(){
   const fSt=document.getElementById('e-f-status').value;
-  const uniq=uniquePedidos(ps);
+  const fAno=document.getElementById('e-f-ano').value;
+  let uniq=uniquePedidos(ps);
+  if(fAno)uniq=uniq.filter(p=>String(p.ano)===fAno); // respeita o filtro de ano da tela
   let lista=fSt?uniq.filter(p=>getSt(p.gid)===fSt):uniq;
   lista.sort((a,b)=>{
     const sd=STATUS_ORD[getSt(a.gid)]-STATUS_ORD[getSt(b.gid)];
@@ -1893,15 +2043,16 @@ function pdfEntregas(){
       const tx=st==='aguardando'?'#555':st==='em_rota'?'#854F0B':'#3B6D11';
       const stN=st==='aguardando'?nAg:st==='em_rota'?nRt:nEn;
       const stV=st==='aguardando'?vAg:st==='em_rota'?vRt:vEn;
-      rows+='<tr><td colspan="6" style="background:'+bg+';color:'+tx+';font-weight:700;font-size:11px;padding:7px 10px;letter-spacing:0.3px">'
+      rows+='<tr><td colspan="7" style="background:'+bg+';color:'+tx+';font-weight:700;font-size:11px;padding:7px 10px;letter-spacing:0.3px">'
         +STATUS_LABEL[st].toUpperCase()+' — '+stN+' pedido'+(stN!==1?'s':'')+' — '+fmt(stV)+'</td></tr>';
       lastSt=st;
     }
     rows+='<tr><td>'+p.num+'</td><td>'+p.mes.substring(0,3)+'/'+p.ano+'</td>';
     rows+='<td>'+(pn?pn.nome:'—')+'</td><td>'+p.cid+'</td><td>'+p.uf+'</td>';
-    rows+='<td style="text-align:right;font-weight:600">'+fmt(p.val)+'</td></tr>';
+    rows+='<td style="text-align:right;font-weight:600">'+fmt(p.val)+'</td>';
+    rows+='<td style="font-size:11px;color:#555">'+(getPg(p.gid)||'—')+'</td></tr>';
   });
-  rows+='<tr style="background:#eef3fa"><td colspan="5" style="font-weight:700">TOTAL</td><td style="text-align:right;font-weight:700">'+fmt(tvTotal)+'</td></tr>';
+  rows+='<tr style="background:#eef3fa"><td colspan="5" style="font-weight:700">TOTAL</td><td style="text-align:right;font-weight:700">'+fmt(tvTotal)+'</td><td></td></tr>';
 
   const hoje=new Date().toLocaleDateString('pt-BR');
   const w=window.open('','_blank');
@@ -1919,14 +2070,14 @@ function pdfEntregas(){
     +'.rd{margin-top:32px;font-size:11px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:12px}'
     +'</style></head><body>'
     +'<button class="btnp" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>'
-    +'<h1>AÇO NAVAL</h1><h2>Controle de Entregas'+(fSt?' — '+STATUS_LABEL[fSt]:'')+'</h2>'
+    +'<h1>AÇO NAVAL</h1><h2>Controle de Entregas'+(fAno?' — '+fAno:'')+(fSt?' — '+STATUS_LABEL[fSt]:'')+'</h2>'
     +'<div class="sub">Gerado em '+hoje+' &nbsp;|&nbsp; Total de pedidos: '+uniq.length+'</div><hr>'
     +'<div class="rs">'
     +'<div class="bx" style="background:#f0f2f5"><div class="v" style="color:#555">'+nAg+'</div><div class="l">⏳ Aguardando</div><div style="font-size:11px;color:#888;margin-top:4px">'+fmt(vAg)+'</div></div>'
     +'<div class="bx" style="background:#FFF4E0"><div class="v" style="color:#854F0B">'+nRt+'</div><div class="l">🚚 Em rota</div><div style="font-size:11px;color:#888;margin-top:4px">'+fmt(vRt)+'</div></div>'
     +'<div class="bx" style="background:#EAF3DE"><div class="v" style="color:#3B6D11">'+nEn+'</div><div class="l">✅ Entregue</div><div style="font-size:11px;color:#888;margin-top:4px">'+fmt(vEn)+'</div></div>'
     +'</div>'
-    +'<table><thead><tr><th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th>UF</th><th style="text-align:right">Valor</th></tr></thead>'
+    +'<table><thead><tr><th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th>UF</th><th style="text-align:right">Valor</th><th>Pagamento</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'<div class="rd">Documento gerado automaticamente — Aço Naval</div>'
     +'</body></html>');
@@ -1935,7 +2086,7 @@ function pdfEntregas(){
 
 /* ========== BACKUP ========== */
 function exportarBackup(){
-  const d={vs,ps,ads,prods,anus,sts,bonus,transfs,data:new Date().toISOString()};
+  const d={vs,ps,ads,prods,anus,sts,bonus,transfs,pgtos,data:new Date().toISOString()};
   const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);
   a.download='backup_aco_naval_'+new Date().toISOString().split('T')[0]+'.json';a.click();
@@ -1948,7 +2099,7 @@ function importarBackup(e){
     if(!confirm('Substituir dados atuais?'))return;
     vs=d.vs||d.vendedores||[];ps=normalizarPedidos(d.ps||d.pedidos);
     ads=d.ads||d.adiantamentos||[];prods=d.prods||d.produtos||[];
-    anus=d.anus||d.anuncios||[];sts=d.sts||{};bonus=d.bonus||[];transfs=d.transfs||[];
+    anus=d.anus||d.anuncios||[];sts=d.sts||{};bonus=d.bonus||[];transfs=d.transfs||[];pgtos=d.pgtos||{};
     salvar();renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();
     alert('Backup importado!');
   }catch(err){alert('Erro: '+err.message);}};
@@ -1956,11 +2107,13 @@ function importarBackup(e){
 }
 function limparTudo(){
   if(!confirm('Apagar TODOS os dados?'))return;
-  if(!confirm('Confirma? Não pode ser desfeito.'))return;
-  vs=[];ps=[];ads=[];prods=[];anus=[];sts={};bonus=[];transfs=[];ta=null;
-  ['vs','ps','ads','prods','anus','sts'].forEach(k=>localStorage.removeItem('an_'+k));
-  renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();
-  alert('Dados apagados.');
+  if(!confirm('Confirma? Não pode ser desfeito e apaga também da NUVEM (todos os dispositivos).'))return;
+  vs=[];ps=[];ads=[];prods=[];anus=[];sts={};bonus=[];transfs=[];pgtos={};pends={};ta=null;
+  ['vs','ps','ads','prods','anus','sts','bonus','transfs','pgtos'].forEach(k=>localStorage.removeItem('an_'+k));
+  // Antes só limpava localmente e os dados voltavam da nuvem ao recarregar.
+  REF.remove().catch(e=>console.error('Erro ao limpar nuvem:',e));
+  renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();atualizarBadgePend();
+  alert('Dados apagados (local e nuvem).');
 }
 
 
@@ -2001,7 +2154,7 @@ function renderDashboard(){
   const uniqMesRef=uniquePedidos(ps.filter(p=>p.mes===mes&&p.ano===ano));
   const fatMes=uniqMesRef.reduce((s,p)=>s+p.val,0);
   const qtdMes=uniqMesRef.length;
-  const comMes=ps.filter(p=>p.mes===mes&&p.ano===ano&&!p.cancelado).reduce((s,p)=>s+p.com,0);
+  const comMes=somaComissoes(ps.filter(p=>p.mes===mes&&p.ano===ano&&!p.cancelado));
   const fatAno=uniquePedidos(ps.filter(p=>p.ano===ano)).reduce((s,p)=>s+p.val,0);
 
   const idxMes=MS.indexOf(mes);
@@ -2119,11 +2272,9 @@ function renderDashboard(){
 function selectDashMes(chave){
   dashMesSel=chave;
   // Atualiza visual das barras sem re-renderizar tudo
+  const refChave=ck(refMes(),refAno());
   document.querySelectorAll('.dash-bar').forEach(r=>{
     const c=r.getAttribute('data-chave');
-    const g={};uniquePedidos(ps).forEach(p=>{const k=ck(p.mes,p.ano);if(!g[k])g[k]={mes:p.mes,ano:p.ano,t:0};g[k].t+=p.val;});
-    const mesesOrdenados=Object.values(g).sort((a,b)=>ord(ck(a.mes,a.ano))-ord(ck(b.mes,b.ano))).slice(-12);
-    const refChave=ck(refMes(),refAno());
     const isSel=c===chave;const isRef=c===refChave;
     r.setAttribute('fill',isSel?'#185FA5':isRef?'#5EA0E0':'#C5DCF5');
   });
@@ -2144,7 +2295,7 @@ function buildDetalheMes(chave){
   }
 
   // KPIs do mês selecionado
-  const comMesSel=ps.filter(p=>p.mes===mes&&p.ano===ano&&!p.cancelado).reduce((s,p)=>s+p.com,0);
+  const comMesSel=somaComissoes(ps.filter(p=>p.mes===mes&&p.ano===ano&&!p.cancelado));
   const CORES_DET=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75','#C9373A','#0E8A8A'];
 
   // --- Por Produto ---
@@ -2371,7 +2522,7 @@ function buildDetalheAno(ano){
     return `<div class="dash-card"><p class="dash-no-data">Nenhum pedido em ${ano}.</p></div>`;
   }
 
-  const comAno=ps.filter(p=>p.ano===ano&&!p.cancelado).reduce((s,p)=>s+p.com,0);
+  const comAno=somaComissoes(ps.filter(p=>p.ano===ano&&!p.cancelado));
   const CORES_DET=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75','#C9373A','#0E8A8A'];
 
   // --- Evolução mensal no ano ---
@@ -2496,7 +2647,7 @@ function pdfVendasAno(ano){
   const uniq=uniquePedidos(ps.filter(p=>p.ano===ano));
   if(!uniq.length){alert('Nenhum pedido em '+ano+'.');return;}
   const tv=uniq.reduce((s,p)=>s+p.val,0);
-  const comAno=ps.filter(p=>p.ano===ano&&!p.cancelado).reduce((s,p)=>s+p.com,0);
+  const comAno=somaComissoes(ps.filter(p=>p.ano===ano&&!p.cancelado));
 
   // Por mês
   const gm={};uniq.forEach(p=>{const c=p.mes;if(!gm[c])gm[c]={t:0,q:0};gm[c].t+=p.val;gm[c].q++;});

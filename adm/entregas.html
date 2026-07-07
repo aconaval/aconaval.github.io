@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aço Naval — Entregas</title>
+<meta name="theme-color" content="#003366">
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+body{background:linear-gradient(160deg,#f2f5f9 0%,#e9eef5 100%);color:#222;min-height:100vh;padding-bottom:40px}
+
+/* ===== HEADER ===== */
+.topo{background:linear-gradient(135deg,#003366 0%,#0C447C 100%);color:#fff;padding:18px 20px 16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 14px rgba(0,20,50,.25)}
+.topo-in{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.topo h1{font-size:17px;font-weight:700;letter-spacing:.3px}
+.topo .sub{font-size:12px;color:#9FC3E8;margin-top:2px}
+.pill-con{font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;background:rgba(255,255,255,.14);color:#cfe4f7;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.pill-con .dot{width:8px;height:8px;border-radius:50%;background:#aaa;transition:background .3s}
+.pill-con.on .dot{background:#7ED957;box-shadow:0 0 6px #7ED957}
+.pill-con.off .dot{background:#EF9F27}
+
+.wrap{max-width:900px;margin:0 auto;padding:16px 14px 0}
+
+/* ===== MÉTRICAS ===== */
+.metricas{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.metric{background:#fff;border-radius:12px;padding:12px 14px;border:1px solid #e0e4e8;position:relative;overflow:hidden;transition:box-shadow .2s}
+.metric::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.metric.ag::before{background:linear-gradient(90deg,#999,#ccc)}
+.metric.rt::before{background:linear-gradient(90deg,#BA7517,#EF9F27)}
+.metric.en::before{background:linear-gradient(90deg,#3B6D11,#63b922)}
+.metric .val{font-size:22px;font-weight:700;color:#003366;line-height:1.1}
+.metric.rt .val{color:#854F0B}
+.metric.en .val{color:#3B6D11}
+.metric .lbl{font-size:10px;color:#888;margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+
+/* ===== FILTROS ===== */
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.filtros select{padding:9px 12px;border:1px solid #d0d4d8;border-radius:8px;background:#fff;font-size:13px;color:#222;flex:1;min-width:120px}
+.busca-wrap{position:relative;flex:2;min-width:180px}
+.busca-wrap .ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none}
+.busca-wrap input{width:100%;padding:9px 32px 9px 34px;border:1px solid #d0d4d8;border-radius:8px;font-size:14px;background:#fff}
+.busca-wrap input:focus,.filtros select:focus{outline:none;border-color:#185FA5;box-shadow:0 0 0 2px rgba(24,95,165,.14)}
+.busca-clear{display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:15px;cursor:pointer;color:#aaa;padding:2px 6px}
+.btn-pdf{padding:9px 16px;border-radius:8px;border:1px solid #185FA5;background:#185FA5;color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,transform .1s;white-space:nowrap}
+.btn-pdf:hover{background:#0C447C}
+.btn-pdf:active{transform:scale(.97)}
+
+/* ===== GRUPOS E CARDS ===== */
+.grupo-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:18px 2px 10px;font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.grupo-h.ag{color:#555}.grupo-h.rt{color:#854F0B}.grupo-h.en{color:#3B6D11}
+.grupo-h .soma{font-weight:600;font-size:11px;opacity:.75;text-transform:none;letter-spacing:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:640px){.grid{grid-template-columns:1fr}}
+.ped{background:#fff;border:1px solid #e0e4e8;border-radius:12px;padding:14px 16px;transition:box-shadow .2s,border-color .2s;animation:ped-in .25s ease}
+@keyframes ped-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.ped.rt{border-left:3px solid #EF9F27}
+.ped.en{border-left:3px solid #63b922;opacity:.82}
+.ped-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.ped-num{font-size:16px;font-weight:700;color:#003366}
+.badge-m{background:#E6F1FB;color:#0C447C;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+.badge-prod{background:#EEEDFE;color:#534AB7;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+.ped-loc{font-size:13px;color:#555;margin-bottom:4px}
+.ped-val{font-size:13px;font-weight:600;color:#185FA5;margin-bottom:10px}
+
+/* Stepper de status — controle segmentado */
+.stepper{display:flex;border:1px solid #d0d4d8;border-radius:10px;overflow:hidden;margin-bottom:10px}
+.step{flex:1;text-align:center;padding:9px 4px;font-size:12px;font-weight:600;color:#888;background:#fafbfc;cursor:pointer;border-right:1px solid #e6e9ed;transition:background .15s,color .15s;user-select:none;-webkit-tap-highlight-color:transparent}
+.step:last-child{border-right:none}
+.step:hover{background:#f0f4f9}
+.step.on.ag{background:#e9ebee;color:#444}
+.step.on.rt{background:#FAEEDA;color:#854F0B}
+.step.on.en{background:#EAF3DE;color:#3B6D11}
+
+.pg-row{display:flex;gap:6px;align-items:center}
+.pg-row input{flex:1;font-size:13px;padding:8px 10px;border:1px solid #e0e4e8;border-radius:8px;background:#fafbfc;transition:border-color .15s,box-shadow .15s}
+.pg-row input:focus{outline:none;border-color:#185FA5;background:#fff;box-shadow:0 0 0 2px rgba(24,95,165,.12)}
+.pg-ok{font-size:14px;color:#3B6D11;opacity:0;transition:opacity .3s;flex-shrink:0}
+.pg-ok.show{opacity:1}
+.pg-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#999;margin-bottom:4px}
+
+.empty{color:#999;font-size:13px;text-align:center;padding:40px 0;font-style:italic}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#3B6D11;color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.2);transition:transform .3s ease;z-index:300;pointer-events:none;white-space:nowrap}
+.toast.show{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div class="topo">
+  <div class="topo-in">
+    <div>
+      <h1>AÇO NAVAL — Entregas</h1>
+      <div class="sub" id="saudacao">Painel de entregas e pagamentos</div>
+    </div>
+    <div class="pill-con off" id="pill-con"><span class="dot"></span><span id="pill-txt">Conectando…</span></div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="metricas">
+    <div class="metric ag"><div class="val" id="m-ag">—</div><div class="lbl">⏳ Aguardando</div></div>
+    <div class="metric rt"><div class="val" id="m-rt">—</div><div class="lbl">🚚 Em rota</div></div>
+    <div class="metric en"><div class="val" id="m-en">—</div><div class="lbl">✅ Entregue</div></div>
+  </div>
+
+  <div class="filtros">
+    <div class="busca-wrap">
+      <span class="ico">🔍</span>
+      <input type="text" id="busca" placeholder="Buscar nº ou cidade..." oninput="render()" autocomplete="off"/>
+      <button class="busca-clear" id="busca-clear" onclick="document.getElementById('busca').value='';render()">✕</button>
+    </div>
+    <select id="f-ano" onchange="render()"><option value="">Todos os anos</option></select>
+    <select id="f-st" onchange="render()">
+      <option value="">Todos os status</option>
+      <option value="aguardando">⏳ Aguardando</option>
+      <option value="em_rota">🚚 Em rota</option>
+      <option value="entregue">✅ Entregue</option>
+    </select>
+    <button class="btn-pdf" onclick="gerarPDF()">📄 PDF</button>
+  </div>
+
+  <div id="lista"><p class="empty">Carregando pedidos…</p></div>
+</div>
+
+<div class="toast" id="toast">✓ Alteração enviada</div>
+
+<script>
+const MS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const STATUS_LABEL={'aguardando':'⏳ Aguardando','em_rota':'🚚 Em rota','entregue':'✅ Entregue'};
+const STATUS_ORD={'aguardando':0,'em_rota':1,'entregue':2};
+
+// ===== FIREBASE (Realtime Database — aco-naval-gestao) =====
+const firebaseConfig = {
+  apiKey: "AIzaSyAb46YPuZDtuGitlySCxKXJjy0WEy0xPMI",
+  authDomain: "aco-naval-gestao.firebaseapp.com",
+  databaseURL: "https://aco-naval-gestao-default-rtdb.firebaseio.com",
+  projectId: "aco-naval-gestao",
+  storageBucket: "aco-naval-gestao.firebasestorage.app",
+  messagingSenderId: "359027216116",
+  appId: "1:359027216116:web:af8df148f57e7c3fb398a1"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const REF = db.ref('dados');
+
+let ps=[],prods=[],sts={},pgtos={},pends={};
+let carregou=false;
+
+// Conexão
+db.ref('.info/connected').on('value',snap=>{
+  const on=snap.val()===true;
+  const pill=document.getElementById('pill-con');
+  pill.className='pill-con '+(on?'on':'off');
+  document.getElementById('pill-txt').textContent=on?'Online':'Sem conexão';
+});
+
+// Saudação por horário
+(function(){
+  const h=new Date().getHours();
+  const s=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
+  document.getElementById('saudacao').textContent=s+'! Painel de entregas e pagamentos';
+})();
+
+/* Normalização leve (mesma regra do sistema de gestão) */
+function normalizar(lista){
+  return (lista||[]).map(p=>{
+    const q=Object.assign({},p);
+    if(typeof q.mes==='number'){q.mes=MS[q.mes-1]||String(q.mes);}
+    else if(typeof q.mes==='string'&&/^\d{1,2}$/.test(q.mes.trim())){q.mes=MS[parseInt(q.mes,10)-1]||q.mes;}
+    if(typeof q.ano==='string'&&/^\d+$/.test(q.ano.trim())){q.ano=parseInt(q.ano,10);}
+    if(typeof q.val==='string'){const n=parseFloat(q.val.replace(',','.'));if(!isNaN(n))q.val=n;}
+    if(typeof q.gid==='string'&&/^\d+$/.test(q.gid.trim())){q.gid=parseInt(q.gid,10);}
+    return q;
+  });
+}
+function uniquePedidos(){
+  const visto={};
+  return ps.filter(p=>!p.cancelado&&p.tipo!=='estorno').filter(p=>{if(visto[p.gid])return false;visto[p.gid]=true;return true;});
+}
+const fmt=v=>'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+
+/* ===== VALORES EFETIVOS (proposta pendente prevalece na visão dela) =====
+   Assim que ela altera algo, a alteração já aparece aplicada aqui.
+   A confirmação final acontece no painel administrativo. */
+function pendKey(gid,campo){return 'p'+gid+'_'+campo;}
+function stEfetivo(gid){
+  const pd=pends[pendKey(gid,'status')];
+  return pd?pd.valor:(sts[String(gid)]||'aguardando');
+}
+function pgEfetivo(gid){
+  const pd=pends[pendKey(gid,'pagamento')];
+  return pd?pd.valor:(pgtos[String(gid)]||'');
+}
+
+/* ===== ENVIO DE ALTERAÇÕES =====
+   Grava apenas em dados/pends/{chave} — nunca sobrescreve o restante do banco. */
+function enviarAlteracao(gid,campo,valor){
+  const uniq=uniquePedidos();
+  const ped=uniq.find(p=>p.gid===gid)||{};
+  const aprovado=campo==='status'?(sts[String(gid)]||'aguardando'):(pgtos[String(gid)]||'');
+  const k=pendKey(gid,campo);
+  // Se voltou ao valor já aprovado, cancela a proposta pendente
+  if(String(valor)===String(aprovado)){
+    delete pends[k];
+    REF.child('pends/'+k).remove().catch(()=>{});
+    render();
+    return;
+  }
+  const obj={gid:gid,campo:campo,valor:valor,anterior:aprovado,
+    num:ped.num||'',cid:ped.cid||'',uf:ped.uf||'',
+    quem:'Painel de entregas',em:new Date().toISOString()};
+  pends[k]=obj;
+  REF.child('pends/'+k).set(obj)
+    .then(()=>toast(campo==='status'?'✓ Status atualizado':'✓ Pagamento salvo'))
+    .catch(()=>toast('⚠️ Falha ao enviar — verifique a conexão','#854F0B'));
+  render();
+}
+function setStatus(gid,val){enviarAlteracao(gid,'status',val);}
+function setPagamento(gid,input){
+  const val=String(input.value||'').trim();
+  enviarAlteracao(gid,'pagamento',val);
+  const ok=input.parentElement.querySelector('.pg-ok');
+  if(ok){ok.classList.add('show');setTimeout(()=>ok.classList.remove('show'),1800);}
+}
+
+let toastTimer=null;
+function toast(msg,cor){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.background=cor||'#3B6D11';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+/* ===== LEITURA EM TEMPO REAL ===== */
+REF.on('value',snap=>{
+  const d=snap.val();
+  if(!d){document.getElementById('lista').innerHTML='<p class="empty">Nenhum pedido encontrado.</p>';return;}
+  ps=normalizar(d.ps);
+  prods=d.prods||[];
+  sts=d.sts||{};
+  pgtos=d.pgtos||{};
+  pends=d.pends||{};
+  carregou=true;
+  // Não re-renderiza enquanto ela digita a condição de pagamento
+  const ae=document.activeElement;
+  if(ae&&(ae.tagName==='INPUT')&&ae.id!=='busca'&&ae.closest('#lista'))return;
+  render();
+});
+
+/* ===== RENDER ===== */
+function render(){
+  if(!carregou)return;
+  const uniq=uniquePedidos();
+
+  // Filtro de ano (padrão: ano atual, se existir)
+  const selAno=document.getElementById('f-ano');
+  const anos=[...new Set(uniq.map(p=>p.ano))].sort((a,b)=>b-a);
+  const atualAno=selAno.dataset.escolhido!=null?selAno.value:String(new Date().getFullYear());
+  selAno.innerHTML='<option value="">Todos os anos</option>';
+  anos.forEach(a=>{selAno.innerHTML+='<option value="'+a+'"'+(String(a)===atualAno?' selected':'')+'>'+a+'</option>';});
+  if(anos.map(String).includes(atualAno))selAno.value=atualAno;
+  const fAno=selAno.value;
+
+  const fSt=document.getElementById('f-st').value;
+  const busca=document.getElementById('busca').value.trim().toLowerCase();
+  document.getElementById('busca-clear').style.display=busca?'block':'none';
+
+  let lista=fAno?uniq.filter(p=>String(p.ano)===fAno):uniq;
+
+  // Métricas do ano filtrado (com propostas dela já contadas)
+  const nAg=lista.filter(p=>stEfetivo(p.gid)==='aguardando').length;
+  const nRt=lista.filter(p=>stEfetivo(p.gid)==='em_rota').length;
+  const nEn=lista.filter(p=>stEfetivo(p.gid)==='entregue').length;
+  document.getElementById('m-ag').textContent=nAg;
+  document.getElementById('m-rt').textContent=nRt;
+  document.getElementById('m-en').textContent=nEn;
+
+  if(fSt)lista=lista.filter(p=>stEfetivo(p.gid)===fSt);
+  if(busca)lista=lista.filter(p=>String(p.num).includes(busca)||(p.cid||'').toLowerCase().includes(busca));
+
+  lista.sort((a,b)=>{
+    const sd=STATUS_ORD[stEfetivo(a.gid)]-STATUS_ORD[stEfetivo(b.gid)];
+    if(sd!==0)return sd;
+    return parseInt(b.num)-parseInt(a.num);
+  });
+
+  const el=document.getElementById('lista');
+  if(!lista.length){el.innerHTML='<p class="empty">Nenhum pedido'+(fSt||busca?' com este filtro':'')+'.</p>';return;}
+
+  let h='';let lastSt=null;let aberto=false;
+  lista.forEach(p=>{
+    const st=stEfetivo(p.gid);
+    if(st!==lastSt){
+      if(aberto)h+='</div>';
+      const grupo=lista.filter(x=>stEfetivo(x.gid)===st);
+      const soma=grupo.reduce((s,x)=>s+(Number(x.val)||0),0);
+      const cl=st==='aguardando'?'ag':st==='em_rota'?'rt':'en';
+      h+='<div class="grupo-h '+cl+'"><span>'+STATUS_LABEL[st]+' — '+grupo.length+' pedido'+(grupo.length!==1?'s':'')+'</span><span class="soma">'+fmt(soma)+'</span></div>';
+      h+='<div class="grid">';
+      aberto=true;lastSt=st;
+    }
+    const pn=prods.find(x=>x.id===p.prod);
+    const cl=st==='aguardando'?'ag':st==='em_rota'?'rt':'en';
+    const pg=pgEfetivo(p.gid);
+    h+='<div class="ped '+cl+'">'
+      +'<div class="ped-top"><span class="ped-num">Nº '+esc(p.num)+'</span>'
+      +'<span><span class="badge-m">'+esc((p.mes||'').substring(0,3))+' '+esc(p.ano)+'</span>'
+      +(pn?' <span class="badge-prod">'+esc(pn.nome)+'</span>':'')+'</span></div>'
+      +'<div class="ped-loc">📍 '+esc(p.cid)+(p.uf?' / '+esc(p.uf):'')+'</div>'
+      +'<div class="ped-val">'+fmt(p.val)+'</div>'
+      +'<div class="stepper">'
+      +'<div class="step'+(st==='aguardando'?' on ag':'')+'" onclick="setStatus('+p.gid+',\'aguardando\')">⏳ Aguardando</div>'
+      +'<div class="step'+(st==='em_rota'?' on rt':'')+'" onclick="setStatus('+p.gid+',\'em_rota\')">🚚 Em rota</div>'
+      +'<div class="step'+(st==='entregue'?' on en':'')+'" onclick="setStatus('+p.gid+',\'entregue\')">✅ Entregue</div>'
+      +'</div>'
+      +'<div class="pg-lbl">Condição de pagamento</div>'
+      +'<div class="pg-row">'
+      +'<input type="text" value="'+esc(pg)+'" placeholder="Ex: 50% entrada + 50% na entrega" onchange="setPagamento('+p.gid+',this)"/>'
+      +'<span class="pg-ok">✔</span>'
+      +'</div></div>';
+  });
+  if(aberto)h+='</div>';
+  el.innerHTML=h;
+}
+document.getElementById('f-ano').addEventListener('change',function(){this.dataset.escolhido='1';});
+
+/* ===== PDF / ROMANEIO ===== */
+function gerarPDF(){
+  const uniq=uniquePedidos();
+  const fAno=document.getElementById('f-ano').value;
+  const fSt=document.getElementById('f-st').value;
+  let lista=fAno?uniq.filter(p=>String(p.ano)===fAno):uniq;
+  if(fSt)lista=lista.filter(p=>stEfetivo(p.gid)===fSt);
+  lista.sort((a,b)=>{
+    const sd=STATUS_ORD[stEfetivo(a.gid)]-STATUS_ORD[stEfetivo(b.gid)];
+    if(sd!==0)return sd;
+    return parseInt(b.num)-parseInt(a.num);
+  });
+  let rows='';let lastSt=null;
+  lista.forEach(p=>{
+    const st=stEfetivo(p.gid);
+    const pn=prods.find(x=>x.id===p.prod);
+    if(st!==lastSt){
+      const bg=st==='aguardando'?'#f0f2f5':st==='em_rota'?'#FFF4E0':'#EAF3DE';
+      const tx=st==='aguardando'?'#555':st==='em_rota'?'#854F0B':'#3B6D11';
+      const g=lista.filter(x=>stEfetivo(x.gid)===st);
+      rows+='<tr><td colspan="6" style="background:'+bg+';color:'+tx+';font-weight:700;font-size:11px;padding:7px 10px">'
+        +STATUS_LABEL[st].toUpperCase()+' — '+g.length+' pedido'+(g.length!==1?'s':'')+'</td></tr>';
+      lastSt=st;
+    }
+    rows+='<tr><td>'+esc(p.num)+'</td><td>'+esc((p.mes||'').substring(0,3))+'/'+esc(p.ano)+'</td>'
+      +'<td>'+(pn?esc(pn.nome):'—')+'</td><td>'+esc(p.cid)+(p.uf?'/'+esc(p.uf):'')+'</td>'
+      +'<td style="text-align:right;font-weight:600">'+fmt(p.val)+'</td>'
+      +'<td style="font-size:11px;color:#555">'+(esc(pgEfetivo(p.gid))||'—')+'</td></tr>';
+  });
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const w=window.open('','_blank');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Entregas</title>'
+    +'<style>@media print{.btnp{display:none}}body{font-family:Arial;padding:32px;color:#222;max-width:800px;margin:auto}'
+    +'h1{color:#003366;font-size:22px;margin:0}h2{font-size:13px;color:#555;font-weight:400;margin:4px 0}'
+    +'.sub{font-size:11px;color:#aaa;margin-bottom:20px}hr{border:none;border-top:2px solid #003366;margin:16px 0}'
+    +'table{width:100%;border-collapse:collapse;font-size:12px}'
+    +'th{background:#003366;color:#fff;padding:8px 10px;text-align:left;font-size:11px}'
+    +'td{padding:8px 10px;border-bottom:1px solid #eee}'
+    +'.btnp{position:fixed;top:20px;right:20px;background:#185FA5;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:13px}'
+    +'.rd{margin-top:32px;font-size:11px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:12px}'
+    +'</style></head><body>'
+    +'<button class="btnp" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>'
+    +'<h1>AÇO NAVAL</h1><h2>Entregas'+(fAno?' — '+fAno:'')+(fSt?' — '+STATUS_LABEL[fSt]:'')+'</h2>'
+    +'<div class="sub">Gerado em '+hoje+' &nbsp;|&nbsp; '+lista.length+' pedido'+(lista.length!==1?'s':'')+'</div><hr>'
+    +'<table><thead><tr><th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th style="text-align:right">Valor</th><th>Pagamento</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody></table>'
+    +'<div class="rd">Documento gerado automaticamente — Aço Naval</div>'
+    +'</body></html>');
+  w.document.close();
+}
+</script>
+</body>
+</html>
