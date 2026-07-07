@@ -50,19 +50,25 @@ select{font-size:14px;padding:8px 10px;border:1px solid #d0d4d8;border-radius:8p
 .btn{font-size:13px;padding:9px 16px;border-radius:8px;border:1px solid #d0d4d8;background:#fff;color:#222;cursor:pointer;font-weight:500;flex-shrink:0}
 .btn-primary{background:#185FA5;color:#fff;border-color:#185FA5}
 
-/* TABELA OTIMIZADA */
-.tabela-wrap{overflow-x:auto;margin:0 -16px;padding:0 16px}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th{background:#f5f7fa;color:#666;font-weight:600;text-align:left;padding:10px 10px;border-bottom:1px solid #e0e4e8;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap}
-td{padding:12px 10px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
-tr:last-child td{border-bottom:none}
-.total-row td{background:#f5f7fa;font-weight:700;border-bottom:none}
-.num{font-weight:700;color:#003366;font-size:15px}
-.cidade{font-size:13px;color:#444}
-.val-td{text-align:right;font-weight:600}
-.com-td{text-align:right;font-weight:700;color:#185FA5}
-.badge-meia{background:#f0f2f5;color:#555;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;vertical-align:middle}
-.badge-venda{background:#E6F1FB;color:#0C447C;font-size:13px;padding:3px 9px;border-radius:8px;font-weight:800;letter-spacing:.3px;display:inline-block}
+/* LISTA DE VENDAS — cartões empilhados (sem rolagem lateral no celular) */
+.venda-item{padding:12px 0;border-bottom:1px solid #f0f2f5}
+.venda-item:last-child{border-bottom:none}
+.venda-linha1{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.venda-cliente{display:flex;align-items:center;gap:8px;min-width:0}
+.venda-nome{font-weight:700;color:#222;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venda-mes{font-size:10px;color:#aaa;font-weight:400;flex-shrink:0;white-space:nowrap}
+.venda-linha2{font-size:12px;color:#777;margin-bottom:8px;display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.venda-valores{display:flex;gap:10px}
+.venda-valores .vitem{flex:1;background:#f5f7fa;border-radius:8px;padding:8px 10px}
+.venda-valores .vitem .lbl{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:2px}
+.venda-valores .vitem .num{font-size:15px;font-weight:700;color:#222}
+.venda-valores .vitem.comissao{background:#E6F1FB}
+.venda-valores .vitem.comissao .num{color:#185FA5}
+.venda-total{margin:6px -16px -16px;padding:14px 16px;background:#f5f7fa;border-radius:0 0 12px 12px}
+.venda-total .venda-valores .vitem{background:#fff}
+.venda-total .lbl{font-weight:700;color:#666}
+.badge-meia{background:#f0f2f5;color:#555;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;vertical-align:middle;margin-left:3px}
+.badge-venda{background:#E6F1FB;color:#0C447C;font-size:13px;padding:3px 9px;border-radius:8px;font-weight:800;letter-spacing:.3px;display:inline-block;flex-shrink:0}
 .badge-cat{background:#EEEDFE;color:#534AB7;font-size:11px;padding:2px 8px;border-radius:12px;font-weight:600;white-space:nowrap;display:inline-block}
 
 /* SEÇÕES */
@@ -416,38 +422,33 @@ function renderConteudo(){
     }
   }
 
-  // Tabela — apenas Nº, Cidade/UF, Valor, Comissão
+  // Lista de vendas — cartões empilhados (Venda, Cliente/Cidade, Categoria, Valor, Comissão)
   let tp='';
   if(!mps.length){
     tp='<p class="empty">Nenhuma venda em '+lbl+'.</p>';
   } else {
-    tp='<div class="tabela-wrap">';
-    tp+='<table><thead><tr>';
-    tp+='<th>Venda</th>';
-    tp+='<th>Cliente / Cidade</th>';
-    tp+='<th>Categoria</th>';
-    tp+='<th style="text-align:right">Valor</th>';
-    tp+='<th style="text-align:right">Comissão</th>';
-    tp+='</tr></thead><tbody>';
     mps.forEach(p=>{
       const com=comDoPedido(p);
       const nv=numVenda[p.gid]||'—';
       const nomeCli=primeiroNome(p);
       const cat=categoriaDoPedido(p);
-      const mesTag=f?'':' <span style="font-size:10px;color:#aaa;font-weight:400">('+p.mes.substring(0,3)+'/'+p.ano+')</span>';
-      tp+='<tr>';
-      tp+='<td class="num"><span class="badge-venda">#'+nv+'</span>'+mesTag+'</td>';
-      tp+='<td class="cidade">'+(nomeCli?'<strong style="color:#222">'+nomeCli+'</strong><br>':'')+'<span style="font-size:12px;color:#777">'+p.cid+' — '+p.uf+'</span></td>';
-      tp+='<td>'+(cat?'<span class="badge-cat">'+cat+'</span>':'<span style="color:#ccc">—</span>')+'</td>';
-      tp+='<td class="val-td">'+fmt(p.val)+'</td>';
-      tp+='<td class="com-td">'+fmt(com)+(p.meia?' <span class="badge-meia">½</span>':'')+'</td>';
-      tp+='</tr>';
+      const mesTag=f?'':'<span class="venda-mes">'+p.mes.substring(0,3)+'/'+p.ano+'</span>';
+      tp+='<div class="venda-item">';
+      tp+='<div class="venda-linha1">';
+      tp+='<div class="venda-cliente"><span class="badge-venda">#'+nv+'</span><span class="venda-nome">'+(nomeCli||'—')+'</span></div>';
+      tp+=mesTag;
+      tp+='</div>';
+      tp+='<div class="venda-linha2"><span>'+p.cid+' — '+p.uf+'</span>'+(cat?'<span class="badge-cat">'+cat+'</span>':'')+'</div>';
+      tp+='<div class="venda-valores">';
+      tp+='<div class="vitem"><span class="lbl">Valor</span><span class="num">'+fmt(p.val)+'</span></div>';
+      tp+='<div class="vitem comissao"><span class="lbl">Comissão'+(p.meia?' <span class="badge-meia">½</span>':'')+'</span><span class="num">'+fmt(com)+'</span></div>';
+      tp+='</div></div>';
     });
     const totComissao=mps.reduce((s,p)=>s+comDoPedido(p),0);
-    tp+='<tr class="total-row"><td colspan="3">Total</td>';
-    tp+='<td class="val-td">'+fmt(tv)+'</td>';
-    tp+='<td class="com-td">'+fmt(totComissao)+'</td>';
-    tp+='</tr></tbody></table></div>';
+    tp+='<div class="venda-total"><div class="venda-valores">';
+    tp+='<div class="vitem"><span class="lbl">Total ('+mps.length+' venda'+(mps.length===1?'':'s')+')</span><span class="num">'+fmt(tv)+'</span></div>';
+    tp+='<div class="vitem comissao"><span class="lbl">Total comissão</span><span class="num">'+fmt(totComissao)+'</span></div>';
+    tp+='</div></div>';
   }
   document.getElementById('tabela-pedidos').innerHTML=tp;
 
