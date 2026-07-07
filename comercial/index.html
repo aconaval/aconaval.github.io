@@ -1818,6 +1818,13 @@ function removeFoto() { currentFotoBase64 = null; resetFotoUI(); }
 async function salvarFotosProjeto(prodId, fotos) {
   if (!db || !prodId) return;
   const arr = fotos || [];
+  // Descobre quantas fotos existiam antes, para apagar as que sobrarem
+  // além do novo total (senão ficam órfãs no Firestore).
+  let oldCount = 0;
+  try {
+    const idxSnap = await db.collection('acn_prod_fotos').doc(String(prodId)).get();
+    if (idxSnap.exists) oldCount = idxSnap.data().fotoCount || 0;
+  } catch {}
   const batch = db.batch();
   // Documento índice — registra quantas fotos existem (merge para não apagar fotosclientes)
   batch.set(
@@ -1829,6 +1836,10 @@ async function salvarFotosProjeto(prodId, fotos) {
   arr.forEach((foto, i) => {
     batch.set(db.collection('acn_prod_fotos').doc(`${prodId}_f${i}`), { foto, ordem: i });
   });
+  // Remove documentos órfãos que sobraram de uma lista maior anterior
+  for (let i = arr.length; i < oldCount; i++) {
+    batch.delete(db.collection('acn_prod_fotos').doc(`${prodId}_f${i}`));
+  }
   await batch.commit();
 }
 
@@ -1854,6 +1865,37 @@ async function carregarFotosProjeto(prodId) {
 let currentFotosProjetoBase64 = [];
 let currentFotosClientesBase64 = [];
 
+// ── FILA DE GRAVAÇÃO — evita condição de corrida ───────────────────
+// Apagar uma foto (rápido) e adicionar outra (lento: precisa ler o
+// arquivo e comprimir no canvas) disparam duas gravações assíncronas
+// separadas no Firestore. Sem fila, a gravação mais lenta pode chegar
+// ao servidor DEPOIS da mais rápida e sobrescrever com o estado antigo,
+// apagando a foto recém-adicionada mesmo que a tela mostre ela certa.
+// Encadeando as gravações (cada uma só começa quando a anterior termina
+// e sempre lê o array mais atual no momento em que executa), a ordem de
+// conclusão passa a respeitar a ordem de disparo.
+let filaSalvarFotosProjeto = Promise.resolve();
+function enfileirarSalvarFotosProjeto(prodId) {
+  filaSalvarFotosProjeto = filaSalvarFotosProjeto
+    .then(() => salvarFotosProjeto(prodId, currentFotosProjetoBase64))
+    .catch(e => console.error('Erro ao salvar fotos de projeto:', e));
+  return filaSalvarFotosProjeto;
+}
+let filaSalvarFotosProjetoDir = Promise.resolve();
+function enfileirarSalvarFotosProjetoDir(prodId) {
+  filaSalvarFotosProjetoDir = filaSalvarFotosProjetoDir
+    .then(() => salvarFotosProjetoDir(prodId, currentFotosProjetoDirBase64))
+    .catch(e => console.error('Erro ao salvar fotos de projeto (direita):', e));
+  return filaSalvarFotosProjetoDir;
+}
+let filaSalvarFotosClientes = Promise.resolve();
+function enfileirarSalvarFotosClientes(prodId) {
+  filaSalvarFotosClientes = filaSalvarFotosClientes
+    .then(() => salvarFotosClientes(prodId, currentFotosClientesBase64))
+    .catch(e => console.error('Erro ao salvar fotos de clientes:', e));
+  return filaSalvarFotosClientes;
+}
+
 async function onFotoClienteChange(e) {
   const files = Array.from(e.target.files);
   for (const file of files) {
@@ -1870,7 +1912,7 @@ async function onFotoClienteChange(e) {
   if (eid) {
     const prod = produtos.find(p => p.id == eid);
     if (prod) {
-      salvarFotosClientes(eid, currentFotosClientesBase64)
+      enfileirarSalvarFotosClientes(eid)
         .then(() => setStatus('✅ Foto salva', 'ok'))
         .catch(e => { setStatus('⚠️ Erro ao salvar foto de cliente', 'erro'); console.error(e); });
     }
@@ -1882,7 +1924,7 @@ function removeFotoCliente(idx) {
   renderClienteThumbs();
   const eid = document.getElementById('edit-prod-id')?.value;
   if (eid) {
-    salvarFotosClientes(eid, currentFotosClientesBase64)
+    enfileirarSalvarFotosClientes(eid)
       .then(() => setStatus('✅ Foto removida', 'ok'))
       .catch(e => { setStatus('⚠️ Erro ao remover', 'erro'); console.error(e); });
   }
@@ -1904,6 +1946,11 @@ async function salvarFotosClientes(prodId, fotos) {
   // Fotos de clientes ficam no documento índice para evitar limite — mas cada uma é menor (comprimidas)
   // Salva como docs separados: acn_prod_fotos/{prodId}_c{i}
   const arr = fotos || [];
+  let oldCount = 0;
+  try {
+    const idxSnap = await db.collection('acn_prod_fotos').doc(String(prodId)).get();
+    if (idxSnap.exists) oldCount = idxSnap.data().clienteCount || 0;
+  } catch {}
   const batch = db.batch();
   batch.set(
     db.collection('acn_prod_fotos').doc(String(prodId)),
@@ -1913,6 +1960,9 @@ async function salvarFotosClientes(prodId, fotos) {
   arr.forEach((foto, i) => {
     batch.set(db.collection('acn_prod_fotos').doc(`${prodId}_c${i}`), { foto, ordem: i });
   });
+  for (let i = arr.length; i < oldCount; i++) {
+    batch.delete(db.collection('acn_prod_fotos').doc(`${prodId}_c${i}`));
+  }
   await batch.commit();
 }
 
@@ -1953,8 +2003,8 @@ async function onFotoProjetoChange(e) {
     if (prod) {
       prod.fotosprojeto = [...currentFotosProjetoBase64];
       Promise.all([
-        salvarFotosProjeto(prod.id, prod.fotosprojeto),
-        ...(prod.ehVariacao ? [] : [salvarFotosClientes(prod.id, currentFotosClientesBase64)]),
+        enfileirarSalvarFotosProjeto(prod.id),
+        ...(prod.ehVariacao ? [] : [enfileirarSalvarFotosClientes(prod.id)]),
       ])
         .then(() => setStatus('✅ Foto salva', 'ok'))
         .catch(e => {
@@ -1975,7 +2025,7 @@ function removeFotoProjeto(idx) {
     const prod = produtos.find(p => p.id == eid);
     if (prod) {
       prod.fotosprojeto = [...currentFotosProjetoBase64];
-      salvarFotosProjeto(prod.id, prod.fotosprojeto)
+      enfileirarSalvarFotosProjeto(prod.id)
         .then(() => setStatus('✅ Foto removida', 'ok'))
         .catch(e => { setStatus('⚠️ Erro ao remover foto', 'erro'); console.error(e); });
     }
@@ -2044,7 +2094,7 @@ async function onFotoProjetoDirChange(e) {
     const prod = produtos.find(p => p.id == eid);
     if (prod) {
       prod.fotosprojetoDir = [...currentFotosProjetoDirBase64];
-      salvarFotosProjetoDir(prod.id, prod.fotosprojetoDir)
+      enfileirarSalvarFotosProjetoDir(prod.id)
         .then(() => setStatus('✅ Foto (direita) salva', 'ok'))
         .catch(err => { console.error(err); setStatus('⚠️ Erro ao salvar foto (direita)', 'erro'); });
     }
@@ -2056,7 +2106,7 @@ function removeFotoProjetoDir(idx) {
   const eid = document.getElementById('edit-prod-id')?.value;
   if (eid) {
     const prod = produtos.find(p => p.id == eid);
-    if (prod) { prod.fotosprojetoDir = [...currentFotosProjetoDirBase64]; salvarFotosProjetoDir(prod.id, prod.fotosprojetoDir).catch(()=>{}); }
+    if (prod) { prod.fotosprojetoDir = [...currentFotosProjetoDirBase64]; enfileirarSalvarFotosProjetoDir(prod.id).catch(()=>{}); }
   }
 }
 function renderProjetoDirThumbs() {
@@ -2073,9 +2123,17 @@ function renderProjetoDirThumbs() {
 async function salvarFotosProjetoDir(prodId, fotos) {
   if (!db || !prodId) return;
   const arr = fotos || [];
+  let oldCount = 0;
+  try {
+    const idxSnap = await db.collection('acn_prod_fotos').doc(String(prodId)).get();
+    if (idxSnap.exists) oldCount = idxSnap.data().fotoDirCount || 0;
+  } catch {}
   const batch = db.batch();
   batch.set(db.collection('acn_prod_fotos').doc(String(prodId)), { fotoDirCount: arr.length }, { merge: true });
   arr.forEach((foto, i) => batch.set(db.collection('acn_prod_fotos').doc(`${prodId}_fd${i}`), { foto, ordem: i }));
+  for (let i = arr.length; i < oldCount; i++) {
+    batch.delete(db.collection('acn_prod_fotos').doc(`${prodId}_fd${i}`));
+  }
   await batch.commit();
 }
 async function carregarFotosProjetoDir(prodId) {
