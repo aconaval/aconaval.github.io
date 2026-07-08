@@ -114,6 +114,19 @@ textarea{font-family:inherit}
 .status-sel.entregue{background:#EAF3DE;color:#3B6D11;border-color:#63b922}
 .pg-input{font-size:12px;padding:6px 9px;border:1px solid #e0e4e8;border-radius:6px;width:100%;min-width:130px;background:#fafbfc;transition:border-color .15s,box-shadow .15s}
 .pg-input:focus{outline:none;border-color:#185FA5;background:#fff;box-shadow:0 0 0 2px rgba(24,95,165,.12)}
+.com-sel{border-radius:20px;font-weight:600;font-size:12px;padding:6px 10px;cursor:pointer;transition:box-shadow .15s;border:1px solid}
+.com-sel:focus{box-shadow:0 0 0 3px rgba(24,95,165,.18)}
+.com-sel.aguardando{background:#FFF4E0;color:#854F0B;border-color:#EF9F27}
+.com-sel.comissao_paga{background:#EAF3DE;color:#3B6D11;border-color:#63b922}
+.com-info{font-size:10px;color:#888;margin-top:4px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
+.com-info:hover{color:#185FA5}
+/* ===== SELEÇÃO MÚLTIPLA DE VENDEDORES (variáveis) ===== */
+.vend-fixos-note{font-size:11px;color:#888;margin-bottom:7px}
+.vend-check-grid{display:flex;flex-wrap:wrap;gap:7px}
+.vend-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1px solid #d0d4d8;border-radius:20px;font-size:12px;font-weight:600;color:#555;cursor:pointer;background:#fafbfc;transition:background .15s,border-color .15s,color .15s;user-select:none}
+.vend-chip input{accent-color:#185FA5;cursor:pointer;width:15px;height:15px}
+.vend-chip:hover{background:#f0f4f9;border-color:#b8c2cc}
+.vend-chip.checked{background:#E6F1FB;border-color:#185FA5;color:#0C447C}
 /* ===== APROVAÇÕES ===== */
 .badge-pend{position:absolute;top:2px;right:6px;background:#D85A30;color:#fff;font-size:10px;font-weight:700;border-radius:20px;min-width:17px;height:17px;padding:0 4px;align-items:center;justify-content:center;line-height:1;box-shadow:0 1px 4px rgba(216,90,48,.4);animation:pend-pulse 2s ease-in-out infinite}
 @keyframes pend-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
@@ -331,6 +344,7 @@ textarea{font-family:inherit}
   /* Entregas — status select full width */
   .card-table .status-sel{width:100%;margin-top:0}
   .card-table .pg-input{width:100%}
+  .card-table .com-sel{width:100%}
   .badge-pend{top:1px;right:calc(50% - 26px)}
   .pend-row{flex-direction:column;align-items:stretch}
   .pend-row>div:last-child{justify-content:stretch}
@@ -452,19 +466,18 @@ textarea{font-family:inherit}
         </div>
         <div class="field"><div class="label">Valor (R$)</div><input type="number" id="p-val" step="0.01" min="0" placeholder="Ex: 5000"/></div>
       </div>
-      <div class="row" style="align-items:center">
-        <div class="field"><div class="label">Vendedor</div>
-          <select id="p-vend">
-            <option value="">Só fixos</option>
-          </select>
+      <div class="row" style="align-items:flex-start">
+        <div class="field" style="flex:2;min-width:240px">
+          <div class="label">Vendedor(es) variável(is) <span style="font-weight:400;color:#aaa">— fixos entram sempre, sem precisar marcar</span></div>
+          <div id="p-vend-box"></div>
         </div>
-        <div style="padding-bottom:2px">
+        <div style="padding-bottom:2px;padding-top:22px">
           <div class="check-row">
             <input type="checkbox" id="p-meia"/>
             <label for="p-meia">Metade da comissão (desconto especial)</label>
           </div>
         </div>
-        <button class="btn btn-primary" style="white-space:nowrap" onclick="addPed()">+ Lançar pedido</button>
+        <button class="btn btn-primary" style="white-space:nowrap;margin-top:22px" onclick="addPed()">+ Lançar pedido</button>
       </div>
     </div>
 
@@ -512,8 +525,13 @@ textarea{font-family:inherit}
         <select id="e-f-status" onchange="renderEntregas()" style="width:auto;padding:6px 10px;font-size:13px">
           <option value="">Todos os status</option>
           <option value="aguardando">⏳ Aguardando</option>
-          <option value="em_rota">🚚 Em rota</option>
+          <option value="em_rota" selected>🚚 Em rota</option>
           <option value="entregue">✅ Entregue</option>
+        </select>
+        <select id="e-f-com" onchange="renderEntregas()" style="width:auto;padding:6px 10px;font-size:13px">
+          <option value="">Comissão: todas</option>
+          <option value="aguardando">⏳ Aguardando pagar</option>
+          <option value="comissao_paga">💰 Comissão paga</option>
         </select>
         <button class="btn btn-primary" onclick="pdfEntregas()">📄 Gerar PDF</button>
       </div>
@@ -524,6 +542,7 @@ textarea{font-family:inherit}
       <div class="metric" style="border-left:3px solid #d0d4d8"><div class="val" id="ec-ag" style="color:#666">—</div><div class="lbl">⏳ Aguardando</div></div>
       <div class="metric" style="border-left:3px solid #EF9F27"><div class="val" id="ec-rt" style="color:#BA7517">—</div><div class="lbl">🚚 Em rota</div></div>
       <div class="metric" style="border-left:3px solid #63b922"><div class="val" id="ec-en" style="color:#3B6D11">—</div><div class="lbl">✅ Entregue</div></div>
+      <div class="metric" style="border-left:3px solid #EF9F27"><div class="val" id="ec-comag" style="color:#854F0B">—</div><div class="lbl">💰 Comissão a pagar</div></div>
     </div>
 
     <div style="position:relative;margin-bottom:10px">
@@ -683,7 +702,7 @@ textarea{font-family:inherit}
 
     <div class="row" style="margin-bottom:0;margin-top:10px">
       <div class="field"><div class="label">Valor (R$)</div><input type="number" id="ep-val" step="0.01" min="0" placeholder="Ex: 5000"/></div>
-      <div class="field"><div class="label">Vendedor</div><select id="ep-vend"><option value="">Só fixos</option></select></div>
+      <div class="field"><div class="label">Vendedor(es) variável(is)</div><div id="ep-vend-box"></div></div>
     </div>
 
     <div class="check-row" style="margin-top:12px">
@@ -702,6 +721,42 @@ textarea{font-family:inherit}
         O pedido é <strong>arquivado</strong> (sai da contabilidade anual, das entregas e do faturamento do mês original) e um <strong>estorno de comissão</strong> é lançado no <strong>mês atual</strong> para o(s) vendedor(es). O valor de vendas do mês não muda — apenas a comissão. Pode ser desfeito em "🗄️ Cancelados".
       </p>
       <button class="btn btn-danger" style="width:100%;font-size:14px;padding:11px" onclick="cancelarPedido()">🚫 Cancelar este pedido (estorno)</button>
+    </div>
+  </div>
+
+
+  <!-- PAINEL DE DETALHES — COMISSÃO PAGA -->
+  <div id="cp-overlay" onclick="fecharComPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;"></div>
+  <div id="cp-panel" style="
+    display:none;position:fixed;bottom:0;left:0;right:0;z-index:301;
+    background:#fff;border-radius:16px 16px 0 0;
+    padding:24px 20px 32px;
+    box-shadow:0 -6px 32px rgba(0,0,0,.18);
+    transform:translateY(100%);transition:transform .3s ease;
+  ">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div>
+        <div style="font-size:17px;font-weight:700;color:#003366">💰 Comissão paga</div>
+        <div id="cp-panel-sub" style="font-size:12px;color:#888;margin-top:2px"></div>
+      </div>
+      <button onclick="fecharComPanel()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;padding:4px 8px;border-radius:6px">✕</button>
+    </div>
+    <input type="hidden" id="cp-gid"/>
+    <div class="row" style="margin-bottom:0">
+      <div class="field"><div class="label">Data do pagamento</div><input type="date" id="cp-data"/></div>
+      <div class="field"><div class="label">Forma de pagamento</div>
+        <select id="cp-forma">
+          <option>Pix</option><option>Dinheiro</option><option>Transferência</option>
+          <option>Cartão</option><option>Descontado em vendas</option><option>Outro</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;margin-bottom:0">
+      <div class="field"><div class="label">Observação (opcional)</div><input type="text" id="cp-obs" placeholder="Ex: pago junto com o adiantamento de junho"/></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button class="btn btn-primary" style="flex:1;font-size:15px;padding:12px" onclick="salvarComPanel()">✅ Confirmar pagamento</button>
+      <button class="btn" style="flex:1;font-size:15px;padding:12px" onclick="fecharComPanel()">Cancelar</button>
     </div>
   </div>
 
@@ -753,6 +808,9 @@ const HEXCORES=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75'];
 let vs=[],ps=[],ads=[],prods=[],anus=[],sts={},bonus=[],transfs=[],ta=null;
 let pgtos={};   // condição de pagamento aprovada por pedido (gid -> texto)
 let pends={};   // alterações pendentes de aprovação vindas do painel de entregas
+let comsts={};  // status de pagamento de COMISSÃO por pedido (gid -> 'aguardando'|'comissao_paga')
+let compag={};  // detalhes do pagamento da comissão (gid -> {data, forma, obs})
+let comMigrado=false; // trava para a migração automática (ver migrarComissoesPagas)
 
 // ===== FIREBASE CONFIG =====
 const firebaseConfig = {
@@ -769,6 +827,9 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const REF = db.ref('dados');
+// Aprovações ficam FORA do nó 'dados' de propósito: qualquer página antiga
+// que ainda salve com set() no nó inteiro não consegue apagá-las.
+const APRV = db.ref('aprovacoes');
 
 // Status de conexão
 let fbOnline = false;
@@ -789,7 +850,7 @@ function salvar() {
   // update() em vez de set(): grava só as chaves listadas e PRESERVA o nó
   // 'pends' (aprovações do painel de entregas), que é gerenciado por
   // operações child() dos dois lados — evita sobrescrever dados de terceiros.
-  const dados = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos};
+  const dados = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos, comsts, compag, comMigrado};
   REF.update(dados)
     .then(() => {
       const si = document.getElementById('save-info');
@@ -802,7 +863,7 @@ function salvar() {
       console.error('Erro ao salvar:', e);
       // fallback localStorage (backup completo, sem eval)
       try {
-        const mapa = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos};
+        const mapa = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos, comsts, compag};
         Object.keys(mapa).forEach(k => localStorage.setItem('an_'+k, JSON.stringify(mapa[k])));
       } catch(_) {}
       const si = document.getElementById('save-info');
@@ -831,7 +892,9 @@ function carregar() {
         bonus = d.bonus || [];
         transfs = dedupTransfs(d.transfs || []);
         pgtos = d.pgtos || {};
-        pends = d.pends || {};
+        comsts = d.comsts || {};
+        compag = d.compag || {};
+        comMigrado = !!d.comMigrado;
       } else {
         // Tenta recuperar do localStorage se Firebase estiver vazio
         try {
@@ -839,6 +902,7 @@ function carregar() {
           vs = ler('vs', vs); ps = ler('ps', ps); ads = ler('ads', ads);
           prods = ler('prods', prods); anus = ler('anus', anus); sts = ler('sts', sts);
           bonus = ler('bonus', bonus); transfs = ler('transfs', transfs); pgtos = ler('pgtos', pgtos);
+          comsts = ler('comsts', comsts); compag = ler('compag', compag);
           // Se tinha dados locais, migra pro Firebase
           if (vs.length || ps.length) salvar();
         } catch(_) {}
@@ -847,6 +911,8 @@ function carregar() {
       document.querySelector('.container').style.pointerEvents = 'auto';
       // Virada automática de saldo dos meses encerrados (antes de renderizar)
       autoTransferirSaldos();
+      // Migração única: pedidos que já estavam 'entregue' entram como comissão paga
+      migrarComissoesPagas();
       // Renderiza tudo após carregar
       renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
     })
@@ -858,6 +924,7 @@ function carregar() {
         vs = ler('vs', vs); ps = ler('ps', ps); ads = ler('ads', ads);
         prods = ler('prods', prods); anus = ler('anus', anus); sts = ler('sts', sts);
         bonus = ler('bonus', bonus); transfs = ler('transfs', transfs); pgtos = ler('pgtos', pgtos);
+        comsts = ler('comsts', comsts); compag = ler('compag', compag);
       } catch(_) {}
       document.querySelector('.container').style.opacity = '1';
       document.querySelector('.container').style.pointerEvents = 'auto';
@@ -877,7 +944,9 @@ function carregar() {
     bonus = d.bonus || [];
     transfs = dedupTransfs(d.transfs || []);
     pgtos = d.pgtos || {};
-    pends = d.pends || {};
+    comsts = d.comsts || {};
+    compag = d.compag || {};
+    comMigrado = !!d.comMigrado;
     // Se o usuário está digitando em algum campo (ex.: pagamento na tabela de
     // entregas ou busca), adia o re-render dessa área para não perder o texto.
     const ae = document.activeElement;
@@ -887,6 +956,12 @@ function carregar() {
       if (document.getElementById('page-entregas').classList.contains('active')) renderEntregas();
       if (document.getElementById('page-pedidos').classList.contains('active')) renderPedidos();
     }
+  });
+
+  // Escuta as aprovações pendentes em tempo real (nó próprio, fora de 'dados')
+  APRV.on('value', snap => {
+    pends = snap.val() || {};
+    atualizarBadgePend(); // atualiza badge + card de aprovações
   });
 }
 
@@ -1081,20 +1156,29 @@ function copiarLink(id,btn){
    ou 'todos_var' = todos os variáveis (uso interno/legado). */
 function fixos(){return vs.filter(v=>(v.tipo||'fixo')==='fixo');}
 function variaveis(){return vs.filter(v=>(v.tipo||'fixo')==='variavel');}
-function alvosComissao(vidSel){
+/* Aceita um array de ids de vendedores VARIÁVEIS selecionados (0, 1 ou vários —
+   é o que resolve o caso de venda duplicada/compartilhada entre dois vendedores).
+   Fixos entram sempre, automaticamente. Mantém compatibilidade com chamadas
+   antigas que passavam uma string única ou 'todos'/'todos_var' (dados legados). */
+function alvosComissao(vidsSel){
   const fx=fixos();
-  if(vidSel==='todos'||vidSel==='todos_var'){
-    // legado: credita todos (fixos + variáveis)
-    return vs.slice();
+  let ids;
+  if(Array.isArray(vidsSel)){
+    ids=vidsSel;
+  }else if(vidsSel==='todos'||vidsSel==='todos_var'){
+    return vs.slice(); // legado: credita todos
+  }else if(vidsSel==null||vidsSel===''){
+    ids=[];
+  }else{
+    ids=[vidsSel];
   }
-  if(vidSel==null||vidSel===''){
-    return fx.slice(); // só os fixos
-  }
-  const vv=vs.find(v=>String(v.id)===String(vidSel));
-  if(!vv)return fx.slice();
-  if((vv.tipo||'fixo')==='fixo')return fx.slice(); // escolheu um fixo: fixos já cobrem
-  // variável escolhido: fixos + ele (sem duplicar)
-  return [...fx, vv];
+  const map={};
+  fx.forEach(v=>map[v.id]=v);
+  ids.forEach(id=>{
+    const v=vs.find(x=>String(x.id)===String(id));
+    if(v&&(v.tipo||'fixo')==='variavel')map[v.id]=v; // dedup automático via chave
+  });
+  return Object.values(map);
 }
 function pushVenda(gid,base,alvos){
   alvos.forEach((v,i)=>{
@@ -1106,12 +1190,32 @@ function pushVenda(gid,base,alvos){
   });
 }
 
-function renderSel(){
+/* Lê os ids marcados numa caixa de checkboxes de vendedor (multi-seleção) */
+function lerVendSelecionados(boxId){
+  const box=document.getElementById(boxId);if(!box)return [];
+  return [...box.querySelectorAll('input[type=checkbox]:checked')].map(el=>el.value);
+}
+/* Monta o HTML da caixa: nota dos fixos + chips marcáveis dos variáveis */
+function htmlVendBox(vidsAtuais){
   const fx=fixos(),vr=variaveis();
-  const fixLbl=fx.length?('Só fixos: '+fx.map(v=>v.nome).join(', ')):'Nenhum fixo cadastrado';
-  let h='<option value="">📌 '+fixLbl+'</option>';
-  vr.forEach(v=>{h+='<option value="'+v.id+'">🎯 '+v.nome+' ('+v.perc+'%) + fixos</option>';});
-  document.getElementById('p-vend').innerHTML=h;
+  const fixLbl=fx.length?('📌 Fixos (sempre): '+fx.map(v=>v.nome).join(', ')):'📌 Nenhum vendedor fixo cadastrado';
+  let h='<div class="vend-fixos-note">'+fixLbl+'</div>';
+  if(vr.length){
+    h+='<div class="vend-check-grid">';
+    vr.forEach(v=>{
+      const checked=vidsAtuais&&vidsAtuais.map(String).includes(String(v.id));
+      h+='<label class="vend-chip'+(checked?' checked':'')+'">'
+        +'<input type="checkbox" value="'+v.id+'"'+(checked?' checked':'')+' onchange="this.parentElement.classList.toggle(\'checked\',this.checked)"/>'
+        +'🎯 '+v.nome+' ('+v.perc+'%)</label>';
+    });
+    h+='</div>';
+  }else{
+    h+='<p style="font-size:12px;color:#aaa;margin-top:2px">Nenhum vendedor variável cadastrado.</p>';
+  }
+  return h;
+}
+function renderSel(){
+  document.getElementById('p-vend-box').innerHTML=htmlVendBox();
   let h2='<option value="">Selecione...</option>';
   vs.forEach(v=>{h2+='<option value="'+v.id+'">'+v.nome+'</option>';});
   document.getElementById('a-vend').innerHTML=h2;
@@ -1251,11 +1355,11 @@ function addPed(){
   const uf=document.getElementById('p-uf').value.trim();
   const val=parseFloat(document.getElementById('p-val').value);
   const meia=document.getElementById('p-meia').checked;
-  const vidSel=document.getElementById('p-vend').value;
+  const vidsSel=lerVendSelecionados('p-vend-box');
   if(!num||!cid||!uf||isNaN(val)||val<=0){alert('Preencha número, cidade, UF e valor.');return;}
   const mes=refMes(),ano=refAno();
   const gid=Date.now();
-  const alvos=alvosComissao(vidSel);
+  const alvos=alvosComissao(vidsSel);
   if(!alvos.length){alert('Cadastre pelo menos um vendedor (fixo ou variável) antes de lançar pedidos.');return;}
   pushVenda(gid,{num,prod,cid,uf,val,mes,ano,meia},alvos);
   lp();salvar();renderV();renderRel();renderF();if(document.getElementById('page-pedidos').classList.contains('active'))renderPedidos();
@@ -1285,17 +1389,12 @@ function editarPedido(gid){
   prods.forEach(p=>{hp+=`<option value="${p.id}"${p.id===ref.prod?' selected':''}>${p.nome}</option>`;});
   document.getElementById('ep-prod').innerHTML=hp;
 
-  // Preenche select de vendedor (mesmo modelo: fixos automáticos + cada variável)
+  // Preenche caixa de vendedores (mesmo modelo: fixos automáticos + marca cada
+  // variável que já estiver vinculado a esta venda — permite ver/editar casos
+  // de venda duplicada entre dois ou mais vendedores).
   const gidRegs=ps.filter(p=>p.gid===gid&&p.tipo!=='estorno');
-  const fx=fixos(),vr=variaveis();
-  const fixLbl=fx.length?('Só fixos: '+fx.map(v=>v.nome).join(', ')):'Nenhum fixo cadastrado';
-  let hv='<option value="">📌 '+fixLbl+'</option>';
-  vr.forEach(v=>{hv+=`<option value="${v.id}">🎯 ${v.nome} (${v.perc}%) + fixos</option>`;});
-  document.getElementById('ep-vend').innerHTML=hv;
-  // Detecta se há um variável atualmente vinculado a este pedido
   const vidsAtuais=gidRegs.map(p=>p.vid);
-  const varVinc=vr.find(v=>vidsAtuais.includes(v.id));
-  document.getElementById('ep-vend').value=varVinc?String(varVinc.id):'';
+  document.getElementById('ep-vend-box').innerHTML=htmlVendBox(vidsAtuais);
 
   // Abre painel
   document.getElementById('ped-overlay').style.display='block';
@@ -1323,7 +1422,7 @@ function salvarEditPedido(){
   const uf=document.getElementById('ep-uf').value.trim();
   const val=parseFloat(document.getElementById('ep-val').value);
   const meia=document.getElementById('ep-meia').checked;
-  const vidSel=document.getElementById('ep-vend').value;
+  const vidsSel=lerVendSelecionados('ep-vend-box');
 
   if(!num||!cid||!uf||isNaN(val)||val<=0){alert('Preencha número, cidade, UF e valor.');return;}
   if(isNaN(ano)||ano<2020){alert('Ano inválido.');return;}
@@ -1331,7 +1430,7 @@ function salvarEditPedido(){
   // Preserva metadados de integração (origem/cliente) do registro atual
   const antigos=ps.filter(p=>p.gid===gid&&p.tipo!=='estorno');
   const meta=antigos[0]||{};
-  const alvosNovos=alvosComissao(vidSel);
+  const alvosNovos=alvosComissao(vidsSel);
   if(!alvosNovos.length){alert('Nenhum vendedor válido para este pedido.');return;}
 
   // Remove os registros antigos (não-estorno) e recria conforme a seleção.
@@ -1352,6 +1451,7 @@ function lp(){
   document.getElementById('p-prod').value='';
   document.getElementById('p-uf').value='';
   document.getElementById('p-meia').checked=false;
+  document.querySelectorAll('#p-vend-box input[type=checkbox]').forEach(el=>{el.checked=false;el.parentElement.classList.remove('checked');});
 }
 
 /* ========== ADIANTAMENTOS ========== */
@@ -1835,6 +1935,72 @@ function setPg(gid,val){
   salvar();
 }
 
+/* ========== STATUS DE COMISSÃO (independente do status de entrega) ==========
+   'aguardando'      → comissão ainda não foi paga ao vendedor
+   'comissao_paga'   → paga, com detalhes (data, forma, obs) guardados em compag */
+function getComSt(gid){return comsts[String(gid)]||'aguardando';}
+function getComPag(gid){return compag[String(gid)]||null;}
+function onComSelect(gid,val){
+  if(val==='comissao_paga'){abrirComPanel(gid);}
+  else{
+    comsts[String(gid)]='aguardando';
+    delete compag[String(gid)];
+    salvar();renderEntregas();
+  }
+}
+function abrirComPanel(gid){
+  const ref=ps.find(p=>p.gid===gid);if(!ref)return;
+  document.getElementById('cp-gid').value=gid;
+  document.getElementById('cp-panel-sub').textContent='Pedido Nº '+ref.num+' — '+ref.cid+' / '+ref.uf;
+  const info=getComPag(gid);
+  const hj=new Date();
+  document.getElementById('cp-data').value=(info&&info.data)?info.data:hj.toISOString().substring(0,10);
+  document.getElementById('cp-forma').value=(info&&info.forma)?info.forma:'Pix';
+  document.getElementById('cp-obs').value=(info&&info.obs)?info.obs:'';
+  document.getElementById('cp-overlay').style.display='block';
+  const panel=document.getElementById('cp-panel');
+  panel.style.display='block';
+  requestAnimationFrame(()=>panel.style.transform='translateY(0)');
+}
+function fecharComPanel(){
+  const panel=document.getElementById('cp-panel');
+  panel.style.transform='translateY(100%)';
+  setTimeout(()=>{panel.style.display='none';document.getElementById('cp-overlay').style.display='none';},300);
+  // Se cancelou sem confirmar e o select já tinha ido pra "paga" visualmente, o
+  // próximo renderEntregas() volta a mostrar o valor real salvo (getComSt).
+  renderEntregas();
+}
+function salvarComPanel(){
+  const gid=parseInt(document.getElementById('cp-gid').value);
+  const data=document.getElementById('cp-data').value;
+  const forma=document.getElementById('cp-forma').value;
+  const obs=document.getElementById('cp-obs').value.trim();
+  comsts[String(gid)]='comissao_paga';
+  compag[String(gid)]={data,forma,obs};
+  salvar();
+  fecharComPanel();
+  renderEntregas();
+}
+/* ===== MIGRAÇÃO ÚNICA =====
+   Roda só uma vez (trava comMigrado, persistida no Firebase): todo pedido que
+   JÁ estava com status de entrega 'entregue' antes desta função existir passa
+   a contar como comissão paga automaticamente. Pedidos que forem marcados
+   como entregues DAQUI PRA FRENTE continuam nascendo como "aguardando
+   receber comissão" — é só o histórico que é adiantado. */
+function migrarComissoesPagas(){
+  if(comMigrado)return;
+  let mudou=false;
+  uniquePedidos(ps).forEach(p=>{
+    if(getSt(p.gid)==='entregue'&&!comsts[String(p.gid)]){
+      comsts[String(p.gid)]='comissao_paga';
+      mudou=true;
+    }
+  });
+  comMigrado=true;
+  salvar(); // grava o flag mesmo se `mudou` for false, pra não rodar de novo
+  if(mudou)console.log('💰 Migração: pedidos já entregues marcados como comissão paga.');
+}
+
 /* ========== APROVAÇÕES (painel de entregas da colaboradora) ==========
    As propostas ficam em dados/pends/{p<gid>_<campo>} — uma por campo por
    pedido (a mais recente substitui a anterior). Só entram em vigor (sts/pgtos)
@@ -1842,7 +2008,7 @@ function setPg(gid,val){
 function pendKey(gid,campo){return 'p'+gid+'_'+campo;}
 function removerPendDe(gid,campo){
   const k=pendKey(gid,campo);
-  if(pends[k]){delete pends[k];REF.child('pends/'+k).remove().catch(()=>{});atualizarBadgePend();}
+  if(pends[k]){delete pends[k];APRV.child(k).remove().catch(()=>{});atualizarBadgePend();}
 }
 function listaPends(){
   return Object.keys(pends).map(k=>Object.assign({key:k},pends[k]))
@@ -1877,7 +2043,8 @@ function renderAprovacoes(){
       +'<div style="flex:1;min-width:200px"><strong>Pedido Nº '+(p.num||'?')+'</strong>'
       +(p.cid?' <span style="color:#888;font-size:12px">— '+p.cid+(p.uf?'/'+p.uf:'')+'</span>':'')
       +'<div style="font-size:13px;margin-top:3px">'+desc+'</div>'
-      +'<div style="font-size:11px;color:#aaa;margin-top:2px">'+(p.quem||'Painel de entregas')+(dt?' • '+dt:'')+'</div></div>'
+      +(p.desc?'<div style="font-size:12px;color:#555;margin-top:4px;background:#f7f4ec;border-left:2px solid #EF9F27;border-radius:0 6px 6px 0;padding:5px 9px">📝 '+String(p.desc).replace(/</g,'&lt;')+'</div>':'')
+      +'<div style="font-size:11px;color:#aaa;margin-top:3px">'+(p.quem||'Painel de entregas')+(dt?' • '+dt:'')+'</div></div>'
       +'<div style="display:flex;gap:6px;flex-shrink:0">'
       +'<button class="btn inline btn-aprovar" onclick="aprovarPend(\''+p.key+'\')">✅ Aprovar</button>'
       +'<button class="btn inline btn-recusar" onclick="recusarPend(\''+p.key+'\')">✕ Recusar</button>'
@@ -1893,7 +2060,7 @@ function aprovarPend(key,silencioso){
     if(v)pgtos[String(p.gid)]=v;else delete pgtos[String(p.gid)];
   }
   delete pends[key];
-  REF.child('pends/'+key).remove().catch(()=>{});
+  APRV.child(key).remove().catch(()=>{});
   if(!silencioso){
     salvar();atualizarBadgePend();
     if(document.getElementById('page-entregas').classList.contains('active'))renderEntregas();
@@ -1903,7 +2070,7 @@ function aprovarPend(key,silencioso){
 function recusarPend(key){
   if(!pends[key])return;
   delete pends[key];
-  REF.child('pends/'+key).remove().catch(()=>{});
+  APRV.child(key).remove().catch(()=>{});
   atualizarBadgePend();
 }
 function aprovarTodas(){
@@ -1936,10 +2103,12 @@ function renderEntregas(){
   const nAg=uniqFiltrado.filter(p=>getSt(p.gid)==='aguardando').length;
   const nRt=uniqFiltrado.filter(p=>getSt(p.gid)==='em_rota').length;
   const nEn=uniqFiltrado.filter(p=>getSt(p.gid)==='entregue').length;
+  const nComAg=uniqFiltrado.filter(p=>getComSt(p.gid)==='aguardando').length;
   document.getElementById('ec-total').querySelector('.val').textContent=tot;
   document.getElementById('ec-ag').textContent=nAg;
   document.getElementById('ec-rt').textContent=nRt;
   document.getElementById('ec-en').textContent=nEn;
+  document.getElementById('ec-comag').textContent=nComAg;
 
   const el=document.getElementById('tabela-entregas');
   const busca=(document.getElementById('ent-busca')?document.getElementById('ent-busca').value:'').trim().toLowerCase();
@@ -1948,6 +2117,8 @@ function renderEntregas(){
 
   let lista=uniqFiltrado;
   if(fSt)lista=lista.filter(p=>getSt(p.gid)===fSt);
+  const fCom=document.getElementById('e-f-com').value;
+  if(fCom)lista=lista.filter(p=>getComSt(p.gid)===fCom);
   if(busca)lista=lista.filter(p=>
     String(p.num).includes(busca)||
     (p.cid||'').toLowerCase().includes(busca)
@@ -1970,7 +2141,7 @@ function renderEntregas(){
   let h='<table class="ent-table"><thead><tr>'
     +'<th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th>UF</th>'
     +'<th style="text-align:right">Valor</th><th style="text-align:center">Status</th>'
-    +'<th>Pagamento</th>'
+    +'<th>Pagamento</th><th style="text-align:center">Comissão</th>'
     +'</tr></thead><tbody>';
 
   let lastSt='';
@@ -1985,7 +2156,7 @@ function renderEntregas(){
       const stN=st==='aguardando'?nAg:st==='em_rota'?nRt:nEn;
       const bgCl=st==='aguardando'?'#f0f2f5':st==='em_rota'?'#FFF4E0':'#EAF3DE';
       const txCl=st==='aguardando'?'#555':st==='em_rota'?'#854F0B':'#3B6D11';
-      h+='<tr><td colspan="8" style="background:'+bgCl+';color:'+txCl+';font-weight:700;font-size:12px;padding:8px 14px;letter-spacing:0.3px">'
+      h+='<tr><td colspan="9" style="background:'+bgCl+';color:'+txCl+';font-weight:700;font-size:12px;padding:8px 14px;letter-spacing:0.3px">'
         +STATUS_LABEL[st].toUpperCase()+' — '+stN+' pedido'+(stN!==1?'s':'')+' — '+fmt(stVal)+'</td></tr>';
       lastSt=st;
     }
@@ -2003,13 +2174,23 @@ function renderEntregas(){
       +'</select></td>';
     const pg=getPg(p.gid).replace(/"/g,'&quot;');
     h+='<td><input type="text" class="pg-input" value="'+pg+'" placeholder="Ex: 50% entrada + 50%"'
-      +' onchange="setPg('+p.gid+',this.value)"/></td></tr>';
+      +' onchange="setPg('+p.gid+',this.value)"/></td>';
+    const cst=getComSt(p.gid);
+    const cinfo=getComPag(p.gid);
+    h+='<td style="text-align:center">'
+      +'<select class="com-sel '+cst+'" onchange="onComSelect('+p.gid+',this.value)">'
+      +'<option value="aguardando"'+(cst==='aguardando'?' selected':'')+'>⏳ Aguardando</option>'
+      +'<option value="comissao_paga"'+(cst==='comissao_paga'?' selected':'')+'>💰 Paga</option>'
+      +'</select>'
+      +(cst==='comissao_paga'&&cinfo?'<div class="com-info" onclick="abrirComPanel('+p.gid+')" title="Clique para editar">'
+        +(cinfo.data?new Date(cinfo.data+'T00:00').toLocaleDateString('pt-BR'):'')+(cinfo.forma?' • '+cinfo.forma:'')+'</div>':'')
+      +'</td></tr>';
   });
 
   // totais gerais
   const tvTotal=lista.reduce((s,p)=>s+p.val,0);
   h+='<tr style="background:#003366"><td colspan="5" style="color:#fff;font-weight:700;font-size:12px;letter-spacing:0.3px">TOTAL'+(fSt?' — '+STATUS_LABEL[fSt]:'')+'</td>'
-    +'<td style="text-align:right;color:#fff;font-weight:700">'+fmt(tvTotal)+'</td><td></td><td></td></tr>';
+    +'<td style="text-align:right;color:#fff;font-weight:700">'+fmt(tvTotal)+'</td><td></td><td></td><td></td></tr>';
   el.innerHTML=h+'</tbody></table>';
   applyCardLabels('tabela-entregas');
 }
@@ -2086,7 +2267,7 @@ function pdfEntregas(){
 
 /* ========== BACKUP ========== */
 function exportarBackup(){
-  const d={vs,ps,ads,prods,anus,sts,bonus,transfs,pgtos,data:new Date().toISOString()};
+  const d={vs,ps,ads,prods,anus,sts,bonus,transfs,pgtos,comsts,compag,data:new Date().toISOString()};
   const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);
   a.download='backup_aco_naval_'+new Date().toISOString().split('T')[0]+'.json';a.click();
@@ -2100,6 +2281,7 @@ function importarBackup(e){
     vs=d.vs||d.vendedores||[];ps=normalizarPedidos(d.ps||d.pedidos);
     ads=d.ads||d.adiantamentos||[];prods=d.prods||d.produtos||[];
     anus=d.anus||d.anuncios||[];sts=d.sts||{};bonus=d.bonus||[];transfs=d.transfs||[];pgtos=d.pgtos||{};
+    comsts=d.comsts||{};compag=d.compag||{};
     salvar();renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();
     alert('Backup importado!');
   }catch(err){alert('Erro: '+err.message);}};
@@ -2108,10 +2290,11 @@ function importarBackup(e){
 function limparTudo(){
   if(!confirm('Apagar TODOS os dados?'))return;
   if(!confirm('Confirma? Não pode ser desfeito e apaga também da NUVEM (todos os dispositivos).'))return;
-  vs=[];ps=[];ads=[];prods=[];anus=[];sts={};bonus=[];transfs=[];pgtos={};pends={};ta=null;
-  ['vs','ps','ads','prods','anus','sts','bonus','transfs','pgtos'].forEach(k=>localStorage.removeItem('an_'+k));
+  vs=[];ps=[];ads=[];prods=[];anus=[];sts={};bonus=[];transfs=[];pgtos={};pends={};comsts={};compag={};comMigrado=false;ta=null;
+  ['vs','ps','ads','prods','anus','sts','bonus','transfs','pgtos','comsts','compag'].forEach(k=>localStorage.removeItem('an_'+k));
   // Antes só limpava localmente e os dados voltavam da nuvem ao recarregar.
   REF.remove().catch(e=>console.error('Erro ao limpar nuvem:',e));
+  APRV.remove().catch(()=>{});
   renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();atualizarBadgePend();
   alert('Dados apagados (local e nuvem).');
 }
