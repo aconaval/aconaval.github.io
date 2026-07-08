@@ -74,25 +74,12 @@ body{background:linear-gradient(160deg,#f2f5f9 0%,#e9eef5 100%);color:#222;min-h
 .step.on.rt{background:#FAEEDA;color:#854F0B}
 .step.on.en{background:#EAF3DE;color:#3B6D11}
 
-/* Rascunho de status aguardando confirmação */
-.ped.draft{border-color:#185FA5;box-shadow:0 0 0 2px rgba(24,95,165,.14)}
-.draft-box{background:#F0F6FF;border:1px solid #B9D5F0;border-radius:10px;padding:10px 12px;margin-bottom:10px;animation:ped-in .2s ease}
-.draft-t{font-size:12px;color:#0C447C;margin-bottom:7px}
-.draft-box textarea{width:100%;font-size:13px;padding:8px 10px;border:1px solid #B9D5F0;border-radius:8px;background:#fff;resize:vertical;font-family:inherit}
-.draft-box textarea:focus{outline:none;border-color:#185FA5;box-shadow:0 0 0 2px rgba(24,95,165,.14)}
-.draft-btns{display:flex;gap:8px;margin-top:8px}
-.btn-conf{flex:1;padding:9px 12px;border-radius:8px;border:1px solid #3B6D11;background:#3B6D11;color:#fff;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .1s}
-.btn-conf:hover{background:#2E5A0C}
-.btn-conf:active{transform:scale(.97)}
-.btn-canc{padding:9px 14px;border-radius:8px;border:1px solid #d0d4d8;background:#fff;color:#666;font-size:13px;cursor:pointer;transition:background .15s}
-.btn-canc:hover{background:#f5f7fa}
-
-.pg-row{display:flex;gap:6px;align-items:center}
-.pg-row input{flex:1;font-size:13px;padding:8px 10px;border:1px solid #e0e4e8;border-radius:8px;background:#fafbfc;transition:border-color .15s,box-shadow .15s}
-.pg-row input:focus{outline:none;border-color:#185FA5;background:#fff;box-shadow:0 0 0 2px rgba(24,95,165,.12)}
-.pg-ok{font-size:14px;color:#3B6D11;opacity:0;transition:opacity .3s;flex-shrink:0}
-.pg-ok.show{opacity:1}
-.pg-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#999;margin-bottom:4px}
+/* Alteração de status enviada, aguardando aprovação do administrador */
+.ped.pending{border-color:#EF9F27;box-shadow:0 0 0 2px rgba(239,159,39,.14)}
+.nota-box{background:#FFFBF3;border:1px solid #F0DBA8;border-radius:10px;padding:10px 12px;margin-top:2px;margin-bottom:10px;animation:ped-in .2s ease}
+.nota-tag{font-size:11px;color:#854F0B;font-weight:600;margin-bottom:7px}
+.nota-box textarea{width:100%;font-size:13px;padding:8px 10px;border:1px solid #F0DBA8;border-radius:8px;background:#fff;resize:vertical;font-family:inherit}
+.nota-box textarea:focus{outline:none;border-color:#EF9F27;box-shadow:0 0 0 2px rgba(239,159,39,.14)}
 
 .empty{color:#999;font-size:13px;text-align:center;padding:40px 0;font-style:italic}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#3B6D11;color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.2);transition:transform .3s ease;z-index:300;pointer-events:none;white-space:nowrap}
@@ -160,8 +147,8 @@ const REF = db.ref('dados');
 // Nó próprio para as propostas — fora de 'dados', imune a sobrescritas
 const APRV = db.ref('aprovacoes');
 
-let ps=[],prods=[],sts={},pgtos={},pends={};
-let drafts={};   // rascunhos de status ainda não confirmados (gid -> valor)
+let ps=[],prods=[],sts={},pends={};
+let notas={};    // texto de descrição digitado por gid (mantém o que ela escreveu entre re-renders)
 let carregou=false;
 
 // Conexão
@@ -176,7 +163,7 @@ db.ref('.info/connected').on('value',snap=>{
 (function(){
   const h=new Date().getHours();
   const s=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
-  document.getElementById('saudacao').textContent=s+'! Painel de entregas e pagamentos';
+  document.getElementById('saudacao').textContent=s+'! Painel de entregas';
 })();
 
 /* Normalização leve (mesma regra do sistema de gestão) */
@@ -198,68 +185,67 @@ function uniquePedidos(){
 const fmt=v=>'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 
-/* ===== VALORES EFETIVOS (proposta pendente prevalece na visão dela) =====
-   Assim que ela altera algo, a alteração já aparece aplicada aqui.
-   A confirmação final acontece no painel administrativo. */
+/* ===== STATUS EFETIVO =====
+   Assim que ela clica num status, a proposta é enviada na hora — o clique já
+   vale como seleção, sem precisar de um segundo passo pra confirmar. A visão
+   dela já mostra o novo status aplicado; a aprovação final acontece no painel
+   administrativo. */
 function pendKey(gid,campo){return 'p'+gid+'_'+campo;}
 function stEfetivo(gid){
   const pd=pends[pendKey(gid,'status')];
   return pd?pd.valor:(sts[String(gid)]||'aguardando');
 }
-function pgEfetivo(gid){
-  const pd=pends[pendKey(gid,'pagamento')];
-  return pd?pd.valor:(pgtos[String(gid)]||'');
-}
 
-/* ===== ENVIO DE ALTERAÇÕES =====
+/* ===== ENVIO DE ALTERAÇÃO DE STATUS =====
    Grava apenas em aprovacoes/{chave} — nunca toca no restante do banco.
-   Status: escolhe → descrição opcional → CONFIRMAR. Pagamento: salva ao sair. */
-function enviarAlteracao(gid,campo,valor,desc){
+   Um clique já vale como seleção e já envia. */
+function enviarAlteracao(gid,valor,desc){
   const uniq=uniquePedidos();
   const ped=uniq.find(p=>p.gid===gid)||{};
-  const aprovado=campo==='status'?(sts[String(gid)]||'aguardando'):(pgtos[String(gid)]||'');
-  const k=pendKey(gid,campo);
-  // Se voltou ao valor já aprovado, cancela a proposta pendente
+  const aprovado=sts[String(gid)]||'aguardando';
+  const k=pendKey(gid,'status');
+  // Se voltou ao valor já aprovado (e sem nota), cancela a proposta pendente
   if(String(valor)===String(aprovado)&&!desc){
     delete pends[k];
     APRV.child(k).remove().catch(()=>{});
+    delete notas[gid];
     render();
     return;
   }
-  const obj={gid:gid,campo:campo,valor:valor,anterior:aprovado,
+  const obj={gid:gid,campo:'status',valor:valor,anterior:aprovado,
     num:ped.num||'',cid:ped.cid||'',uf:ped.uf||'',
     quem:'Painel de entregas',em:new Date().toISOString()};
   if(desc)obj.desc=desc;
   pends[k]=obj;
   APRV.child(k).set(obj)
-    .then(()=>toast(campo==='status'?'✓ Status atualizado':'✓ Pagamento salvo'))
+    .then(()=>toast('✓ Status atualizado'))
     .catch(()=>toast('⚠️ Falha ao enviar — verifique a conexão','#854F0B'));
   render();
 }
-/* Toque no status: cria um RASCUNHO no cartão (descrição opcional + confirmar) */
+/* Clique no status: já seleciona e já envia na hora (sem precisar confirmar
+   depois). Se ela clicar de novo no status que já está aprovado, cancela a
+   proposta pendente (volta pro estado atual). */
 function escolherStatus(gid,val){
-  if(val===stEfetivo(gid)&&!drafts[gid]){render();return;}
-  if(val===stEfetivo(gid)){delete drafts[gid];render();return;}
-  const desc=drafts[gid]?drafts[gid].desc:'';
-  drafts[gid]={valor:val,desc:desc||''};
-  render();
-  const ta=document.getElementById('draft-desc-'+gid);
-  if(ta)ta.focus();
+  const aprovado=sts[String(gid)]||'aguardando';
+  if(val===aprovado){
+    enviarAlteracao(gid,val); // cancela pendência, se houver
+    return;
+  }
+  const descAtual=notas[gid]!=null?notas[gid]:((pends[pendKey(gid,'status')]||{}).desc||'');
+  enviarAlteracao(gid,val,descAtual||undefined);
+  const ta=document.getElementById('nota-'+gid);
+  if(ta)setTimeout(()=>ta.focus(),50);
 }
-function guardarDesc(gid,el){if(drafts[gid])drafts[gid].desc=el.value;}
-function cancelarDraft(gid){delete drafts[gid];render();}
-function confirmarStatus(gid){
-  const d=drafts[gid];if(!d)return;
-  const ta=document.getElementById('draft-desc-'+gid);
-  const desc=String((ta?ta.value:d.desc)||'').trim();
-  delete drafts[gid];
-  enviarAlteracao(gid,'status',d.valor,desc||undefined);
-}
-function setPagamento(gid,input){
-  const val=String(input.value||'').trim();
-  enviarAlteracao(gid,'pagamento',val);
-  const ok=input.parentElement.querySelector('.pg-ok');
-  if(ok){ok.classList.add('show');setTimeout(()=>ok.classList.remove('show'),1800);}
+/* Descrição: aparece só enquanto há uma alteração de status pendente, e
+   salva sozinha (sem botão de confirmar) assim que ela para de digitar. */
+function guardarNota(gid,el){
+  notas[gid]=el.value;
+  const k=pendKey(gid,'status');
+  const p=pends[k];
+  if(!p)return; // não há alteração pendente pra anexar a nota
+  const desc=el.value.trim();
+  if(desc)p.desc=desc;else delete p.desc;
+  APRV.child(k).update({desc: desc||null}).catch(()=>{});
 }
 
 let toastTimer=null;
@@ -278,7 +264,6 @@ REF.on('value',snap=>{
   ps=normalizar(d.ps);
   prods=d.prods||[];
   sts=d.sts||{};
-  pgtos=d.pgtos||{};
   carregou=true;
   renderSeguro();
 });
@@ -348,34 +333,26 @@ function render(){
     }
     const pn=prods.find(x=>x.id===p.prod);
     const cl=st==='aguardando'?'ag':st==='em_rota'?'rt':'en';
-    const pg=pgEfetivo(p.gid);
-    const draft=drafts[p.gid];                 // status escolhido, aguardando confirmação
-    const stMostrado=draft?draft.valor:st;     // stepper destaca o rascunho, se houver
-    h+='<div class="ped '+cl+(draft?' draft':'')+'">'
+    const pendente=pends[pendKey(p.gid,'status')]; // há uma alteração aguardando aprovação?
+    h+='<div class="ped '+cl+(pendente?' pending':'')+'">'
       +'<div class="ped-top"><span class="ped-num">Nº '+esc(p.num)+'</span>'
       +'<span><span class="badge-m">'+esc((p.mes||'').substring(0,3))+' '+esc(p.ano)+'</span>'
       +(pn?' <span class="badge-prod">'+esc(pn.nome)+'</span>':'')+'</span></div>'
       +'<div class="ped-loc">📍 '+esc(p.cid)+(p.uf?' / '+esc(p.uf):'')+'</div>'
       +'<div class="ped-val">'+fmt(p.val)+'</div>'
       +'<div class="stepper">'
-      +'<div class="step'+(stMostrado==='aguardando'?' on ag':'')+'" onclick="escolherStatus('+p.gid+',\'aguardando\')">⏳ Aguardando</div>'
-      +'<div class="step'+(stMostrado==='em_rota'?' on rt':'')+'" onclick="escolherStatus('+p.gid+',\'em_rota\')">🚚 Em rota</div>'
-      +'<div class="step'+(stMostrado==='entregue'?' on en':'')+'" onclick="escolherStatus('+p.gid+',\'entregue\')">✅ Entregue</div>'
+      +'<div class="step'+(st==='aguardando'?' on ag':'')+'" onclick="escolherStatus('+p.gid+',\'aguardando\')">⏳ Aguardando</div>'
+      +'<div class="step'+(st==='em_rota'?' on rt':'')+'" onclick="escolherStatus('+p.gid+',\'em_rota\')">🚚 Em rota</div>'
+      +'<div class="step'+(st==='entregue'?' on en':'')+'" onclick="escolherStatus('+p.gid+',\'entregue\')">✅ Entregue</div>'
       +'</div>';
-    if(draft){
-      h+='<div class="draft-box">'
-        +'<div class="draft-t">Mudar para <strong>'+STATUS_LABEL[draft.valor]+'</strong></div>'
-        +'<textarea id="draft-desc-'+p.gid+'" rows="2" oninput="guardarDesc('+p.gid+',this)" placeholder="Descrição (opcional) — ex: saiu com o Fulano, entregar até sexta...">'+esc(draft.desc||'')+'</textarea>'
-        +'<div class="draft-btns">'
-        +'<button class="btn-conf" onclick="confirmarStatus('+p.gid+')">✅ Confirmar</button>'
-        +'<button class="btn-canc" onclick="cancelarDraft('+p.gid+')">Cancelar</button>'
-        +'</div></div>';
+    if(pendente){
+      const nota=notas[p.gid]!=null?notas[p.gid]:(pendente.desc||'');
+      h+='<div class="nota-box">'
+        +'<div class="nota-tag">🕓 Aguardando aprovação do administrador</div>'
+        +'<textarea id="nota-'+p.gid+'" rows="2" oninput="guardarNota('+p.gid+',this)" placeholder="Descrição (opcional) — ex: saiu com o Fulano, entregar até sexta...">'+esc(nota)+'</textarea>'
+        +'</div>';
     }
-    h+='<div class="pg-lbl">Condição de pagamento</div>'
-      +'<div class="pg-row">'
-      +'<input type="text" value="'+esc(pg)+'" placeholder="Ex: 50% entrada + 50% na entrega" onchange="setPagamento('+p.gid+',this)"/>'
-      +'<span class="pg-ok">✔</span>'
-      +'</div></div>';
+    h+='</div>';
   });
   if(aberto)h+='</div>';
   el.innerHTML=h;
@@ -402,14 +379,13 @@ function gerarPDF(){
       const bg=st==='aguardando'?'#f0f2f5':st==='em_rota'?'#FFF4E0':'#EAF3DE';
       const tx=st==='aguardando'?'#555':st==='em_rota'?'#854F0B':'#3B6D11';
       const g=lista.filter(x=>stEfetivo(x.gid)===st);
-      rows+='<tr><td colspan="6" style="background:'+bg+';color:'+tx+';font-weight:700;font-size:11px;padding:7px 10px">'
+      rows+='<tr><td colspan="5" style="background:'+bg+';color:'+tx+';font-weight:700;font-size:11px;padding:7px 10px">'
         +STATUS_LABEL[st].toUpperCase()+' — '+g.length+' pedido'+(g.length!==1?'s':'')+'</td></tr>';
       lastSt=st;
     }
     rows+='<tr><td>'+esc(p.num)+'</td><td>'+esc((p.mes||'').substring(0,3))+'/'+esc(p.ano)+'</td>'
       +'<td>'+(pn?esc(pn.nome):'—')+'</td><td>'+esc(p.cid)+(p.uf?'/'+esc(p.uf):'')+'</td>'
-      +'<td style="text-align:right;font-weight:600">'+fmt(p.val)+'</td>'
-      +'<td style="font-size:11px;color:#555">'+(esc(pgEfetivo(p.gid))||'—')+'</td></tr>';
+      +'<td style="text-align:right;font-weight:600">'+fmt(p.val)+'</td></tr>';
   });
   const hoje=new Date().toLocaleDateString('pt-BR');
   const w=window.open('','_blank');
@@ -426,7 +402,7 @@ function gerarPDF(){
     +'<button class="btnp" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>'
     +'<h1>AÇO NAVAL</h1><h2>Entregas'+(fAno?' — '+fAno:'')+(fSt?' — '+STATUS_LABEL[fSt]:'')+'</h2>'
     +'<div class="sub">Gerado em '+hoje+' &nbsp;|&nbsp; '+lista.length+' pedido'+(lista.length!==1?'s':'')+'</div><hr>'
-    +'<table><thead><tr><th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th style="text-align:right">Valor</th><th>Pagamento</th></tr></thead>'
+    +'<table><thead><tr><th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th style="text-align:right">Valor</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'<div class="rd">Documento gerado automaticamente — Aço Naval</div>'
     +'</body></html>');

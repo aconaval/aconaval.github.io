@@ -112,8 +112,6 @@ textarea{font-family:inherit}
 .status-sel.aguardando{background:#f5f5f5;color:#555;border-color:#d0d4d8}
 .status-sel.em_rota{background:#FAEEDA;color:#854F0B;border-color:#EF9F27}
 .status-sel.entregue{background:#EAF3DE;color:#3B6D11;border-color:#63b922}
-.pg-input{font-size:12px;padding:6px 9px;border:1px solid #e0e4e8;border-radius:6px;width:100%;min-width:130px;background:#fafbfc;transition:border-color .15s,box-shadow .15s}
-.pg-input:focus{outline:none;border-color:#185FA5;background:#fff;box-shadow:0 0 0 2px rgba(24,95,165,.12)}
 .com-sel{border-radius:20px;font-weight:600;font-size:12px;padding:6px 10px;cursor:pointer;transition:box-shadow .15s;border:1px solid}
 .com-sel:focus{box-shadow:0 0 0 3px rgba(24,95,165,.18)}
 .com-sel.aguardando{background:#FFF4E0;color:#854F0B;border-color:#EF9F27}
@@ -343,7 +341,6 @@ textarea{font-family:inherit}
   .card-table td[data-label=""] {justify-content:flex-end}
   /* Entregas — status select full width */
   .card-table .status-sel{width:100%;margin-top:0}
-  .card-table .pg-input{width:100%}
   .card-table .com-sel{width:100%}
   .badge-pend{top:1px;right:calc(50% - 26px)}
   .pend-row{flex-direction:column;align-items:stretch}
@@ -1927,13 +1924,6 @@ function setSt(gid,val){
   removerPendDe(gid,'status'); // alteração direta do admin supera proposta pendente
   salvar();renderEntregas();
 }
-function getPg(gid){return pgtos[String(gid)]||'';}
-function setPg(gid,val){
-  val=String(val||'').trim();
-  if(val)pgtos[String(gid)]=val;else delete pgtos[String(gid)];
-  removerPendDe(gid,'pagamento');
-  salvar();
-}
 
 /* ========== STATUS DE COMISSÃO (independente do status de entrega) ==========
    'aguardando'      → comissão ainda não foi paga ao vendedor
@@ -2141,7 +2131,7 @@ function renderEntregas(){
   let h='<table class="ent-table"><thead><tr>'
     +'<th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th>UF</th>'
     +'<th style="text-align:right">Valor</th><th style="text-align:center">Status</th>'
-    +'<th>Pagamento</th><th style="text-align:center">Comissão</th>'
+    +'<th style="text-align:center">Comissão</th>'
     +'</tr></thead><tbody>';
 
   let lastSt='';
@@ -2156,7 +2146,7 @@ function renderEntregas(){
       const stN=st==='aguardando'?nAg:st==='em_rota'?nRt:nEn;
       const bgCl=st==='aguardando'?'#f0f2f5':st==='em_rota'?'#FFF4E0':'#EAF3DE';
       const txCl=st==='aguardando'?'#555':st==='em_rota'?'#854F0B':'#3B6D11';
-      h+='<tr><td colspan="9" style="background:'+bgCl+';color:'+txCl+';font-weight:700;font-size:12px;padding:8px 14px;letter-spacing:0.3px">'
+      h+='<tr><td colspan="8" style="background:'+bgCl+';color:'+txCl+';font-weight:700;font-size:12px;padding:8px 14px;letter-spacing:0.3px">'
         +STATUS_LABEL[st].toUpperCase()+' — '+stN+' pedido'+(stN!==1?'s':'')+' — '+fmt(stVal)+'</td></tr>';
       lastSt=st;
     }
@@ -2172,9 +2162,6 @@ function renderEntregas(){
       +'<option value="em_rota"'+(st==='em_rota'?' selected':'')+'>🚚 Em rota</option>'
       +'<option value="entregue"'+(st==='entregue'?' selected':'')+'>✅ Entregue</option>'
       +'</select></td>';
-    const pg=getPg(p.gid).replace(/"/g,'&quot;');
-    h+='<td><input type="text" class="pg-input" value="'+pg+'" placeholder="Ex: 50% entrada + 50%"'
-      +' onchange="setPg('+p.gid+',this.value)"/></td>';
     const cst=getComSt(p.gid);
     const cinfo=getComPag(p.gid);
     h+='<td style="text-align:center">'
@@ -2190,7 +2177,7 @@ function renderEntregas(){
   // totais gerais
   const tvTotal=lista.reduce((s,p)=>s+p.val,0);
   h+='<tr style="background:#003366"><td colspan="5" style="color:#fff;font-weight:700;font-size:12px;letter-spacing:0.3px">TOTAL'+(fSt?' — '+STATUS_LABEL[fSt]:'')+'</td>'
-    +'<td style="text-align:right;color:#fff;font-weight:700">'+fmt(tvTotal)+'</td><td></td><td></td><td></td></tr>';
+    +'<td style="text-align:right;color:#fff;font-weight:700">'+fmt(tvTotal)+'</td><td></td><td></td></tr>';
   el.innerHTML=h+'</tbody></table>';
   applyCardLabels('tabela-entregas');
 }
@@ -2224,14 +2211,13 @@ function pdfEntregas(){
       const tx=st==='aguardando'?'#555':st==='em_rota'?'#854F0B':'#3B6D11';
       const stN=st==='aguardando'?nAg:st==='em_rota'?nRt:nEn;
       const stV=st==='aguardando'?vAg:st==='em_rota'?vRt:vEn;
-      rows+='<tr><td colspan="7" style="background:'+bg+';color:'+tx+';font-weight:700;font-size:11px;padding:7px 10px;letter-spacing:0.3px">'
+      rows+='<tr><td colspan="6" style="background:'+bg+';color:'+tx+';font-weight:700;font-size:11px;padding:7px 10px;letter-spacing:0.3px">'
         +STATUS_LABEL[st].toUpperCase()+' — '+stN+' pedido'+(stN!==1?'s':'')+' — '+fmt(stV)+'</td></tr>';
       lastSt=st;
     }
     rows+='<tr><td>'+p.num+'</td><td>'+p.mes.substring(0,3)+'/'+p.ano+'</td>';
     rows+='<td>'+(pn?pn.nome:'—')+'</td><td>'+p.cid+'</td><td>'+p.uf+'</td>';
-    rows+='<td style="text-align:right;font-weight:600">'+fmt(p.val)+'</td>';
-    rows+='<td style="font-size:11px;color:#555">'+(getPg(p.gid)||'—')+'</td></tr>';
+    rows+='<td style="text-align:right;font-weight:600">'+fmt(p.val)+'</td></tr>';
   });
   rows+='<tr style="background:#eef3fa"><td colspan="5" style="font-weight:700">TOTAL</td><td style="text-align:right;font-weight:700">'+fmt(tvTotal)+'</td><td></td></tr>';
 
@@ -2258,7 +2244,7 @@ function pdfEntregas(){
     +'<div class="bx" style="background:#FFF4E0"><div class="v" style="color:#854F0B">'+nRt+'</div><div class="l">🚚 Em rota</div><div style="font-size:11px;color:#888;margin-top:4px">'+fmt(vRt)+'</div></div>'
     +'<div class="bx" style="background:#EAF3DE"><div class="v" style="color:#3B6D11">'+nEn+'</div><div class="l">✅ Entregue</div><div style="font-size:11px;color:#888;margin-top:4px">'+fmt(vEn)+'</div></div>'
     +'</div>'
-    +'<table><thead><tr><th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th>UF</th><th style="text-align:right">Valor</th><th>Pagamento</th></tr></thead>'
+    +'<table><thead><tr><th>Nº</th><th>Mês</th><th>Produto</th><th>Cidade</th><th>UF</th><th style="text-align:right">Valor</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'<div class="rd">Documento gerado automaticamente — Aço Naval</div>'
     +'</body></html>');
