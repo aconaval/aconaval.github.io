@@ -1829,7 +1829,9 @@ async function salvarFotosProjeto(prodId, fotos) {
   // Documento índice — registra quantas fotos existem (merge para não apagar fotosclientes)
   batch.set(
     db.collection('acn_prod_fotos').doc(String(prodId)),
-    { fotoCount: arr.length },
+    // Apaga o array legado 'fotos' — se ficar, carregarFotosProjeto() dá
+    // prioridade a ele no reload e fotos removidas "voltam do além".
+    { fotoCount: arr.length, fotos: firebase.firestore.FieldValue.delete() },
     { merge: true }
   );
   // Cada foto num documento próprio
@@ -1849,9 +1851,13 @@ async function carregarFotosProjeto(prodId) {
     const snap = await db.collection('acn_prod_fotos').doc(String(prodId)).get();
     if (!snap.exists) return [];
     const data = snap.data();
-    // Formato antigo: array direto no documento
-    if (Array.isArray(data.fotos) && data.fotos.length) return data.fotos;
-    // Formato novo: documentos separados
+    // Formato novo (docs separados) tem prioridade: se fotoCount já existe,
+    // ele é a fonte da verdade — o array legado pode estar desatualizado.
+    if (data.fotoCount === undefined) {
+      // Formato antigo: array direto no documento (só se nunca migrou)
+      if (Array.isArray(data.fotos) && data.fotos.length) return data.fotos;
+      return [];
+    }
     const count = data.fotoCount || 0;
     if (!count) return [];
     const snaps = await Promise.all(
@@ -1954,7 +1960,9 @@ async function salvarFotosClientes(prodId, fotos) {
   const batch = db.batch();
   batch.set(
     db.collection('acn_prod_fotos').doc(String(prodId)),
-    { clienteCount: arr.length },
+    // Mesmo motivo: remove o array legado 'fotosclientes' para o formato
+    // novo (docs _c{i}) passar a valer no reload.
+    { clienteCount: arr.length, fotosclientes: firebase.firestore.FieldValue.delete() },
     { merge: true }
   );
   arr.forEach((foto, i) => {
@@ -1972,9 +1980,11 @@ async function carregarFotosClientes(prodId) {
     const snap = await db.collection('acn_prod_fotos').doc(String(prodId)).get();
     if (!snap.exists) return [];
     const data = snap.data();
-    // Formato antigo: array fotosclientes direto
-    if (Array.isArray(data.fotosclientes) && data.fotosclientes.length) return data.fotosclientes;
-    // Formato novo: docs separados
+    // Formato novo tem prioridade quando clienteCount já existe.
+    if (data.clienteCount === undefined) {
+      if (Array.isArray(data.fotosclientes) && data.fotosclientes.length) return data.fotosclientes;
+      return [];
+    }
     const count = data.clienteCount || 0;
     if (!count) return [];
     const snaps = await Promise.all(
