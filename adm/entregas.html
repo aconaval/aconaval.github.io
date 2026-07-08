@@ -74,6 +74,19 @@ body{background:linear-gradient(160deg,#f2f5f9 0%,#e9eef5 100%);color:#222;min-h
 .step.on.rt{background:#FAEEDA;color:#854F0B}
 .step.on.en{background:#EAF3DE;color:#3B6D11}
 
+/* Rascunho de status aguardando confirmação */
+.ped.draft{border-color:#185FA5;box-shadow:0 0 0 2px rgba(24,95,165,.14)}
+.draft-box{background:#F0F6FF;border:1px solid #B9D5F0;border-radius:10px;padding:10px 12px;margin-bottom:10px;animation:ped-in .2s ease}
+.draft-t{font-size:12px;color:#0C447C;margin-bottom:7px}
+.draft-box textarea{width:100%;font-size:13px;padding:8px 10px;border:1px solid #B9D5F0;border-radius:8px;background:#fff;resize:vertical;font-family:inherit}
+.draft-box textarea:focus{outline:none;border-color:#185FA5;box-shadow:0 0 0 2px rgba(24,95,165,.14)}
+.draft-btns{display:flex;gap:8px;margin-top:8px}
+.btn-conf{flex:1;padding:9px 12px;border-radius:8px;border:1px solid #3B6D11;background:#3B6D11;color:#fff;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .1s}
+.btn-conf:hover{background:#2E5A0C}
+.btn-conf:active{transform:scale(.97)}
+.btn-canc{padding:9px 14px;border-radius:8px;border:1px solid #d0d4d8;background:#fff;color:#666;font-size:13px;cursor:pointer;transition:background .15s}
+.btn-canc:hover{background:#f5f7fa}
+
 .pg-row{display:flex;gap:6px;align-items:center}
 .pg-row input{flex:1;font-size:13px;padding:8px 10px;border:1px solid #e0e4e8;border-radius:8px;background:#fafbfc;transition:border-color .15s,box-shadow .15s}
 .pg-row input:focus{outline:none;border-color:#185FA5;background:#fff;box-shadow:0 0 0 2px rgba(24,95,165,.12)}
@@ -144,8 +157,11 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const REF = db.ref('dados');
+// Nó próprio para as propostas — fora de 'dados', imune a sobrescritas
+const APRV = db.ref('aprovacoes');
 
 let ps=[],prods=[],sts={},pgtos={},pends={};
+let drafts={};   // rascunhos de status ainda não confirmados (gid -> valor)
 let carregou=false;
 
 // Conexão
@@ -196,29 +212,49 @@ function pgEfetivo(gid){
 }
 
 /* ===== ENVIO DE ALTERAÇÕES =====
-   Grava apenas em dados/pends/{chave} — nunca sobrescreve o restante do banco. */
-function enviarAlteracao(gid,campo,valor){
+   Grava apenas em aprovacoes/{chave} — nunca toca no restante do banco.
+   Status: escolhe → descrição opcional → CONFIRMAR. Pagamento: salva ao sair. */
+function enviarAlteracao(gid,campo,valor,desc){
   const uniq=uniquePedidos();
   const ped=uniq.find(p=>p.gid===gid)||{};
   const aprovado=campo==='status'?(sts[String(gid)]||'aguardando'):(pgtos[String(gid)]||'');
   const k=pendKey(gid,campo);
   // Se voltou ao valor já aprovado, cancela a proposta pendente
-  if(String(valor)===String(aprovado)){
+  if(String(valor)===String(aprovado)&&!desc){
     delete pends[k];
-    REF.child('pends/'+k).remove().catch(()=>{});
+    APRV.child(k).remove().catch(()=>{});
     render();
     return;
   }
   const obj={gid:gid,campo:campo,valor:valor,anterior:aprovado,
     num:ped.num||'',cid:ped.cid||'',uf:ped.uf||'',
     quem:'Painel de entregas',em:new Date().toISOString()};
+  if(desc)obj.desc=desc;
   pends[k]=obj;
-  REF.child('pends/'+k).set(obj)
+  APRV.child(k).set(obj)
     .then(()=>toast(campo==='status'?'✓ Status atualizado':'✓ Pagamento salvo'))
     .catch(()=>toast('⚠️ Falha ao enviar — verifique a conexão','#854F0B'));
   render();
 }
-function setStatus(gid,val){enviarAlteracao(gid,'status',val);}
+/* Toque no status: cria um RASCUNHO no cartão (descrição opcional + confirmar) */
+function escolherStatus(gid,val){
+  if(val===stEfetivo(gid)&&!drafts[gid]){render();return;}
+  if(val===stEfetivo(gid)){delete drafts[gid];render();return;}
+  const desc=drafts[gid]?drafts[gid].desc:'';
+  drafts[gid]={valor:val,desc:desc||''};
+  render();
+  const ta=document.getElementById('draft-desc-'+gid);
+  if(ta)ta.focus();
+}
+function guardarDesc(gid,el){if(drafts[gid])drafts[gid].desc=el.value;}
+function cancelarDraft(gid){delete drafts[gid];render();}
+function confirmarStatus(gid){
+  const d=drafts[gid];if(!d)return;
+  const ta=document.getElementById('draft-desc-'+gid);
+  const desc=String((ta?ta.value:d.desc)||'').trim();
+  delete drafts[gid];
+  enviarAlteracao(gid,'status',d.valor,desc||undefined);
+}
 function setPagamento(gid,input){
   const val=String(input.value||'').trim();
   enviarAlteracao(gid,'pagamento',val);
@@ -243,13 +279,20 @@ REF.on('value',snap=>{
   prods=d.prods||[];
   sts=d.sts||{};
   pgtos=d.pgtos||{};
-  pends=d.pends||{};
   carregou=true;
-  // Não re-renderiza enquanto ela digita a condição de pagamento
-  const ae=document.activeElement;
-  if(ae&&(ae.tagName==='INPUT')&&ae.id!=='busca'&&ae.closest('#lista'))return;
-  render();
+  renderSeguro();
 });
+APRV.on('value',snap=>{
+  pends=snap.val()||{};
+  renderSeguro();
+});
+/* Não re-renderiza enquanto ela digita (pagamento ou descrição) */
+function renderSeguro(){
+  if(!carregou)return;
+  const ae=document.activeElement;
+  if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA')&&ae.id!=='busca'&&ae.closest('#lista'))return;
+  render();
+}
 
 /* ===== RENDER ===== */
 function render(){
@@ -306,18 +349,29 @@ function render(){
     const pn=prods.find(x=>x.id===p.prod);
     const cl=st==='aguardando'?'ag':st==='em_rota'?'rt':'en';
     const pg=pgEfetivo(p.gid);
-    h+='<div class="ped '+cl+'">'
+    const draft=drafts[p.gid];                 // status escolhido, aguardando confirmação
+    const stMostrado=draft?draft.valor:st;     // stepper destaca o rascunho, se houver
+    h+='<div class="ped '+cl+(draft?' draft':'')+'">'
       +'<div class="ped-top"><span class="ped-num">Nº '+esc(p.num)+'</span>'
       +'<span><span class="badge-m">'+esc((p.mes||'').substring(0,3))+' '+esc(p.ano)+'</span>'
       +(pn?' <span class="badge-prod">'+esc(pn.nome)+'</span>':'')+'</span></div>'
       +'<div class="ped-loc">📍 '+esc(p.cid)+(p.uf?' / '+esc(p.uf):'')+'</div>'
       +'<div class="ped-val">'+fmt(p.val)+'</div>'
       +'<div class="stepper">'
-      +'<div class="step'+(st==='aguardando'?' on ag':'')+'" onclick="setStatus('+p.gid+',\'aguardando\')">⏳ Aguardando</div>'
-      +'<div class="step'+(st==='em_rota'?' on rt':'')+'" onclick="setStatus('+p.gid+',\'em_rota\')">🚚 Em rota</div>'
-      +'<div class="step'+(st==='entregue'?' on en':'')+'" onclick="setStatus('+p.gid+',\'entregue\')">✅ Entregue</div>'
-      +'</div>'
-      +'<div class="pg-lbl">Condição de pagamento</div>'
+      +'<div class="step'+(stMostrado==='aguardando'?' on ag':'')+'" onclick="escolherStatus('+p.gid+',\'aguardando\')">⏳ Aguardando</div>'
+      +'<div class="step'+(stMostrado==='em_rota'?' on rt':'')+'" onclick="escolherStatus('+p.gid+',\'em_rota\')">🚚 Em rota</div>'
+      +'<div class="step'+(stMostrado==='entregue'?' on en':'')+'" onclick="escolherStatus('+p.gid+',\'entregue\')">✅ Entregue</div>'
+      +'</div>';
+    if(draft){
+      h+='<div class="draft-box">'
+        +'<div class="draft-t">Mudar para <strong>'+STATUS_LABEL[draft.valor]+'</strong></div>'
+        +'<textarea id="draft-desc-'+p.gid+'" rows="2" oninput="guardarDesc('+p.gid+',this)" placeholder="Descrição (opcional) — ex: saiu com o Fulano, entregar até sexta...">'+esc(draft.desc||'')+'</textarea>'
+        +'<div class="draft-btns">'
+        +'<button class="btn-conf" onclick="confirmarStatus('+p.gid+')">✅ Confirmar</button>'
+        +'<button class="btn-canc" onclick="cancelarDraft('+p.gid+')">Cancelar</button>'
+        +'</div></div>';
+    }
+    h+='<div class="pg-lbl">Condição de pagamento</div>'
       +'<div class="pg-row">'
       +'<input type="text" value="'+esc(pg)+'" placeholder="Ex: 50% entrada + 50% na entrega" onchange="setPagamento('+p.gid+',this)"/>'
       +'<span class="pg-ok">✔</span>'
