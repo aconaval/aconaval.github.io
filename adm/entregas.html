@@ -167,8 +167,14 @@ db.ref('.info/connected').on('value',snap=>{
 })();
 
 /* Normalização leve (mesma regra do sistema de gestão) */
+function gidDerivado(num,ano){
+  const s='g'+String(num==null?'':num).trim()+'_'+String(ano==null?'':ano).trim();
+  let h=5381;
+  for(let i=0;i<s.length;i++){h=((h*33)^s.charCodeAt(i))>>>0;}
+  return 1000000000+(h%1000000000);
+}
 function normalizar(lista){
-  return (lista||[]).map(p=>{
+  const norm=(lista||[]).map(p=>{
     const q=Object.assign({},p);
     if(typeof q.mes==='number'){q.mes=MS[q.mes-1]||String(q.mes);}
     else if(typeof q.mes==='string'&&/^\d{1,2}$/.test(q.mes.trim())){q.mes=MS[parseInt(q.mes,10)-1]||q.mes;}
@@ -177,6 +183,20 @@ function normalizar(lista){
     if(typeof q.gid==='string'&&/^\d+$/.test(q.gid.trim())){q.gid=parseInt(q.gid,10);}
     return q;
   });
+  /* Correção de gids — IDÊNTICA à do painel administrativo, para os dois
+     painéis chegarem sempre à mesma chave de status por pedido:
+     gid ausente -> derivado do (nº, ano); gid repetido entre pedidos de nº
+     diferente -> o primeiro nº mantém, os demais ganham gid derivado. */
+  norm.forEach(q=>{
+    if(q.gid==null||q.gid===''){q.gid=gidDerivado(q.num,q.ano);}
+  });
+  const donoDoGid={};
+  norm.forEach(q=>{
+    const k=String(q.gid);
+    if(donoDoGid[k]==null){donoDoGid[k]=String(q.num);}
+    else if(donoDoGid[k]!==String(q.num)){q.gid=gidDerivado(q.num,q.ano);}
+  });
+  return norm;
 }
 function uniquePedidos(){
   const visto={};

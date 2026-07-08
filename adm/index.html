@@ -773,8 +773,18 @@ function nomeParaVid(x){
   const v=vs.find(v=>v.nome&&v.nome.toLowerCase().trim()===s);
   return v?v.id:null;
 }
+/* Gid derivado determinístico para pedidos sem gid ou com gid duplicado.
+   Faixa 1e9..2e9 — nunca colide com gids reais (Date.now() ≈ 1.7e12).
+   Mesma função existe no painel de entregas: os dois painéis SEMPRE chegam
+   ao mesmo gid para o mesmo pedido. */
+function gidDerivado(num,ano){
+  const s='g'+String(num==null?'':num).trim()+'_'+String(ano==null?'':ano).trim();
+  let h=5381;
+  for(let i=0;i<s.length;i++){h=((h*33)^s.charCodeAt(i))>>>0;}
+  return 1000000000+(h%1000000000);
+}
 function normalizarPedidos(lista){
-  return (lista||[]).map(p=>{
+  const norm=(lista||[]).map(p=>{
     const q=Object.assign({},p);
     // mes: número ou string-numérica -> nome em português
     if(typeof q.mes==='number'){q.mes=MS[q.mes-1]||String(q.mes);}
@@ -800,6 +810,24 @@ function normalizarPedidos(lista){
     }
     return q;
   });
+  /* ===== CORREÇÃO DE GIDs (bug: mudar o status de um mudava de todos) =====
+     O status de entrega/comissão é chaveado por gid. Se pedidos DIFERENTES
+     chegam sem gid (todos caem na chave "undefined") ou compartilhando o
+     mesmo gid, eles passam a dividir o mesmo status. Regras:
+     1) gid ausente -> gid derivado do (nº, ano), determinístico;
+     2) gid repetido entre pedidos de nº diferente -> o primeiro nº mantém o
+        gid, os demais ganham gid derivado (registros multi-vendedor do MESMO
+        pedido continuam agrupados, pois têm o mesmo nº). */
+  norm.forEach(q=>{
+    if(q.gid==null||q.gid===''){q.gid=gidDerivado(q.num,q.ano);}
+  });
+  const donoDoGid={};
+  norm.forEach(q=>{
+    const k=String(q.gid);
+    if(donoDoGid[k]==null){donoDoGid[k]=String(q.num);}
+    else if(donoDoGid[k]!==String(q.num)){q.gid=gidDerivado(q.num,q.ano);}
+  });
+  return norm;
 }
 const HEXCORES=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75'];
 let vs=[],ps=[],ads=[],prods=[],anus=[],sts={},bonus=[],transfs=[],ta=null;
