@@ -261,7 +261,9 @@
         <p style="font-size:11px;color:#e8743b;margin:0 0 10px;line-height:1.5">
           ⚠️ <b>Ajuste primeiro a câmera</b>, depois posicione o modelo
         </p>
-        <button class="wide" id="autoBtn" style="margin-bottom:10px;background:#1d3a52;border-color:#2c5a82;color:#cfe6ff;font-weight:600">🔍 Detectar perspectiva da foto</button>
+        <p style="font-size:11px;color:#8fc0f0;margin:0 0 10px;line-height:1.5">
+          🔍 A perspectiva é <b>detectada sozinha</b> toda vez que uma foto nova entra. Os controles abaixo são só pra ajuste fino.
+        </p>
         <div class="row">
           <label>Altura cam.</label>
           <input type="range" id="sCamH" min="0.1" max="6" step="0.05" value="1.2">
@@ -319,7 +321,7 @@
         <div id="medResult" class="note" style="display:none;color:var(--txt)"></div>
         <button class="wide" id="limparMed" style="margin-top:8px;font-size:11px;display:none">🧹 Limpar medidas</button>
         <div class="note">
-          <b>Como funciona:</b> rode <b>🔍 Detectar perspectiva</b> primeiro (a linha do horizonte precisa estar no lugar certo). Em <b>🎯 Calibrar</b>, toque na <b>base</b> (onde encosta no chão) e no <b>topo</b> de algo de altura conhecida — uma porta é perfeita. Depois, <b>📏 Medir</b> revela a altura real de qualquer parede. Sem calibrar, o sistema <b>supõe</b> a foto tirada na altura dos olhos (~1,55 m) e marca o resultado como estimativa.
+          <b>Como funciona:</b> ao carregar a foto, o sistema já detecta a perspectiva e <b>estima a altura sozinho</b> (régua automática). Pra precisão total, use <b>🎯 Calibrar</b>: toque na <b>base</b> (onde encosta no chão) e no <b>topo</b> de algo de altura conhecida — uma porta é perfeita. Depois, <b>📏 Medir</b> revela a altura real de qualquer parede. Sem calibrar, o sistema <b>supõe</b> a foto tirada na altura dos olhos (~1,55 m) e marca o resultado como estimativa.
         </div>
       </div>
 
@@ -665,9 +667,14 @@ function loadBgFromFile(f){
     fitFrame();
     $('bgLabel').classList.add('loaded'); $('bgLabel').querySelector('b').textContent='Foto carregada ✓';
     $('zoomSec').style.display='block';
-    // foto nova = escala nova: zera medidas e calibração antigas
+    // foto nova = cena nova: tira o produto da tela, zera medidas, calibração
+    // e feedback antigo da detecção — nada da foto anterior sobrevive
+    removerModelo();
     medidas=[]; camCalibrada=false; setMedirMode(null); atualizarMedUI();
-    toast('Foto carregada');
+    detectShowing=false; clearTimeout(detectTimer); octx.clearRect(0,0,overlayCV.width,overlayCV.height);
+    resetCamPadrao();   // câmera parte do padrão pra detecção não herdar ajuste velho
+    // espera o layout assentar (aspectRatio novo) e analisa a perspectiva sozinho
+    requestAnimationFrame(()=> detectPerspective());
   };
   bgImg.src=url;
 }
@@ -796,17 +803,20 @@ bind('sOpacity','oOpacity',v=>{ curOpacity=v; applyOpacity(); }, v=>Math.round(v
 $('cGrid').addEventListener('change',e=>grid.visible=e.target.checked);
 $('cGizmo').addEventListener('change',e=>gizmo.visible=e.target.checked);
 $('dropFloor').addEventListener('click',()=>{ if(model){ const b=new THREE.Box3().setFromObject(model); model.position.y -= b.min.y; }});
-$('resetCam').addEventListener('click',()=>{
+function resetCamPadrao(){
   $('sFov').value=60; $('oFov').textContent='60°';
   camera.fov=60; camera.updateProjectionMatrix();
   orbit.target.set(0,0.5,0);
   camera.position.set(0,1.2,4.0);
   orbit.update(); syncCamSliders();
-});
-$('removeGlb').addEventListener('click',()=>{
-  if(model){ scene.remove(model); tcontrols.detach(); model=null; $('exportBtn').disabled=true;
-    $('glbLabel').classList.remove('loaded'); $('glbLabel').querySelector('b').textContent='Escolher arquivo'; }
-});
+}
+$('resetCam').addEventListener('click', resetCamPadrao);
+function removerModelo(){
+  if(!model) return;
+  scene.remove(model); tcontrols.detach(); model=null; $('exportBtn').disabled=true;
+  $('glbLabel').classList.remove('loaded'); $('glbLabel').querySelector('b').textContent='Escolher arquivo';
+}
+$('removeGlb').addEventListener('click', removerModelo);
 
 // voltar Luz & sombra aos valores padrão
 function aplicarLuzPadrao(){
@@ -1392,8 +1402,7 @@ async function detectPerspective(){
   if(_detectando) return;
   if(!bgImg.naturalWidth){ toast('Carregue a foto primeiro'); return; }
   _detectando=true;
-  const btn=$('autoBtn');
-  btn.textContent='⏳ Analisando foto...'; btn.disabled=true;
+  toast('⏳ Analisando a perspectiva da foto...');
   // no celular, fecha o painel pra dar pra ver o resultado desenhado na foto
   if(window.matchMedia('(max-width:640px)').matches) setPanel(false);
 
@@ -1414,7 +1423,6 @@ async function detectPerspective(){
     w.postMessage({pixels:pixels.buffer, W, H},[pixels.buffer]);
   });
 
-  btn.textContent='🔍 Detectar perspectiva da foto'; btn.disabled=false;
   _detectando=false;
 
   const inv=1/scale;
@@ -1442,8 +1450,17 @@ async function detectPerspective(){
 
   const yHorizonPx = Math.max(-bgImg.naturalHeight, Math.min(2*bgImg.naturalHeight, vp.y));
   const ndcY = 1 - 2*(yHorizonPx/bgImg.naturalHeight);
+  // câmera já parte da altura típica de quem fotografa em pé (~1,55 m) —
+  // isso é o que dá senso de escala automático à cena; 🎯 Calibrar refina
+  if(!camCalibrada) setCamAltura(CAM_SUPOSTA);
   aimHorizonAtNDC(ndcY);
+  syncCamSliders();
   drawDetected(inl, vps, yHorizonPx);
+
+  // régua automática: estima o pé-direito (ou planta uma régua de 1 m)
+  // usando as próprias linhas que a detecção encontrou
+  try{ autoRegua(escLinhas(result.allLines), yHorizonPx, result.fallback==='center'); }
+  catch(err){ console.warn('autoRegua:', err); }
 
   const pct=Math.round((yHorizonPx/bgImg.naturalHeight)*100);
   let msg;
@@ -1482,16 +1499,89 @@ function drawDetected(usedLines, vps, horizonYpx){
   }
   detectShowing=true;
   clearTimeout(detectTimer);
-  detectTimer=setTimeout(()=>{ detectShowing=false; }, 6500);
+  detectTimer=setTimeout(()=>{ detectShowing=false; }, 4000);
 }
 
-$('autoBtn').addEventListener('click', detectPerspective);
+// ===== RÉGUA AUTOMÁTICA (percepção de altura sem toque nenhum) =====
+// Depois da detecção, o sistema mede sozinho: procura, entre as linhas que a
+// própria detecção achou, a junta chão-parede (abaixo do horizonte) e a linha
+// do teto (acima). Com a câmera suposta na altura dos olhos, a metrologia de
+// vista única entrega o pé-direito. Se o teto não aparece na foto, ele planta
+// uma régua de 1 m em pé no chão — referência visual de escala imediata.
+function autoRegua(linhas, yHpx, semEstrutura){
+  if(!bgImg.naturalWidth) return;
+  linhas = linhas || [];
+  const W=bgImg.naturalWidth, H=bgImg.naturalHeight;
+  const vH=yHpx/H;
+  const Hc=camera.position.y || CAM_SUPOSTA;
+  // Y da linha num X qualquer (limitado ao trecho real do segmento)
+  const yAt=(l,x)=>{
+    const dx=l.x2-l.x1;
+    if(Math.abs(dx)<1e-3) return (l.y1+l.y2)/2;
+    const t=Math.max(0,Math.min(1,(x-l.x1)/dx));
+    return l.y1+(l.y2-l.y1)*t;
+  };
+  const scoreL=l=>l.len*(l.r||1);
+  // linhas "deitadas" (junta de chão em perspectiva pode ter até ~40°)
+  const flat=linhas.filter(l=>{
+    let a=Math.abs(Math.atan2(l.y2-l.y1,l.x2-l.x1)*180/Math.PI); if(a>90)a=180-a;
+    return a<40 && l.len>W*0.08;
+  });
+  const fortes=arr=>arr.slice().sort((a,b)=>scoreL(b)-scoreL(a)).slice(0,8);
+  // junta chão-parede: linha forte inteira ABAIXO do horizonte; entre as
+  // fortes, a mais ALTA vence (rejunte de piso fica mais embaixo e perde)
+  let chao=null;
+  for(const l of fortes(flat.filter(l=>Math.min(l.y1,l.y2)>yHpx+0.05*H && Math.max(l.y1,l.y2)<H*0.99))){
+    if(!chao || (l.y1+l.y2) < (chao.y1+chao.y2)) chao=l;
+  }
+  // linha do teto: forte, inteira ACIMA do horizonte; a mais BAIXA vence
+  let teto=null;
+  for(const l of fortes(flat.filter(l=>Math.max(l.y1,l.y2)<yHpx-0.04*H && Math.min(l.y1,l.y2)>H*0.01))){
+    if(!teto || (l.y1+l.y2) > (teto.y1+teto.y2)) teto=l;
+  }
+
+  // caso ideal: chão + teto visíveis -> pé-direito estimado
+  if(chao && teto && !semEstrutura){
+    const x0=Math.max(Math.min(chao.x1,chao.x2), Math.min(teto.x1,teto.x2));
+    const x1=Math.min(Math.max(chao.x1,chao.x2), Math.max(teto.x1,teto.x2));
+    const x=(x1>x0) ? (x0+x1)/2 : (chao.x1+chao.x2)/2;   // mede onde as duas se cruzam em X
+    const vB=yAt(chao,x)/H, vT=yAt(teto,x)/H;
+    if(vB>vH+0.02 && vT<vH-0.01){
+      const alt=Hc*(vB-vT)/(vB-vH);
+      if(alt>=1.8 && alt<=5.5){   // pé-direito plausível — fora disso, não confia
+        medidas.push({b:{u:x/W,v:vB}, t:{u:x/W,v:vT}, alt:alt, calib:false,
+          txt:'Pé-direito estimado <b>automaticamente</b>: <b>'+mFmt(alt)+' m</b> <span style="color:#e8743b">(câmera suposta em '+mFmt(Hc)+' m — 🎯 Calibrar refina)</span>'});
+        atualizarMedUI();
+        toast('📏 Pé-direito estimado: ≈ '+mFmt(alt)+' m (automático)', 5000);
+        return;
+      }
+    }
+  }
+
+  // sem teto na foto: régua de 1 m em pé sobre a junta do chão (ou, sem
+  // junta clara, num ponto seguro entre o horizonte e a base da foto)
+  let u, vB;
+  if(chao){
+    const xm=Math.max(W*0.12, Math.min(W*0.88, (chao.x1+chao.x2)/2));
+    u=xm/W; vB=yAt(chao,xm)/H;
+  } else {
+    u=0.5; vB=vH+0.72*(1-vH);
+  }
+  if(!(vB>vH+0.02)) vB=Math.min(0.96, vH+0.72*(1-vH));
+  if(!(vB>vH+0.02)) return;                    // horizonte na base da foto — sem chão visível
+  const vT=vB-(1.0/Hc)*(vB-vH);
+  if(vT<=0.005) return;                        // a régua estouraria o topo da foto
+  medidas.push({b:{u,v:vB}, t:{u,v:vT}, alt:1.0, calib:false,
+    txt:'Régua <b>automática</b> de <b>1,00 m</b> em pé no chão — é a escala da foto <span style="color:#e8743b">(estimativa — 🎯 Calibrar refina)</span>'});
+  atualizarMedUI();
+  toast('📏 Régua automática de 1 m posicionada no chão', 4500);
+}
 
 // ===== ESCALA REAL — metrologia de vista única =====
 // A mágica: pra qualquer objeto vertical apoiado no chão, vale
 //     Altura = AlturaCâmera × (yBase − yTopo) / (yBase − yHorizonte)
 // (tudo em coordenadas de tela). Ou seja: com a linha do horizonte no lugar
-// certo (🔍 Detectar perspectiva) e UMA referência de altura conhecida
+// certo (detecção automática ao carregar a foto) e UMA referência conhecida
 // (porta, muro, pessoa...), dá pra descobrir a altura real da câmera — e
 // a partir daí medir a altura de QUALQUER parede da foto só com 2 toques.
 // Sem referência, o sistema supõe a foto tirada na altura dos olhos (~1,55 m)
@@ -1568,7 +1658,7 @@ function tapMedir(cx, cy){
   const u = (cx - r.left) / r.width, v = (cy - r.top) / r.height;
   if(u < 0 || u > 1 || v < 0 || v > 1) return;
   const vH = horizonV();
-  if(!isFinite(vH)){ toast('Não achei o horizonte — rode 🔍 Detectar perspectiva primeiro'); return; }
+  if(!isFinite(vH)){ toast('Não achei o horizonte — recarregue a foto pra detectar de novo'); return; }
 
   if(!medir.base){
     if(v <= vH + 0.005){
