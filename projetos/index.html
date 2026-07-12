@@ -239,6 +239,7 @@
           <button data-mode="rotate">Girar</button>
           <button data-mode="scale">Escalar</button>
         </div>
+        <button class="wide" id="mirrorBtn" style="margin:9px 0 2px" title="Inverte o produto — o que fica à esquerda passa pra direita (e vice-versa)">↔ Espelhar produto (esq ↔ dir)</button>
         <div class="check" id="snapWrap">
           <input type="checkbox" id="snapY"><label for="snapY" style="cursor:pointer">Travar girar no eixo vertical</label>
         </div>
@@ -445,7 +446,14 @@ tcontrols.addEventListener('dragging-changed', e=> orbit.enabled = !e.value && !
 const gizmo = tcontrols.getHelper ? tcontrols.getHelper() : tcontrols;
 scene.add(gizmo);
 
-let model=null, baseScale=1;
+let model=null, baseScale=1, espelhado=false;
+
+// escala do produto respeitando o espelhamento (X negativo = invertido esq/dir)
+function aplicarEscalaModelo(v){
+  if(!model) return;
+  const s=baseScale*v;
+  model.scale.set(espelhado ? -s : s, s, s);
+}
 
 function setSunDir(){
   const az = THREE.MathUtils.degToRad(+$('sAzim').value);
@@ -488,6 +496,7 @@ function loadGLB(url, revoke){
     const c=new THREE.Vector3(); box.getCenter(c);
     model.position.x -= c.x; model.position.z -= c.z; model.position.y -= box.min.y;
     baseScale = 1.5 / (size.y || 1);
+    espelhado=false; $('mirrorBtn').classList.remove('on');   // modelo novo entra no sentido original
     model.scale.setScalar(baseScale);
     $('sScale').value=1; $('oScale').textContent='1.00×';
     scene.add(model);
@@ -759,7 +768,17 @@ $('cHorizon').addEventListener('change', drawHorizon);
 
 // ---- sliders ----
 const bind=(id,out,fn,fmt)=>{const el=$(id);const o=$(out);const upd=()=>{o.textContent=fmt(el.value);fn(+el.value);};el.addEventListener('input',upd);upd();};
-bind('sScale','oScale',v=>{ if(model) model.scale.setScalar(baseScale*v); }, v=>(+v).toFixed(2)+'×');
+bind('sScale','oScale',v=>aplicarEscalaModelo(v), v=>(+v).toFixed(2)+'×');
+
+// espelhar produto: inverte esquerda ↔ direita (escala X negativa; os
+// materiais já são DoubleSide, então o render não sofre com o flip)
+$('mirrorBtn').addEventListener('click', ()=>{
+  if(!model){ toast('Carregue um produto primeiro'); return; }
+  espelhado=!espelhado;
+  aplicarEscalaModelo(+$('sScale').value);
+  $('mirrorBtn').classList.toggle('on', espelhado);
+  toast(espelhado ? '↔ Produto espelhado (esq ↔ dir)' : 'Produto de volta ao sentido original');
+});
 bind('sFov','oFov',v=>{ camera.fov=v; camera.updateProjectionMatrix(); }, v=>v+'°');
 
 // câmera: altura e distância INDEPENDENTES — mexer numa não mexe na outra,
