@@ -818,6 +818,15 @@ var ACN3D = (function() {
       var dot = btn.querySelector('.acn3d-rdot');
       var labTime = lab.querySelector('.acn3d-rtime');
       var rec = null, chunks = [], micStream = null, mixStream = null, timer = null, t0 = 0;
+      // Dentro da Central (Electron), o MP4/H264+AAC as vezes falha CALADO —
+      // o MediaRecorder diz que suporta, mas nao produz nenhum byte (o Chromium
+      // "puro" do Electron nem sempre tem o encoder de hardware que o Edge tem).
+      // Por isso: dentro da Central, tenta WEBM primeiro (sempre funciona, nao
+      // depende de licenca/hardware); e tem uma rede de seguranca (watchdog)
+      // que detecta gravacao vazia bem no comeco e troca de formato sozinha,
+      // pra nenhuma gravacao inteira ser perdida por causa disso.
+      var inCentral = !!(window.centralPage && window.centralPage.saveRecording);
+      var watchdogT = null, restarted = false, gotData = false;
       var audioCtx = null, srcNode = null, destNode = null, keepGain = null;
       var origPR = renderer.getPixelRatio();
       var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
@@ -829,16 +838,18 @@ var ACN3D = (function() {
         if (ms) toast._t = setTimeout(function(){ toast.style.display = 'none'; }, ms);
       }
       function fmt(s){ var m=Math.floor(s/60), x=s%60; return m+':'+(x<10?'0':'')+x; }
-      function pickMime() {
-        // MP4 com AAC e a unica combinacao que o WhatsApp reproduz com som.
-        // 'video/mp4' puro NAO entra: o Chrome coloca audio Opus dentro do MP4
-        // (e o WhatsApp nao toca Opus) — por isso so pedimos AAC explicito.
-        var c = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-                 'video/mp4;codecs=avc1,mp4a.40.2',
-                 'video/mp4;codecs=h264,aac',
-                 'video/webm;codecs=vp8,opus',
-                 'video/webm;codecs=vp9,opus',
-                 'video/webm'];
+      function pickMime(preferWebm) {
+        // MP4 com AAC e a combinacao que o WhatsApp reproduz com som de forma
+        // mais confiavel na maioria dos aparelhos. 'video/mp4' puro NAO entra:
+        // o Chrome coloca audio Opus dentro do MP4 (e o WhatsApp nao toca
+        // Opus) — por isso so pedimos AAC explicito.
+        var mp4 = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+                   'video/mp4;codecs=avc1,mp4a.40.2',
+                   'video/mp4;codecs=h264,aac'];
+        var webm = ['video/webm;codecs=vp9,opus',
+                    'video/webm;codecs=vp8,opus',
+                    'video/webm'];
+        var c = preferWebm ? webm.concat(mp4) : mp4.concat(webm);
         for (var i=0;i<c.length;i++){ try{ if(MediaRecorder.isTypeSupported(c[i])) return c[i]; }catch(e){} }
         return '';   // Safari sem match → o padrao do proprio Safari ja e MP4/AAC
       }
@@ -873,47 +884,55 @@ var ACN3D = (function() {
       }
 
       hardStopRec = function() {
+        clearTimeout(watchdogT); restarted = true; // impede o watchdog de reviver a gravacao depois do teardown
         if (rec && rec.state !== 'inactive') { rec.onstop = null; try{ rec.stop(); }catch(e){} }
         stopTracks(); resetUI(); controls.autoRotate = !userStopped; rec = null;
       };
 
-      async function start() {
-        try {
-          micStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video:false });
-        } catch(e) {
-          flash('🎤 Nao consegui acessar o microfone. Autorize o uso do microfone e tente de novo.', 5000);
-          return;
+      async function start(preferWebm) {
+        // preferWebm=true so acontece na 2a tentativa automatica (watchdog) —
+        // reaproveita o microfone/stream ja abertos quando possivel.
+        if (!mixStream) {
+          try {
+            micStream = await navigator.mediaDevices.getUserMedia({
+              audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video:false });
+          } catch(e) {
+            flash('🎤 Nao consegui acessar o microfone. Autorize o uso do microfone e tente de novo.', 5000);
+            return;
+          }
+
+          // Microfone roteado pela Web Audio API → corrige audio mudo no iOS/Android.
+          var micTrack = null;
+          try {
+            var AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) {
+              audioCtx = new AC();
+              if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch(e) {} }
+              srcNode  = audioCtx.createMediaStreamSource(micStream);
+              destNode = audioCtx.createMediaStreamDestination();
+              srcNode.connect(destNode);
+              // Mantem o grafo de audio "rodando" no iOS — sem isto o destino sai MUDO.
+              // Ganho 0 → nao gera microfonia/eco nos alto-falantes.
+              keepGain = audioCtx.createGain();
+              keepGain.gain.value = 0;
+              srcNode.connect(keepGain);
+              keepGain.connect(audioCtx.destination);
+              if (destNode.stream.getAudioTracks().length) micTrack = destNode.stream.getAudioTracks()[0];
+            }
+          } catch(e) { /* fallback abaixo usa o track cru do microfone */ }
+          if (!micTrack) micTrack = micStream.getAudioTracks()[0];
+
+          boostResolution(true);                         // grava em resolucao maior
+          var cs = canvas.captureStream(30);
+          try { if (micTrack) cs.addTrack(micTrack); }   // audio adicionado AO stream do canvas (mais estavel no iOS)
+          catch(e) { cs = new MediaStream(cs.getVideoTracks().concat(micTrack ? [micTrack] : [])); }
+          mixStream = cs;
         }
 
-        // Microfone roteado pela Web Audio API → corrige audio mudo no iOS/Android.
-        var micTrack = null;
-        try {
-          var AC = window.AudioContext || window.webkitAudioContext;
-          if (AC) {
-            audioCtx = new AC();
-            if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch(e) {} }
-            srcNode  = audioCtx.createMediaStreamSource(micStream);
-            destNode = audioCtx.createMediaStreamDestination();
-            srcNode.connect(destNode);
-            // Mantem o grafo de audio "rodando" no iOS — sem isto o destino sai MUDO.
-            // Ganho 0 → nao gera microfonia/eco nos alto-falantes.
-            keepGain = audioCtx.createGain();
-            keepGain.gain.value = 0;
-            srcNode.connect(keepGain);
-            keepGain.connect(audioCtx.destination);
-            if (destNode.stream.getAudioTracks().length) micTrack = destNode.stream.getAudioTracks()[0];
-          }
-        } catch(e) { /* fallback abaixo usa o track cru do microfone */ }
-        if (!micTrack) micTrack = micStream.getAudioTracks()[0];
-
-        boostResolution(true);                         // grava em resolucao maior
-        var cs = canvas.captureStream(30);
-        try { if (micTrack) cs.addTrack(micTrack); }   // audio adicionado AO stream do canvas (mais estavel no iOS)
-        catch(e) { cs = new MediaStream(cs.getVideoTracks().concat(micTrack ? [micTrack] : [])); }
-        mixStream = cs;
-
-        var mime = pickMime();
+        // Dentro da Central, comeca preferindo WEBM direto (evita o MP4 que
+        // costuma falhar calado ali). Fora da Central, continua preferindo
+        // MP4 (melhor compatibilidade), com WEBM so como plano B automatico.
+        var mime = pickMime(preferWebm || inCentral);
         var opt = { videoBitsPerSecond: 14000000, audioBitsPerSecond: 256000 };
         if (mime) opt.mimeType = mime;
         try {
@@ -922,10 +941,10 @@ var ACN3D = (function() {
           try { rec = mime ? new MediaRecorder(mixStream, { mimeType:mime }) : new MediaRecorder(mixStream); }
           catch(e2){ flash('Seu navegador nao suporta gravacao de video.', 5000); stopTracks(); return; }
         }
-        chunks = [];
-        rec.ondataavailable = function(ev){ if (ev.data && ev.data.size) chunks.push(ev.data); };
+        chunks = []; gotData = false;
+        rec.ondataavailable = function(ev){ if (ev.data && ev.data.size) { chunks.push(ev.data); gotData = true; } };
         rec.onstop = finish;
-        rec.start();
+        rec.start(1000); // pedaços de 1s: da pro watchdog conferir se ta chegando byte de verdade
 
         controls.autoRotate = false;        // voce controla o angulo enquanto narra
         btn.style.background = 'rgba(255,255,255,.97)';
@@ -936,20 +955,43 @@ var ACN3D = (function() {
         lab.style.display = 'inline-flex';
         timer = setInterval(function(){ labTime.textContent = fmt(Math.floor((Date.now()-t0)/1000)); }, 500);
         flash('Gravando… fale e gire o modelo. Toque no botao para encerrar.', 2800);
+
+        // ── watchdog: se em 2.2s nao chegou NENHUM byte, o formato escolhido
+        // esta falhando calado (visto dentro da Central com MP4/H264+AAC).
+        // Troca pra WEBM sozinho, sem o usuario precisar perceber ou refazer
+        // do zero — so um leve solavanco no comecinho da gravacao.
+        clearTimeout(watchdogT);
+        if (!restarted) {
+          watchdogT = setTimeout(function(){
+            if (gotData || !rec || rec.state !== 'recording') return; // ja esta tudo bem
+            restarted = true;
+            var oldRec = rec; oldRec.onstop = null; oldRec.ondataavailable = null;
+            try { oldRec.stop(); } catch(e) {}
+            if (timer) { clearInterval(timer); timer = null; }
+            flash('Ajustando o formato de gravação…', 1600);
+            start(true); // recomeça já forçando WEBM
+          }, 2200);
+        }
       }
 
       function stop() {
+        clearTimeout(watchdogT); restarted = true; // parada manual: nao deixa o watchdog reviver depois
         if (rec && rec.state === 'recording') { labTime.textContent = '…'; try{ rec.stop(); }catch(e){} }
       }
 
       async function finish() {
         if (timer) { clearInterval(timer); timer = null; }
-        var mime = (rec && rec.mimeType) || pickMime() || 'video/webm';
+        var mime = (rec && rec.mimeType) || pickMime(inCentral) || 'video/webm';
         var ext  = mime.indexOf('mp4') > -1 ? 'mp4' : 'webm';
         var blob = new Blob(chunks, { type: (mime.split(';')[0] || 'video/webm') });
         stopTracks(); resetUI(); controls.autoRotate = !userStopped;
         if (destroyed) return;
-        if (!blob.size) { flash('A gravacao saiu vazia. Tente novamente.', 4000); return; }
+        if (!blob.size) {
+          flash(inCentral
+            ? 'A gravação saiu vazia mesmo depois de tentar os dois formatos. Verifique se o microfone está liberado nas permissões do Windows e tente de novo.'
+            : 'A gravacao saiu vazia. Tente novamente.', 6000);
+          return;
+        }
 
         var base = (opts.nome || 'aconaval-3d').toString()
                     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
