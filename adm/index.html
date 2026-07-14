@@ -585,6 +585,22 @@ textarea{font-family:inherit}
       </div>
       <div id="lista-prod" style="margin-top:12px"><p class="empty">Nenhum produto cadastrado.</p></div>
     </div>
+    <div class="card" id="card-anunv">
+      <h3>📣 Anúncios por vendedor</h3>
+      <p style="font-size:12px;color:#888;margin-bottom:12px">Cadastre o número que recebe os leads, quanto você investe por dia e onde cada vendedor anuncia (produto e estado). Aparece organizado no Dashboard.</p>
+      <div id="lista-anunv"><p class="empty">Nenhum vendedor cadastrado.</p></div>
+    </div>
+    <div class="card" id="card-meta">
+      <h3>🔗 Conta de anúncios Meta (opcional)</h3>
+      <p style="font-size:12px;color:#888;margin-bottom:12px">Conecte sua conta do Gerenciador de Anúncios (Facebook/Instagram) para ver o <strong>gasto real</strong> de hoje e do mês no Dashboard, ao lado do planejado.</p>
+      <div class="row">
+        <div class="field"><div class="label">ID da conta de anúncios</div><input type="text" id="meta-acc" placeholder="Ex: act_1234567890"/></div>
+        <div class="field"><div class="label">Token de acesso (fica só neste aparelho)</div><input type="password" id="meta-token" placeholder="Cole o token aqui"/></div>
+        <button class="btn btn-primary" onclick="salvarMetaCfg()">💾 Salvar</button>
+        <button class="btn" onclick="sincronizarMeta(true)">🔄 Testar conexão</button>
+      </div>
+      <p style="font-size:11px;color:#aaa;margin-top:8px">Como obter: <strong>business.facebook.com</strong> → Configurações do negócio → Usuários do sistema → Gerar token com permissão <strong>ads_read</strong> (não expira). O ID da conta aparece no Gerenciador de Anúncios (começa com act_). Por segurança, o token não vai para a nuvem — fica salvo apenas neste navegador.</p>
+    </div>
     <div class="card">
       <h3>Links dos vendedores</h3>
       <p style="font-size:12px;color:#888;margin-bottom:12px">Envie o link abaixo para cada vendedor ver suas comissões. O link funciona pelo celular também.</p>
@@ -831,6 +847,9 @@ function normalizarPedidos(lista){
 }
 const HEXCORES=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75'];
 let vs=[],ps=[],ads=[],prods=[],anus=[],sts={},bonus=[],transfs=[],ta=null;
+let anunv={};   // config de anúncios por vendedor ('v'+vid -> {num, dia, prods:[], ufs:[]})
+let metaAcc=''; // ID da conta Meta Ads (act_...) — sincronizado na nuvem
+let metaSpend=null; // gasto real puxado da Meta (transitório, não salvo)
 let pgtos={};   // condição de pagamento aprovada por pedido (gid -> texto)
 let pends={};   // alterações pendentes de aprovação vindas do painel de entregas
 let comsts={};  // status de pagamento de COMISSÃO por pedido (gid -> 'aguardando'|'comissao_paga')
@@ -875,7 +894,7 @@ function salvar() {
   // update() em vez de set(): grava só as chaves listadas e PRESERVA o nó
   // 'pends' (aprovações do painel de entregas), que é gerenciado por
   // operações child() dos dois lados — evita sobrescrever dados de terceiros.
-  const dados = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos, comsts, compag, comMigrado};
+  const dados = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos, comsts, compag, comMigrado, anunv, metaAcc};
   REF.update(dados)
     .then(() => {
       const si = document.getElementById('save-info');
@@ -888,7 +907,7 @@ function salvar() {
       console.error('Erro ao salvar:', e);
       // fallback localStorage (backup completo, sem eval)
       try {
-        const mapa = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos, comsts, compag};
+        const mapa = {vs, ps, ads, prods, anus, sts, bonus, transfs, pgtos, comsts, compag, anunv, metaAcc};
         Object.keys(mapa).forEach(k => localStorage.setItem('an_'+k, JSON.stringify(mapa[k])));
       } catch(_) {}
       const si = document.getElementById('save-info');
@@ -920,6 +939,8 @@ function carregar() {
         comsts = d.comsts || {};
         compag = d.compag || {};
         comMigrado = !!d.comMigrado;
+        anunv = d.anunv || {};
+        metaAcc = d.metaAcc || '';
       } else {
         // Tenta recuperar do localStorage se Firebase estiver vazio
         try {
@@ -928,6 +949,7 @@ function carregar() {
           prods = ler('prods', prods); anus = ler('anus', anus); sts = ler('sts', sts);
           bonus = ler('bonus', bonus); transfs = ler('transfs', transfs); pgtos = ler('pgtos', pgtos);
           comsts = ler('comsts', comsts); compag = ler('compag', compag);
+          anunv = ler('anunv', anunv); metaAcc = ler('metaAcc', metaAcc);
           // Se tinha dados locais, migra pro Firebase
           if (vs.length || ps.length) salvar();
         } catch(_) {}
@@ -939,7 +961,7 @@ function carregar() {
       // Migração única: pedidos que já estavam 'entregue' entram como comissão paga
       migrarComissoesPagas();
       // Renderiza tudo após carregar
-      renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+      renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); renderAnunCfg(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
     })
     .catch(e => {
       console.error('Erro ao carregar:', e);
@@ -950,10 +972,11 @@ function carregar() {
         prods = ler('prods', prods); anus = ler('anus', anus); sts = ler('sts', sts);
         bonus = ler('bonus', bonus); transfs = ler('transfs', transfs); pgtos = ler('pgtos', pgtos);
         comsts = ler('comsts', comsts); compag = ler('compag', compag);
+        anunv = ler('anunv', anunv); metaAcc = ler('metaAcc', metaAcc);
       } catch(_) {}
       document.querySelector('.container').style.opacity = '1';
       document.querySelector('.container').style.pointerEvents = 'auto';
-      renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+      renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); renderAnunCfg(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
     });
 
   // Escuta mudanças em tempo real (outro computador / painel de entregas salvou)
@@ -972,11 +995,13 @@ function carregar() {
     comsts = d.comsts || {};
     compag = d.compag || {};
     comMigrado = !!d.comMigrado;
+    anunv = d.anunv || {};
+    metaAcc = d.metaAcc || '';
     // Se o usuário está digitando em algum campo (ex.: pagamento na tabela de
     // entregas ou busca), adia o re-render dessa área para não perder o texto.
     const ae = document.activeElement;
     const digitando = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT') && ae.closest('.page');
-    renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+    renderV(); renderSel(); renderTabs(); renderF(); renderProd(); renderSelProd(); renderLinksVendedores(); renderAnunCfg(); atualizarBadgePend(); if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
     if (!digitando) {
       if (document.getElementById('page-entregas').classList.contains('active')) renderEntregas();
       if (document.getElementById('page-pedidos').classList.contains('active')) renderPedidos();
@@ -1022,13 +1047,13 @@ function addProd(){
   if(prods.find(p=>p.nome.toLowerCase()===n.toLowerCase())){alert('Produto já cadastrado.');return;}
   prods.push({id:Date.now(),nome:n});
   document.getElementById('pr-nome').value='';
-  salvar();renderProd();renderSelProd();
+  salvar();renderProd();renderSelProd();renderAnunCfg(true);
 }
 function delProd(id){
   if(ps.find(p=>p.prod===id)){alert('Este produto possui pedidos. Remova-os antes.');return;}
   if(!confirm('Remover produto?'))return;
   prods=prods.filter(p=>p.id!==id);
-  salvar();renderProd();renderSelProd();
+  salvar();renderProd();renderSelProd();renderAnunCfg(true);
 }
 function renderProd(){
   const el=document.getElementById('lista-prod');
@@ -1059,15 +1084,16 @@ function addVendedor(){
   if(vs.find(v=>v.nome.toLowerCase()===n.toLowerCase())){alert('Vendedor já cadastrado.');return;}
   vs.push({id:Date.now(),nome:n,perc:pc,bonus:bn,tipo:tp});
   document.getElementById('v-nome').value='';document.getElementById('v-perc').value='';document.getElementById('v-bonus').value='';if(document.getElementById('v-tipo'))document.getElementById('v-tipo').value='fixo';
-  salvar();renderV();renderLinksVendedores();renderSel();renderTabs();
+  salvar();renderV();renderLinksVendedores();renderSel();renderTabs();renderAnunCfg(true);
 }
 function delV(id){
   if(!confirm('Remover vendedor e seus registros?'))return;
   vs=vs.filter(v=>v.id!==id);
   ps=ps.filter(p=>p.vid!==id);
   bonus=bonus.filter(b=>b.vid!==id);
+  delete anunv['v'+id];
   if(ta===id)ta=vs.length?vs[0].id:null;
-  salvar();renderV();renderLinksVendedores();renderSel();renderTabs();
+  salvar();renderV();renderLinksVendedores();renderSel();renderTabs();renderAnunCfg(true);
 }
 function renderV(){
   const el=document.getElementById('lista-v');
@@ -1516,7 +1542,242 @@ function setAnu(prodId,mes,ano,val){
   const idx=anus.findIndex(a=>a.prod===prodId&&a.mes===mes&&a.ano===ano);
   if(idx>=0)anus[idx].val=val;
   else anus.push({prod:prodId,mes,ano,val});
-  salvar();renderAnuncios(mes,ano);
+  salvar();
+  const wDet=document.getElementById('dash-det-wrap');
+  if(wDet&&dashMesSel)wDet.innerHTML=buildDetalheMes(dashMesSel);
+}
+
+/* ========== ANÚNCIOS POR VENDEDOR ========== */
+const UFS_BR=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+const escA=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function anv(vid){
+  const a=anunv['v'+vid]||{};
+  return {num:a.num||'',dia:Number(a.dia)||0,prods:a.prods||[],ufs:a.ufs||[]};
+}
+function setAnvCampo(vid,campo,val){
+  const a=anv(vid);a[campo]=val;anunv['v'+vid]=a;
+  salvar();renderAnunCfg(true);
+  if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+}
+function toggleAnvProd(vid,pid){
+  const a=anv(vid);
+  const i=a.prods.indexOf(pid);
+  if(i>=0)a.prods.splice(i,1);else a.prods.push(pid);
+  setAnvCampo(vid,'prods',a.prods);
+}
+function toggleAnvUf(vid,uf){
+  const a=anv(vid);
+  const i=a.ufs.indexOf(uf);
+  if(i>=0)a.ufs.splice(i,1);else a.ufs.push(uf);
+  setAnvCampo(vid,'ufs',a.ufs);
+}
+function renderAnunCfg(force){
+  const el=document.getElementById('lista-anunv');
+  if(!el)return;
+  // Não re-renderiza por cima de quem está digitando (evento realtime da nuvem)
+  const ae=document.activeElement;
+  if(!force&&ae&&ae.closest&&ae.closest('#card-anunv'))return;
+  // Campos da integração Meta
+  const ma=document.getElementById('meta-acc');
+  if(ma&&document.activeElement!==ma)ma.value=metaAcc||'';
+  const mt=document.getElementById('meta-token');
+  if(mt&&document.activeElement!==mt)mt.value=metaToken();
+  if(!vs.length){el.innerHTML='<p class="empty">Nenhum vendedor cadastrado.</p>';return;}
+  let h='';
+  vs.forEach(v=>{
+    const a=anv(v.id);
+    let chipsP='';
+    if(prods.length){
+      prods.forEach(p=>{
+        const on=a.prods.indexOf(p.id)>=0;
+        chipsP+='<span class="tab'+(on?' active':'')+'" style="user-select:none" onclick="toggleAnvProd('+v.id+','+p.id+')">'+(on?'✓ ':'')+escA(p.nome)+'</span>';
+      });
+    } else chipsP='<span style="font-size:12px;color:#bbb">Cadastre produtos acima para selecionar.</span>';
+    let chipsU='';
+    UFS_BR.forEach(uf=>{
+      const on=a.ufs.indexOf(uf)>=0;
+      chipsU+='<span class="tab'+(on?' active':'')+'" style="user-select:none;padding:4px 9px;font-size:12px" onclick="toggleAnvUf('+v.id+',\''+uf+'\')">'+uf+'</span>';
+    });
+    h+='<div style="border:1px solid #e0e4e8;border-radius:10px;padding:14px;margin-bottom:12px">'
+      +'<div style="font-size:14px;font-weight:700;color:#003366;margin-bottom:10px">'+escA(v.nome)+'</div>'
+      +'<div class="row" style="margin-bottom:10px">'
+      +'<div class="field"><div class="label">Número do vendedor (WhatsApp)</div><input type="text" value="'+escA(a.num)+'" placeholder="Ex: 51 99999-0000" onchange="setAnvCampo('+v.id+',\'num\',this.value.trim())"/></div>'
+      +'<div class="field" style="max-width:170px"><div class="label">Investimento (R$/dia)</div><input type="number" step="0.01" min="0" value="'+(a.dia||'')+'" placeholder="Ex: 50" onchange="setAnvCampo('+v.id+',\'dia\',parseFloat(this.value)||0)"/></div>'
+      +'</div>'
+      +'<div class="label" style="margin-bottom:6px">Produtos anunciados</div>'
+      +'<div style="margin-bottom:10px">'+chipsP+'</div>'
+      +'<div class="label" style="margin-bottom:6px">Estados onde anuncia</div>'
+      +'<div>'+chipsU+'</div>'
+      +'</div>';
+  });
+  el.innerHTML=h;
+}
+
+/* ---- Integração Meta Ads ---- */
+function metaToken(){try{return localStorage.getItem('an_metaToken')||'';}catch(_){return '';}}
+function salvarMetaCfg(){
+  const acc=(document.getElementById('meta-acc').value||'').trim();
+  const tok=(document.getElementById('meta-token').value||'').trim();
+  metaAcc=acc;
+  try{if(tok)localStorage.setItem('an_metaToken',tok);else localStorage.removeItem('an_metaToken');}catch(_){}
+  salvar();
+  alert('Configuração salva. Use "Testar conexão" para verificar.');
+}
+async function sincronizarMeta(avisar){
+  const acc=(metaAcc||'').trim();
+  const tok=metaToken();
+  if(!acc||!tok){
+    if(avisar)alert('Preencha o ID da conta (act_...) e o token na aba Config.');
+    return;
+  }
+  const base='https://graph.facebook.com/v19.0/'+encodeURIComponent(acc.indexOf('act_')===0?acc:'act_'+acc);
+  const q=p=>fetch(base+'/insights?'+p+'&access_token='+encodeURIComponent(tok)).then(r=>r.json());
+  const btns=document.querySelectorAll('.btn-meta-sync');btns.forEach(b=>{b.disabled=true;b.textContent='⏳ Sincronizando...';});
+  try{
+    const [hoje,mesR,camps]=await Promise.all([
+      q('fields=spend&date_preset=today'),
+      q('fields=spend&date_preset=this_month'),
+      q('level=campaign&fields=campaign_name,spend&date_preset=this_month&limit=100')
+    ]);
+    if(hoje.error)throw new Error(hoje.error.message||'Erro na API da Meta');
+    const gHoje=(hoje.data&&hoje.data[0]&&parseFloat(hoje.data[0].spend))||0;
+    const gMes=(mesR.data&&mesR.data[0]&&parseFloat(mesR.data[0].spend))||0;
+    const lista=(camps.data||[]).map(c=>({nome:c.campaign_name||'—',gasto:parseFloat(c.spend)||0})).filter(c=>c.gasto>0).sort((a,b)=>b.gasto-a.gasto);
+    metaSpend={hoje:gHoje,mes:gMes,camps:lista,at:new Date()};
+    if(document.getElementById('page-dashboard').classList.contains('active'))renderDashboard();
+    if(avisar)alert('Conectado! Gasto hoje: '+fmt(gHoje)+' · Gasto no mês: '+fmt(gMes));
+  }catch(e){
+    console.error('Meta Ads:',e);
+    if(avisar)alert('Não foi possível conectar: '+e.message+'\n\nVerifique o ID da conta, o token e a permissão ads_read.');
+  }finally{
+    btns.forEach(b=>{b.disabled=false;b.textContent='🔄 Sincronizar gasto real';});
+  }
+}
+
+function buildAnunDash(mes,ano){
+  const idxM=MS.indexOf(mes);
+  const diasMes=new Date(ano,idxM+1,0).getDate();
+  const cfgs=vs.map(v=>({v,a:anv(v.id)})).filter(x=>x.a.num||x.a.dia>0||x.a.prods.length||x.a.ufs.length);
+  const temMeta=!!(metaAcc&&metaToken());
+
+  if(!cfgs.length&&!temMeta){
+    return '<div class="dash-card" style="margin-bottom:16px"><h3>📣 Anúncios</h3>'
+      +'<p class="dash-no-data">Nenhum anúncio cadastrado. Configure em <strong>Config → Anúncios por vendedor</strong>.</p></div>';
+  }
+
+  // Faturamento do mês por produto (para calcular % investido)
+  const uniqMes=uniquePedidos(ps.filter(p=>p.mes===mes&&p.ano===ano));
+  const fatProd={};
+  uniqMes.forEach(p=>{if(p.prod){fatProd[p.prod]=(fatProd[p.prod]||0)+p.val;}});
+
+  let totDia=0;
+  let rows='';
+  cfgs.forEach(({v,a})=>{
+    totDia+=a.dia;
+    const nomesP=a.prods.map(pid=>{const p=prods.find(x=>x.id===pid);return p?'<span class="badge-prod">'+escA(p.nome)+'</span>':'';}).join(' ')||'<span style="color:#bbb">—</span>';
+    const nomesU=a.ufs.map(uf=>'<span class="badge-m">'+uf+'</span>').join(' ')||'<span style="color:#bbb">—</span>';
+    rows+='<tr>'
+      +'<td><strong>'+escA(v.nome)+'</strong></td>'
+      +'<td style="white-space:nowrap">'+(a.num?'📱 '+escA(a.num):'<span style="color:#bbb">—</span>')+'</td>'
+      +'<td style="text-align:right;font-weight:600;color:#185FA5">'+(a.dia>0?fmt(a.dia):'—')+'</td>'
+      +'<td style="text-align:right;color:#666">'+(a.dia>0?fmt(a.dia*diasMes):'—')+'</td>'
+      +'<td>'+nomesP+'</td>'
+      +'<td>'+nomesU+'</td>'
+      +'</tr>';
+  });
+  const totMes=totDia*diasMes;
+
+  // Agrupado por produto e por estado
+  const porProd={},porUf={};
+  cfgs.forEach(({v,a})=>{
+    a.prods.forEach(pid=>{
+      if(!porProd[pid])porProd[pid]={dia:0,vends:[]};
+      porProd[pid].dia+=a.dia;porProd[pid].vends.push(v.nome);
+    });
+    a.ufs.forEach(uf=>{
+      if(!porUf[uf])porUf[uf]={dia:0,vends:[]};
+      porUf[uf].dia+=a.dia;porUf[uf].vends.push(v.nome);
+    });
+  });
+
+  const CORES=['#185FA5','#3B6D11','#BA7517','#D85A30','#7F77DD','#1D9E75','#C9373A','#0E8A8A'];
+  let prodH='';
+  const lp=Object.entries(porProd).sort((a,b)=>b[1].dia-a[1].dia);
+  if(lp.length){
+    const mx=Math.max(...lp.map(e=>e[1].dia),1);
+    lp.forEach(([pid,d],i)=>{
+      const pn=prods.find(x=>x.id===parseInt(pid));
+      const investMes=d.dia*diasMes;
+      const fat=fatProd[pid]||0;
+      const pct=fat>0&&investMes>0?(investMes/fat*100):null;
+      const pctCor=pct===null?'#bbb':pct>20?'#A32D2D':pct>10?'#854F0B':'#3B6D11';
+      prodH+='<div style="margin-bottom:10px">'
+        +'<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:3px;flex-wrap:wrap">'
+        +'<span style="font-size:12px;font-weight:600;color:#222">'+(pn?escA(pn.nome):'—')+' <span style="color:#999;font-weight:400">('+d.vends.map(escA).join(', ')+')</span></span>'
+        +'<span style="font-size:12px;font-weight:700;color:#185FA5">'+fmt(d.dia)+'/dia'
+        +(pct!==null?' · <span style="color:'+pctCor+'">'+pct.toFixed(1)+'% do fat.</span>':'')
+        +'</span></div>'
+        +'<div style="background:#f0f2f5;border-radius:20px;height:8px;overflow:hidden"><div style="width:'+Math.round(d.dia/mx*100)+'%;height:100%;background:'+CORES[i%CORES.length]+';border-radius:20px"></div></div>'
+        +'</div>';
+    });
+  } else prodH='<p class="dash-no-data">Nenhum produto vinculado.</p>';
+
+  let ufH='';
+  const lu=Object.entries(porUf).sort((a,b)=>b[1].dia-a[1].dia);
+  if(lu.length){
+    const mx=Math.max(...lu.map(e=>e[1].dia),1);
+    lu.forEach(([uf,d],i)=>{
+      ufH+='<div class="dash-rank-row">'
+        +'<div style="width:38px;font-size:13px;font-weight:700;color:#003366;flex-shrink:0">'+uf+'</div>'
+        +'<div class="dash-rank-bar"><div class="dash-rank-fill" style="width:'+Math.round(d.dia/mx*100)+'%;background:'+CORES[i%CORES.length]+'"></div></div>'
+        +'<div style="font-size:11px;color:#185FA5;font-weight:600;text-align:right;width:130px;flex-shrink:0" title="'+d.vends.map(escA).join(', ')+'">'+fmt(d.dia)+'/dia</div>'
+        +'</div>';
+    });
+  } else ufH='<p class="dash-no-data">Nenhum estado vinculado.</p>';
+
+  // Bloco do gasto real (Meta)
+  let metaH='';
+  if(temMeta){
+    if(metaSpend){
+      const hh=('0'+metaSpend.at.getHours()).slice(-2)+':'+('0'+metaSpend.at.getMinutes()).slice(-2);
+      let campsH='';
+      if(metaSpend.camps.length){
+        campsH='<div style="margin-top:8px">';
+        metaSpend.camps.slice(0,8).forEach(c=>{
+          campsH+='<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:3px 0;border-bottom:1px solid #f0f2f5"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escA(c.nome)+'</span><span style="font-weight:600;color:#185FA5;flex-shrink:0">'+fmt(c.gasto)+'</span></div>';
+        });
+        campsH+='</div>';
+      }
+      const difDia=metaSpend.hoje-totDia;
+      const difStr=totDia>0?'<div class="kpi-sub" style="color:'+(difDia>0.005?'#A32D2D':'#3B6D11')+'">'+(difDia>0.005?'▲ '+fmt(Math.abs(difDia))+' acima do planejado':'✓ dentro do planejado')+'</div>':'';
+      metaH='<div style="border-top:1px solid #e0e4e8;margin-top:14px;padding-top:12px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">'
+        +'<span style="font-size:13px;font-weight:700;color:#003366">☁️ Gasto real (Meta Ads) <span style="font-weight:400;color:#aaa;font-size:11px">atualizado '+hh+'</span></span>'
+        +'<button class="btn btn-meta-sync" style="font-size:11px;padding:4px 10px" onclick="sincronizarMeta(true)">🔄 Sincronizar gasto real</button></div>'
+        +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">'
+        +'<div class="metric azul"><div class="val">'+fmt(metaSpend.hoje)+'</div><div class="lbl">Gasto hoje</div>'+difStr+'</div>'
+        +'<div class="metric laranja"><div class="val">'+fmt(metaSpend.mes)+'</div><div class="lbl">Gasto no mês (real)</div></div>'
+        +'</div>'+campsH+'</div>';
+    } else {
+      metaH='<div style="border-top:1px solid #e0e4e8;margin-top:14px;padding-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+        +'<span style="font-size:12px;color:#888">Conta Meta configurada — sincronize para ver o gasto real.</span>'
+        +'<button class="btn btn-primary btn-meta-sync" style="font-size:11px;padding:5px 12px" onclick="sincronizarMeta(true)">🔄 Sincronizar gasto real</button></div>';
+    }
+  }
+
+  return '<div class="dash-card" style="margin-bottom:16px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+    +'<h3 style="margin:0">📣 Anúncios — Investimento por Vendedor</h3>'
+    +'<span style="font-size:12px;color:#666"><strong style="color:#185FA5">'+fmt(totDia)+'/dia</strong> · estimado <strong>'+fmt(totMes)+'</strong> em '+mes+' ('+diasMes+' dias)</span>'
+    +'</div>'
+    +(rows?'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:4px"><table style="min-width:560px"><thead><tr><th>Vendedor</th><th>Número</th><th style="text-align:right">R$/dia</th><th style="text-align:right">R$/mês (est.)</th><th>Produtos</th><th>Estados</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'')
+    +'<div class="dash-row" style="margin-top:12px">'
+    +'<div><h3 style="margin-bottom:10px;font-size:13px">📦 Investimento por Produto</h3>'+prodH+'</div>'
+    +'<div><h3 style="margin-bottom:10px;font-size:13px">🗺️ Investimento por Estado</h3>'+ufH+'</div>'
+    +'</div>'
+    +metaH
+    +'</div>';
 }
 
 /* ========== FILTROS ========== */
@@ -2281,7 +2542,7 @@ function pdfEntregas(){
 
 /* ========== BACKUP ========== */
 function exportarBackup(){
-  const d={vs,ps,ads,prods,anus,sts,bonus,transfs,pgtos,comsts,compag,data:new Date().toISOString()};
+  const d={vs,ps,ads,prods,anus,sts,bonus,transfs,pgtos,comsts,compag,anunv,metaAcc,data:new Date().toISOString()};
   const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);
   a.download='backup_aco_naval_'+new Date().toISOString().split('T')[0]+'.json';a.click();
@@ -2295,8 +2556,8 @@ function importarBackup(e){
     vs=d.vs||d.vendedores||[];ps=normalizarPedidos(d.ps||d.pedidos);
     ads=d.ads||d.adiantamentos||[];prods=d.prods||d.produtos||[];
     anus=d.anus||d.anuncios||[];sts=d.sts||{};bonus=d.bonus||[];transfs=d.transfs||[];pgtos=d.pgtos||{};
-    comsts=d.comsts||{};compag=d.compag||{};
-    salvar();renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();
+    comsts=d.comsts||{};compag=d.compag||{};anunv=d.anunv||{};metaAcc=d.metaAcc||'';
+    salvar();renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();renderAnunCfg(true);
     alert('Backup importado!');
   }catch(err){alert('Erro: '+err.message);}};
   r.readAsText(f);
@@ -2304,12 +2565,12 @@ function importarBackup(e){
 function limparTudo(){
   if(!confirm('Apagar TODOS os dados?'))return;
   if(!confirm('Confirma? Não pode ser desfeito e apaga também da NUVEM (todos os dispositivos).'))return;
-  vs=[];ps=[];ads=[];prods=[];anus=[];sts={};bonus=[];transfs=[];pgtos={};pends={};comsts={};compag={};comMigrado=false;ta=null;
-  ['vs','ps','ads','prods','anus','sts','bonus','transfs','pgtos','comsts','compag'].forEach(k=>localStorage.removeItem('an_'+k));
+  vs=[];ps=[];ads=[];prods=[];anus=[];sts={};bonus=[];transfs=[];pgtos={};pends={};comsts={};compag={};comMigrado=false;ta=null;anunv={};metaAcc='';metaSpend=null;
+  ['vs','ps','ads','prods','anus','sts','bonus','transfs','pgtos','comsts','compag','anunv','metaAcc','metaToken'].forEach(k=>localStorage.removeItem('an_'+k));
   // Antes só limpava localmente e os dados voltavam da nuvem ao recarregar.
   REF.remove().catch(e=>console.error('Erro ao limpar nuvem:',e));
   APRV.remove().catch(()=>{});
-  renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();atualizarBadgePend();
+  renderV();renderSel();renderTabs();renderF();renderProd();renderSelProd();renderAnunCfg(true);atualizarBadgePend();
   alert('Dados apagados (local e nuvem).');
 }
 
@@ -2408,6 +2669,9 @@ function renderDashboard(){
       <p style="font-size:11px;color:#aaa;margin-top:10px">🔁 Saldos de meses anteriores (crédito ou dívida) são transferidos automaticamente para o mês seguinte na virada do mês.</p>
     </div>`;
   }
+
+  // ---- Anúncios: investimento por vendedor / produto / estado ----
+  h+=buildAnunDash(mes,ano);
 
   // ---- Gráfico de barras interativo ----
   const g={};
