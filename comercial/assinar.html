@@ -228,16 +228,22 @@
       </div>
       <div style="margin-top:12px">
         <div class="pay-grid">
-          <div class="pay-cell">
+          <div class="pay-cell" id="pay-cell-cartao">
             <div class="pay-type">💳 Cartão</div>
             <div class="pay-value" id="p-cartao">—</div>
             <div class="pay-sub" id="p-parcela">—</div>
           </div>
-          <div class="pay-cell">
+          <div class="pay-cell" id="pay-cell-pix">
             <div class="pay-type">💰 À Vista PIX</div>
             <div class="pay-value green" id="p-pix">—</div>
             <div class="pay-sub" id="p-avista-parc" style="display:none"></div>
             <div class="pay-sub">contato.aconaval@gmail.com</div>
+          </div>
+          <div class="pay-cell" id="pay-misto-cell" style="display:none;grid-column:1/-1;border:2px solid #1a7a44;background:#eef9f2">
+            <div class="pay-type">🔀 Pagamento Combinado</div>
+            <div class="pay-value green" id="p-misto-total">—</div>
+            <div class="pay-sub" id="p-misto-detalhe" style="font-size:11.5px;color:#1a7a44;font-weight:600;margin-top:4px"></div>
+            <div class="pay-sub">PIX: contato.aconaval@gmail.com</div>
           </div>
         </div>
       </div>
@@ -515,6 +521,22 @@ function renderPedido(p) {
     }
   }
 
+  // Pagamento combinado (misto): oculta Cartão/PIX e mostra o bloco único
+  const _mOn = !!p.pagMisto && ((p.mistoVista||0)+(p.mistoCartao||0)) > 0;
+  if (_mOn) {
+    const _mTot  = (p.mistoVista||0)+(p.mistoCartao||0);
+    const _mParc = parseInt(p.mistoParc)||1;
+    const _mParcVal = Math.ceil((p.mistoCartao||0)/_mParc*100)/100;
+    const _cCartao = document.getElementById('pay-cell-cartao'); if (_cCartao) _cCartao.style.display = 'none';
+    const _cPix    = document.getElementById('pay-cell-pix');    if (_cPix)    _cPix.style.display = 'none';
+    const _cMisto  = document.getElementById('pay-misto-cell');  if (_cMisto)  _cMisto.style.display = '';
+    const _mTotEl  = document.getElementById('p-misto-total');   if (_mTotEl)  _mTotEl.textContent = fmtBRL(_mTot);
+    const _mDetEl  = document.getElementById('p-misto-detalhe');
+    if (_mDetEl) _mDetEl.innerHTML = `💰 ${fmtBRL(p.mistoVista||0)} à vista (PIX/dinheiro) na entrega<br>💳 + ${fmtBRL(p.mistoCartao||0)} no cartão${_mParc>1?` em ${_mParc}x sem juros de ${fmtBRL(_mParcVal)}`:''}`;
+    const _avLinha = document.getElementById('p-avista');
+    if (_avLinha) _avLinha.textContent = `Pagamento combinado: ${fmtBRL(_mTot)}`;
+  }
+
   if (p.prazo) {
     document.getElementById('p-prazo').textContent = p.prazo;
     document.getElementById('p-prazo-box').style.display = 'flex';
@@ -606,7 +628,11 @@ async function enviarParaGestao(pedido, nomeAssinante) {
 
     // Valor à vista (não o de cartão) — mesma lógica usada na exibição do pedido
     const totalPag = (pedido.total != null ? pedido.total : pedido.subtotal) || 0;
-    const valAvista = (pedido.avistaVal != null && pedido.avistaVal > 0) ? pedido.avistaVal : totalPag * 0.90;
+    let valAvista = (pedido.avistaVal != null && pedido.avistaVal > 0) ? pedido.avistaVal : totalPag * 0.90;
+    // Pagamento combinado: o valor real fechado é a soma das duas partes
+    if (pedido.pagMisto && ((pedido.mistoVista||0)+(pedido.mistoCartao||0)) > 0) {
+      valAvista = (pedido.mistoVista||0)+(pedido.mistoCartao||0);
+    }
     const val = Math.round(valAvista * 100) / 100;
 
     // Categoria do primeiro produto do pedido, casada com a lista de produtos da Gestão
