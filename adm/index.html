@@ -1583,9 +1583,10 @@ function renderAnunCfg(force){
   if(ma&&document.activeElement!==ma)ma.value=metaAcc||'';
   const mt=document.getElementById('meta-token');
   if(mt&&document.activeElement!==mt)mt.value=metaToken();
-  if(!vs.length){el.innerHTML='<p class="empty">Nenhum vendedor cadastrado.</p>';return;}
+  const vsVar=vs.filter(v=>(v.tipo||'fixo')==='variavel');
+  if(!vsVar.length){el.innerHTML='<p class="empty">Nenhum vendedor variável cadastrado. Vendedores fixos não usam anúncios individuais.</p>';return;}
   let h='';
-  vs.forEach(v=>{
+  vsVar.forEach(v=>{
     const a=anv(v.id);
     let chipsP='';
     if(prods.length){
@@ -1658,7 +1659,7 @@ async function sincronizarMeta(avisar){
 function buildAnunDash(mes,ano){
   const idxM=MS.indexOf(mes);
   const diasMes=new Date(ano,idxM+1,0).getDate();
-  const cfgs=vs.map(v=>({v,a:anv(v.id)})).filter(x=>x.a.num||x.a.dia>0||x.a.prods.length||x.a.ufs.length);
+  const cfgs=vs.filter(v=>(v.tipo||'fixo')==='variavel').map(v=>({v,a:anv(v.id)})).filter(x=>x.a.num||x.a.dia>0||x.a.prods.length||x.a.ufs.length);
   const temMeta=!!(metaAcc&&metaToken());
 
   if(!cfgs.length&&!temMeta){
@@ -1680,8 +1681,7 @@ function buildAnunDash(mes,ano){
     rows+='<tr>'
       +'<td><strong>'+escA(v.nome)+'</strong></td>'
       +'<td style="white-space:nowrap">'+(a.num?'📱 '+escA(a.num):'<span style="color:#bbb">—</span>')+'</td>'
-      +'<td style="text-align:right;font-weight:600;color:#185FA5">'+(a.dia>0?fmt(a.dia):'—')+'</td>'
-      +'<td style="text-align:right;color:#666">'+(a.dia>0?fmt(a.dia*diasMes):'—')+'</td>'
+      +'<td style="text-align:right">'+(a.dia>0?'<div style="font-weight:600;color:#185FA5">'+fmt(a.dia)+'</div><div style="font-size:10px;color:#999">'+fmt(a.dia*diasMes)+'/mês</div>':'—')+'</td>'
       +'<td>'+nomesP+'</td>'
       +'<td>'+nomesU+'</td>'
       +'</tr>';
@@ -1771,7 +1771,7 @@ function buildAnunDash(mes,ano){
     +'<h3 style="margin:0">📣 Anúncios — Investimento por Vendedor</h3>'
     +'<span style="font-size:12px;color:#666"><strong style="color:#185FA5">'+fmt(totDia)+'/dia</strong> · estimado <strong>'+fmt(totMes)+'</strong> em '+mes+' ('+diasMes+' dias)</span>'
     +'</div>'
-    +(rows?'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:4px"><table style="min-width:560px"><thead><tr><th>Vendedor</th><th>Número</th><th style="text-align:right">R$/dia</th><th style="text-align:right">R$/mês (est.)</th><th>Produtos</th><th>Estados</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'')
+    +(rows?'<div style="margin-bottom:4px"><table><thead><tr><th>Vendedor</th><th>Número</th><th style="text-align:right">R$/dia</th><th>Produtos</th><th>Estados</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'')
     +'<div class="dash-row" style="margin-top:12px">'
     +'<div><h3 style="margin-bottom:10px;font-size:13px">📦 Investimento por Produto</h3>'+prodH+'</div>'
     +'<div><h3 style="margin-bottom:10px;font-size:13px">🗺️ Investimento por Estado</h3>'+ufH+'</div>'
