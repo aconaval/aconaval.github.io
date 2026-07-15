@@ -117,26 +117,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 .gal-thumb-3d span{font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.8}
 .gallery-main.is-3d{cursor:default}
-/* ── Seletor de variações 3D ── */
-#variacoes-3d{margin-top:12px}
+/* ── Rótulo de grupo (usado no toggle de lado) ── */
 .var3d-grp{margin-bottom:10px}
 .var3d-grp-label{font-size:11px;font-weight:700;color:var(--steel);text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px;display:flex;align-items:center;gap:5px}
-.var3d-chips{display:flex;gap:8px;flex-wrap:wrap}
-.var3d-chip{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-size:13px;font-weight:600;color:var(--text)}
-.var3d-chip:hover{border-color:var(--blue)}
-.var3d-chip.active{border-color:var(--blue);background:var(--blue-light);box-shadow:0 0 0 3px rgba(21,87,168,.1)}
-.var3d-chip img{width:38px;height:38px;border-radius:7px;object-fit:cover;background:#f3f6fb;flex:none}
-.var3d-chip .var3d-ph{width:38px;height:38px;border-radius:7px;background:#f0f3f8;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
-.var3d-chip .var3d-3dtag{font-size:11px;color:var(--blue)}
 .esp-chips{display:flex;gap:8px}
 .esp-chip{flex:0 0 auto;padding:8px 16px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);transition:border-color .15s,background .15s}
 .esp-chip:hover{border-color:var(--blue)}
 .esp-chip.active{border-color:var(--blue);background:var(--blue-light);box-shadow:0 0 0 3px rgba(21,87,168,.1)}
-/* ── Seletor de combinações (chips de valor por eixo) ── */
-.opc-chips{display:flex;gap:8px;flex-wrap:wrap}
-.opc-chip{flex:0 0 auto;padding:8px 16px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);transition:border-color .15s,background .15s}
-.opc-chip:hover{border-color:var(--blue)}
-.opc-chip.active{border-color:var(--blue);background:var(--blue-light);box-shadow:0 0 0 3px rgba(21,87,168,.1)}
 .gal-section-label{
   font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.6px;text-align:center;padding:2px 0 4px;line-height:1
@@ -362,8 +349,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="gallery-strip" id="gallery-strip"></div>
   </div>
 
-  <!-- SELETOR DE VARIAÇÕES 3D -->
-  <div id="variacoes-3d" style="display:none"></div>
   <!-- TOGGLE LADO (espelho esq/dir) -->
   <div id="espelho-toggle" style="display:none;margin-top:12px">
     <div class="var3d-grp-label">🔁 Lado</div>
@@ -390,6 +375,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="info-block" id="info-dim" style="display:none">
         <div class="info-block-label">📏 Medidas</div>
         <div class="info-block-val" id="prod-dim"></div>
+      </div>
+
+      <div class="info-block" id="info-filtros" style="display:none">
+        <div class="info-block-label">🎚️ Características</div>
+        <div id="prod-filtros" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px"></div>
       </div>
 
       <div class="info-block" id="info-obs" style="display:none">
@@ -1141,11 +1131,7 @@ let varSelUrl   = null;   // URL do GLB da variação escolhida (null = principa
 let varSelPoster = null;  // foto renderizada usada como prévia enquanto carrega
 let espelhado        = false;  // estado do espelho esq/dir no viewer 3D
 let familiaEspelhavel = false; // produto permite espelhamento (esq/dir)
-let varAtual         = null;   // item (produto ou variação) atualmente exibido na galeria
-let eixosCat   = [];     // eixos da categoria: [{nome, opcoes:[...]}]
-let combosList = [];     // combinações disponíveis: [{ sel:{Eixo:valor}, item, _padrao }]
-let comboSel   = {};     // seleção atual do cliente: {Eixo:valor}
-let _cfgEixos  = null;   // cache do eixosDef da config
+let varAtual         = null;   // item atualmente exibido na galeria (o próprio produto)
 
 
 
@@ -1285,29 +1271,15 @@ setupGestures();
     // Fotos de clientes são da família — sempre pelo id da raiz (não mudam por variação)
     produto.rootId = (produto.ehVariacao && produto.paiId != null) ? produto.paiId : produto.id;
     produto.fotosclientes = await carregarFotosClientesDoc(produto.rootId);
-    // Combinações (eixos por categoria; pai = combinação padrão)
-    const { combos, eixos, pai } = await carregarCombinacoes();
-    combosList = combos;
-    eixosCat   = eixos;
-    comboSel   = comboInicialSel();
-    // Se abriu uma combinação-filha direto, o título usa o nome da família
-    if (produto.ehVariacao && pai && pai.nome) produto.nome = pai.nome;
-    // Herda 3D da combinação padrão se o item aberto não tiver
-    const itemInicial = (comboDaSelecao() || combos.find(c => c._padrao) || combos[0] || {}).item;
-    if (itemInicial && !produto.modelo3d && itemInicial.modelo3d) produto.modelo3d = itemInicial.modelo3d;
-    familiaEspelhavel = familiaEspelhavel || !!produto.espelhavel;
+    familiaEspelhavel = !!produto.espelhavel;
     varAtual = produto;
     renderProduto();
     showScreen('prod');
     carregarDepoimentos(produto.cat);
     carregarRelacionados(produto.cat, produto.id);
     atualizarWhatsApp();
-    renderSeletorCombinacoes();
     renderEspelhoToggle();
-    // Aplica a combinação inicial (preço/3D/fotos coerentes), se houver escolha real
-    if (itemInicial && itemInicial.id !== produto.id) {
-      await aplicarCombo(itemInicial);
-    } else if (produto.modelo3d) {
+    if (produto.modelo3d) {
       const idx3d = allPhotos.findIndex(f => f.tipo === '3d');
       if (idx3d > -1) setTimeout(() => setMainPhoto(idx3d), 100);
     }
@@ -1476,6 +1448,15 @@ function renderProduto() {
     document.getElementById('info-obs').style.display = 'block';
   }
 
+  // Características (filtros marcados no cadastro do produto)
+  const filtrosProd = Object.entries(p.filtros || {}).filter(([,v]) => v);
+  if (filtrosProd.length) {
+    document.getElementById('prod-filtros').innerHTML = filtrosProd.map(([nome, v]) =>
+      `<span style="display:inline-flex;align-items:center;gap:5px;background:#eef4fb;border:1px solid #cfe0f2;color:#1557a8;font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:16px"><span style="opacity:.65;font-weight:500">${escHtml(nome)}:</span>${escHtml(v)}</span>`
+    ).join('');
+    document.getElementById('info-filtros').style.display = 'block';
+  }
+
   // Price
   atualizarPrecoCard(p.preco || 0);
 
@@ -1583,143 +1564,9 @@ function atualizarPrecoCard(preco) {
   const t=document.getElementById('price-total');  if(t) t.textContent = `R$ ${total}`;
 }
 
-// Carrega os eixos da categoria (ordem + valores) salvos na config do admin.
-async function carregarEixosCat(cat) {
-  if (_cfgEixos === null) {
-    try {
-      const s = await db.collection('acn').doc('config').get();
-      _cfgEixos = (s.exists && s.data().eixosDef) || {};
-    } catch { _cfgEixos = {}; }
-  }
-  return (_cfgEixos[cat] || []).map(e => ({ nome: e.nome, opcoes: [...(e.opcoes || [])] }));
-}
-
-// Infere eixos a partir das combinações existentes (fallback / robustez).
-function inferirEixos(combos) {
-  const ordem = [], valores = {};
-  combos.forEach(c => Object.keys(c.sel || {}).forEach(eixo => {
-    if (!ordem.includes(eixo)) { ordem.push(eixo); valores[eixo] = []; }
-    const v = c.sel[eixo];
-    if (v != null && v !== '' && !valores[eixo].includes(v)) valores[eixo].push(v);
-  }));
-  return ordem.map(nome => ({ nome, opcoes: valores[nome] }));
-}
-
-// Busca o produto principal + suas combinações-filhas. Monta a lista de combinações
-// (pai = combinação padrão; filhos = outras) e os eixos da categoria.
-async function carregarCombinacoes() {
-  try {
-    const familiaPaiId = produto.ehVariacao ? produto.paiId : produto.id;
-    if (familiaPaiId == null) return { combos: [], eixos: [], pai: produto };
-    const [paiSnap, varSnap] = await Promise.all([
-      produto.ehVariacao
-        ? db.collection('acn_produtos').doc(String(familiaPaiId)).get().catch(() => null)
-        : Promise.resolve(null),
-      db.collection('acn_produtos').where('paiId', '==', familiaPaiId).get().catch(() => null)
-    ]);
-    const pai = produto.ehVariacao
-      ? (paiSnap && paiSnap.exists ? Object.assign({ id: familiaPaiId }, paiSnap.data()) : null)
-      : produto;
-    if (pai && pai.espelhavel) familiaEspelhavel = true;
-
-    const combos = [];
-    if (pai) combos.push({ sel: pai.comboPadrao || {}, item: pai, _padrao: true });
-    if (varSnap && !varSnap.empty) {
-      varSnap.docs.map(d => Object.assign({ id: d.id }, d.data()))
-        .filter(v => v.ehVariacao)
-        .sort((a, b) => (a.ordem || 0) - (b.ordem || 0)
-          || String(a.codigo || '').localeCompare(String(b.codigo || '')))
-        .forEach(v => {
-          // formato novo: v.combo; legado single-axis: v.eixo + v.nome
-          let sel = v.combo;
-          if (!sel && v.eixo) sel = { [v.eixo]: v.nome };
-          combos.push({ sel: sel || {}, item: v });
-        });
-    }
-
-    const cat = (pai && pai.cat) || produto.cat;
-    let eixos = await carregarEixosCat(cat);
-    if (!eixos.length) {
-      eixos = inferirEixos(combos);
-    } else {
-      // mantém só eixos/valores que aparecem em alguma combinação real
-      eixos = eixos.map(e => ({
-        nome: e.nome,
-        opcoes: (e.opcoes || []).filter(o => combos.some(c => c.sel[e.nome] === o))
-      })).filter(e => e.opcoes.length);
-      // acrescenta eixos presentes nas combinações mas ausentes na config
-      inferirEixos(combos).forEach(ie => { if (!eixos.some(e => e.nome === ie.nome)) eixos.push(ie); });
-    }
-    return { combos, eixos, pai };
-  } catch (e) { console.error('combinacoes:', e); return { combos: [], eixos: [], pai: produto }; }
-}
-
-// Seleção inicial: se abriu uma combinação direto, usa ela; senão a padrão (pai); senão a 1ª.
-function comboInicialSel() {
-  if (produto.ehVariacao && produto.combo) return { ...produto.combo };
-  const padrao = combosList.find(c => c._padrao && c.sel && Object.keys(c.sel).length);
-  if (padrao) return { ...padrao.sel };
-  return combosList.length ? { ...combosList[0].sel } : {};
-}
-
-// Acha a combinação que casa exatamente com a seleção atual.
-function comboDaSelecao() {
-  return combosList.find(c => eixosCat.every(e => c.sel[e.nome] === comboSel[e.nome]))
-      || combosList.find(c => Object.keys(comboSel).every(k => c.sel[k] === comboSel[k]));
-}
-
-// Texto da combinação atual: "150 cm · 60 cm · Ilha"
-function comboTextual() {
-  return eixosCat.map(e => comboSel[e.nome]).filter(Boolean).join(' · ');
-}
-
-// Renderiza um grupo de chips por eixo. A seleção atual fica destacada.
-function renderSeletorCombinacoes() {
-  const box = document.getElementById('variacoes-3d');
-  if (!box) return;
-  const temEscolha = combosList.length > 1 && eixosCat.some(e => (e.opcoes || []).length > 1);
-  if (!combosList.length || !temEscolha) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  const esc = s => String(s).replace(/'/g, "\\'");
-  let html = '';
-  eixosCat.forEach(e => {
-    if (!(e.opcoes || []).length) return;
-    html += `<div class="var3d-grp"><div class="var3d-grp-label">🔀 ${e.nome}</div><div class="opc-chips">`;
-    e.opcoes.forEach(o => {
-      const active = comboSel[e.nome] === o;
-      html += `<button class="opc-chip${active ? ' active' : ''}" onclick="selecionarValor('${esc(e.nome)}','${esc(o)}')">${escHtml(o)}</button>`;
-    });
-    html += `</div></div>`;
-  });
-  box.innerHTML = html;
-  box.style.display = 'block';
-}
-
-// Cliente escolheu um valor num eixo → "encaixa" na combinação real mais próxima.
-async function selecionarValor(eixo, valor) {
-  const cands = combosList.filter(c => c.sel[eixo] === valor);
-  if (!cands.length) return;
-  // entre os candidatos, prefere o que mantém mais escolhas atuais nos outros eixos
-  let best = cands[0], bestScore = -1;
-  cands.forEach(c => {
-    let score = 0;
-    eixosCat.forEach(e => { if (e.nome !== eixo && c.sel[e.nome] && c.sel[e.nome] === comboSel[e.nome]) score++; });
-    if (c._padrao) score += 0.5;   // leve preferência pela combinação padrão em empates
-    if (score > bestScore) { bestScore = score; best = c; }
-  });
-  comboSel = { ...best.sel };
-  renderSeletorCombinacoes();
-  await aplicarCombo(best.item);
-}
-
-// Aplica uma combinação: preço + medidas + 3D + fotos + dados do pedido.
-async function aplicarCombo(item) {
-  atualizarPrecoCard(item.preco != null ? item.preco : produto.preco);
-  await montarGaleriaItem(item);
-}
-
-// Monta a galeria de um item (produto ou variação) no lado atual (esq/dir).
+// Monta a galeria do produto no lado atual (esq/dir).
 // Foto principal + projeto trocam por lado; 3D é o mesmo GLB (espelhado no viewer);
-// fotos de clientes são da família e ficam fixas.
+// fotos de clientes ficam fixas.
 async function montarGaleriaItem(item) {
   varAtual = item;
   varSelUrl    = item.modelo3d || null;
@@ -1878,10 +1725,10 @@ async function enviarPedido() {
   const btn = document.getElementById('btn-pedir');
   btn.disabled=true; btn.textContent='⏳ Enviando…';
 
-  // Combinação escolhida pelo cliente (preço/medidas/código próprios)
   const sel       = varAtual || produto;
-  const comboTxt  = comboTextual();
-  const nomeItem  = produto.nome + (comboTxt ? ' — ' + comboTxt : '');
+  // Lado escolhido (só quando o produto permite espelhar)
+  const ladoTxt   = familiaEspelhavel ? (espelhado ? 'Lado: Direita' : 'Lado: Esquerda') : '';
+  const nomeItem  = produto.nome + (ladoTxt ? ' — ' + ladoTxt : '');
   const dimItem   = sel.dim || produto.dim || '';
   const precoItem = (sel.preco != null ? sel.preco : produto.preco) || 0;
   const codItem   = sel.codigo || produto.codigo || '';
