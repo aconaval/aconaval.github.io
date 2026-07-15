@@ -148,6 +148,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   border-bottom:1px solid var(--border);
 }
 .cat-row{display:flex;flex-wrap:wrap;gap:8px}
+/* ── SUBFILTROS (filtros dinâmicos da categoria) ── */
+.subfilter-bar{margin-top:10px;padding-top:10px;border-top:1px dashed #dbe4ee;display:flex;flex-direction:column;gap:7px;animation:sfIn .25s ease}
+@keyframes sfIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.sf-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sf-label{font-size:11px;font-weight:700;color:#5b6b7d;text-transform:uppercase;letter-spacing:.5px;min-width:74px}
+.sf-chip{border:1.5px solid #d5dfe9;background:#fff;color:#37474f;font-size:12.5px;font-weight:600;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+.sf-chip:hover{border-color:#185FA5;color:#185FA5}
+.sf-chip.active{background:#185FA5;border-color:#185FA5;color:#fff;box-shadow:0 2px 8px rgba(24,95,165,.25)}
+.sf-chip.disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+.sf-chip .sf-count{font-weight:400;opacity:.65;font-size:11px;margin-left:3px}
+.sf-clear{border:none;background:#fceaea;color:#a32d2d;font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px;cursor:pointer;font-family:inherit}
+.sf-clear:hover{background:#f5d5d5}
 .cat-row::-webkit-scrollbar{display:none}
 .cat-chip{
   padding:7px 16px;border-radius:999px;border:1.5px solid var(--border);
@@ -733,6 +745,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <!-- MENU DE CATEGORIAS (topo, fixo) -->
     <div class="cat-bar" id="cat-bar">
       <div class="cat-row" id="cat-row"></div>
+      <div id="subfilter-bar" class="subfilter-bar" style="display:none"></div>
     </div>
 
     <div class="section-head">
@@ -1043,6 +1056,8 @@ const db = firebase.firestore();
 let produtos = [];
 let cart = [];  // [{prodId, nome, dim, preco, foto, qty}]
 let filtroAtivo = 'Todos';
+let filtrosDefLoja = {};    // definição dos filtros por categoria (vem do admin): { "Fogão": [{nome, opcoes:[]}] }
+let subFiltros = {};        // seleção atual do cliente: { "Posição": "Ilha" }
 
 // Escapa HTML em textos vindos do banco. Nomes/medidas com aspas — ex: 60\" (polegadas) —
 // quebravam os atributos alt/title e o HTML dos cards inteiros.
@@ -1074,12 +1089,22 @@ function lerCacheLoja() {
   try {
     const c = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
     if (!c || !Array.isArray(c.produtos) || (Date.now() - (c.t || 0)) > CACHE_TTL) return null;
+    filtrosDefLoja = normalizarFiltrosDef(c.filtrosDef || {});
     return c.produtos;
   } catch(e) { return null; }
 }
+
+// Aceita o formato novo ({nome, opcoes}) e o antigo (strings) sem quebrar
+function normalizarFiltrosDef(def) {
+  const out = {};
+  Object.keys(def || {}).forEach(cat => {
+    out[cat] = (def[cat] || []).map(f => (typeof f === 'string') ? { nome: f, opcoes: [] } : f).filter(f => f && f.nome);
+  });
+  return out;
+}
 function salvarCacheLoja() {
   // fotos em base64 podem estourar a cota do sessionStorage — se estourar, só não cacheia
-  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), produtos })); } catch(e) {}
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), produtos, filtrosDef: filtrosDefLoja })); } catch(e) {}
   // cache LEVE compartilhado com a página de produto (menu de categorias / relacionados)
   try {
     const lite = produtos.map(p => ({ id:p.id, nome:p.nome, cat:p.cat, preco:p.preco, foto:p.foto, codigo:p.codigo, dim:p.dim, ehVariacao:!!p.ehVariacao }));
@@ -1096,6 +1121,7 @@ function aplicarCatDaUrl() {
 function renderTudo() {
   aplicarCatDaUrl();
   renderCategories();
+  renderSubFiltros();
   renderCatalog();
   atualizarWhatsAppLoja();
   if (produtos.length) document.getElementById('cart-btn').style.display = 'flex';
@@ -1107,7 +1133,11 @@ async function loadProdutos() {
 
   document.getElementById('loading').classList.add('active');
   try {
-    const idxSnap = await db.collection('acn').doc('produtos_index').get();
+    const [idxSnap, cfgSnap] = await Promise.all([
+      db.collection('acn').doc('produtos_index').get(),
+      db.collection('acn').doc('config').get().catch(() => null)
+    ]);
+    if (cfgSnap && cfgSnap.exists) filtrosDefLoja = normalizarFiltrosDef(cfgSnap.data().filtrosDef || {});
     if (idxSnap.exists) {
       const ids = idxSnap.data().ids || [];
       const snaps = await Promise.all(ids.map(id => db.collection('acn_produtos').doc(String(id)).get()));
@@ -1169,10 +1199,12 @@ function renderCategories() {
 }
 function setCategoria(cat) {
   filtroAtivo = cat;
+  subFiltros = {};                 // trocar de categoria limpa os filtros
   // Atualiza a URL pra permitir compartilhar o link da categoria
   if (cat === 'Todos') history.replaceState({}, '', location.pathname);
   else history.replaceState({}, '', '?cat=' + encodeURIComponent(cat));
   renderCategories();
+  renderSubFiltros();
   renderCatalog();
   atualizarWhatsAppLoja();
   // Volta pro primeiro produto (corrige a tela ficar lá embaixo ao trocar de categoria)
@@ -1187,6 +1219,83 @@ function setCategoria(cat) {
   }
 }
 
+// ── SUBFILTROS DINÂMICOS DA CATEGORIA ─────────────────────────────
+// Nomes dos filtros da categoria: usa a definição do admin e, se faltar,
+// infere pelos valores salvos nos próprios produtos (robustez).
+function filtrosDaCategoria(cat) {
+  const defs = (filtrosDefLoja[cat] || []).map(f => f.nome);
+  const extras = [];
+  produtos.filter(p => p.cat === cat && p.filtros).forEach(p => {
+    Object.keys(p.filtros).forEach(n => {
+      if (p.filtros[n] && !defs.includes(n) && !extras.includes(n)) extras.push(n);
+    });
+  });
+  return [...defs, ...extras];
+}
+
+// Produtos da categoria que passam nos filtros ativos (ignorando um filtro, se pedido)
+function produtosFiltrados(cat, ignorar) {
+  let lista = produtos.filter(p => !isCano(p) && p.cat === cat);
+  Object.entries(subFiltros).forEach(([nome, val]) => {
+    if (!val || nome === ignorar) return;
+    lista = lista.filter(p => p.filtros && p.filtros[nome] === val);
+  });
+  return lista;
+}
+
+function renderSubFiltros() {
+  const bar = document.getElementById('subfilter-bar');
+  if (!bar) return;
+  if (filtroAtivo === 'Todos') { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+
+  const nomes = filtrosDaCategoria(filtroAtivo);
+  if (!nomes.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+
+  const catProds = produtos.filter(p => !isCano(p) && p.cat === filtroAtivo);
+  const temAtivo = Object.values(subFiltros).some(Boolean);
+  let html = '';
+
+  nomes.forEach(nome => {
+    // valores na ordem cadastrada no admin + extras vindos dos produtos
+    const def = (filtrosDefLoja[filtroAtivo] || []).find(f => f.nome === nome);
+    const usados = new Set(catProds.map(p => p.filtros && p.filtros[nome]).filter(Boolean));
+    const vals = [
+      ...(def && def.opcoes ? def.opcoes.filter(o => usados.has(o)) : []),
+      ...[...usados].filter(v => !(def && def.opcoes || []).includes(v))
+    ];
+    if (!vals.length) return;
+
+    // contagem considerando os OUTROS filtros ativos (o cliente vê o que sobra)
+    const base = produtosFiltrados(filtroAtivo, nome);
+    const chips = vals.map(v => {
+      const count = base.filter(p => p.filtros && p.filtros[nome] === v).length;
+      const on = subFiltros[nome] === v;
+      const cls = 'sf-chip' + (on ? ' active' : '') + (!on && count === 0 ? ' disabled' : '');
+      return `<button class="${cls}" onclick="setSubFiltro(decodeURIComponent('${encodeURIComponent(nome)}'),decodeURIComponent('${encodeURIComponent(v)}'))">${escHtml(v)}<span class="sf-count">${count}</span></button>`;
+    }).join('');
+    html += `<div class="sf-row"><span class="sf-label">${escHtml(nome)}</span>${chips}</div>`;
+  });
+
+  if (!html) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  if (temAtivo) html += `<div class="sf-row"><button class="sf-clear" onclick="limparSubFiltros()">✕ Limpar filtros</button></div>`;
+  bar.innerHTML = html;
+  bar.style.display = 'flex';
+}
+
+// Clica num valor: seleciona; clica de novo: desmarca
+function setSubFiltro(nome, val) {
+  if (subFiltros[nome] === val) delete subFiltros[nome];
+  else subFiltros[nome] = val;
+  renderSubFiltros();
+  renderCatalog();
+}
+
+function limparSubFiltros() {
+  subFiltros = {};
+  renderSubFiltros();
+  renderCatalog();
+}
+
 // ── CATALOG ──────────────────────────────────────────────────────
 function renderCatalog() {
   const search = (document.getElementById('search-input').value || '').toLowerCase();
@@ -1194,6 +1303,10 @@ function renderCatalog() {
 
   let filtered = produtos.filter(p => !isCano(p));
   if (filtroAtivo !== 'Todos') filtered = filtered.filter(p => p.cat === filtroAtivo);
+  // Filtros dinâmicos da categoria (Posição, Tamanho, Tipo...)
+  Object.entries(subFiltros).forEach(([nome, val]) => {
+    if (val) filtered = filtered.filter(p => p.filtros && p.filtros[nome] === val);
+  });
   if (search) filtered = filtered.filter(p =>
     (p.nome||'').toLowerCase().includes(search) ||
     (p.cat||'').toLowerCase().includes(search) ||
@@ -1205,9 +1318,11 @@ function renderCatalog() {
   label.textContent = `${filtered.length} produto${filtered.length !== 1 ? 's' : ''} encontrado${filtered.length !== 1 ? 's' : ''}`;
 
   if (!filtered.length) {
+    const temFiltro = Object.values(subFiltros).some(Boolean);
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
       <div class="icon">🔍</div>
-      <p>Nenhum produto encontrado.<br>Tente outra busca ou categoria.</p>
+      <p>Nenhum produto encontrado.<br>${temFiltro ? 'Essa combinação de filtros não tem produto — tente mudar uma opção.' : 'Tente outra busca ou categoria.'}</p>
+      ${temFiltro ? '<button class="sf-clear" style="margin-top:12px" onclick="limparSubFiltros()">✕ Limpar filtros</button>' : ''}
     </div>`;
     return;
   }
