@@ -439,7 +439,7 @@ tbody tr:hover{background:#fafbfc}
   <!-- PAINEL CATEGORIAS E FILTROS -->
   <div class="card slide-panel filtros-panel" id="filtros-panel">
     <div style="font-size:13px;font-weight:700;color:#003366;margin-bottom:4px">🗂️ Categorias e Filtros</div>
-    <div style="font-size:12px;color:#888;margin-bottom:14px">Gerencie as categorias do catálogo e os filtros de cada uma. Ao cadastrar um produto, você escolhe a categoria por seleção.</div>
+    <div style="font-size:12px;color:#888;margin-bottom:14px">Gerencie as categorias do catálogo e os filtros de cada uma. Cada filtro tem seus valores (ex: Posição → Ilha, Parede). Ao cadastrar um produto, você marca os valores que valem para ele — e a loja usa isso pro cliente filtrar até achar o produto.</div>
     <div id="filtros-def-list"></div>
     <!-- Adicionar nova categoria -->
     <div style="border-top:1px solid #f0f2f5;padding-top:12px;margin-top:4px">
@@ -471,22 +471,9 @@ tbody tr:hover{background:#fafbfc}
       <div class="grid2">
         <div class="form-group" id="wrap-preco"><label class="form-label">Valor Unitário (R$)</label><input class="form-input" id="inp-preco" type="number" min="0" step="0.01" placeholder="0,00"/></div>
         <div class="form-group"><label class="form-label">Categoria</label>
-          <select class="form-input" id="inp-cat" onchange="renderFiltrosExtrasForm();renderComboWrap()" style="cursor:pointer">
+          <select class="form-input" id="inp-cat" onchange="renderFiltrosExtrasForm()" style="cursor:pointer">
             <option value="">Selecione a categoria...</option>
           </select>
-        </div>
-      </div>
-      <!-- BANNER: esta é uma combinação de um produto principal -->
-      <div id="combo-banner" style="display:none;align-items:center;gap:8px;padding:9px 12px;background:#F1ECFB;border:1px solid #D6C6EE;border-radius:7px;margin-bottom:12px">
-        <span style="font-size:16px">🔀</span>
-        <div style="font-size:12.5px;color:#5a2d91">Combinação de: <b id="combo-banner-nome"></b></div>
-      </div>
-      <!-- SELETORES DE EIXOS (combinação padrão do principal OU valores de uma combinação) -->
-      <div id="combo-wrap" style="display:none">
-        <div class="conj-picker" style="background:#faf7ff;border-color:#e6def5">
-          <div id="combo-label" style="font-size:12px;font-weight:700;color:#6B3FA0;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px"></div>
-          <div id="combo-selects" style="display:flex;flex-wrap:wrap;gap:10px"></div>
-          <div id="combo-hint" style="font-size:11px;color:#888;margin-top:9px;line-height:1.5"></div>
         </div>
       </div>
       <!-- PAINEL CONJUNTO -->
@@ -547,11 +534,6 @@ tbody tr:hover{background:#fafbfc}
         </div>
         <input type="file" id="inp-foto-clientes" accept="image/*" multiple style="display:none" onchange="onFotoClienteChange(event)"/>
       </div>
-      <div id="nota-clientes-variacao" class="form-group" style="display:none">
-        <div style="font-size:12px;color:#6B3FA0;background:#F1ECFB;border:1px solid #D6C6EE;border-radius:6px;padding:8px 11px;line-height:1.5">
-          📸 <b>Fotos de clientes ficam no produto principal</b> — valem para todas as variações e não mudam ao trocar de tamanho/opção. Só foto principal, projeto e 3D são por variação.
-        </div>
-      </div>
       <div class="form-group" id="glb-wrap">
         <label class="form-label">🧊 Modelo 3D (GLB) <span style="font-weight:400;color:#888;font-size:11px">— visualização interativa 360° para o cliente</span></label>
         <div id="glb-current" style="display:none;align-items:center;gap:8px;padding:8px 10px;background:#f0f6ff;border:1px solid #B5D4F4;border-radius:6px;margin-bottom:6px">
@@ -600,7 +582,6 @@ tbody tr:hover{background:#fafbfc}
       </div>
       <div id="prod-acoes-extra" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f0f2f5;padding-top:12px;margin-top:4px;margin-bottom:12px">
         <span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.4px;width:100%">Outras ações para este produto</span>
-        <button class="btn btn-ghost btn-sm" id="btn-prod-variacao" style="color:#6B3FA0" onclick="novaCombinacaoDe(parseInt(document.getElementById('edit-prod-id').value))" title="Adicionar uma combinação deste produto">🔀 + Combinação</button>
         <button class="btn btn-ghost btn-sm" style="color:#185FA5" onclick="copiarLinkProduto(document.getElementById('edit-prod-id').value, this)" title="Copiar link do produto para enviar ao cliente">🔗 Copiar Link</button>
         <button class="btn btn-danger btn-sm" onclick="deleteProduto(document.getElementById('edit-prod-id').value)">🗑️ Excluir Produto</button>
       </div>
@@ -711,7 +692,7 @@ tbody tr:hover{background:#fafbfc}
 <!-- PAGE: LISTA -->
 <div class="page" id="page-lista">
   <div class="sec-header">
-    <div class="sec-title">Orçamentos Emitidos <small>Histórico completo de orçamentos</small></div>
+    <div class="sec-title">Orçamentos Emitidos <small>Orçamentos são apagados automaticamente após 30 dias · Pedidos nunca são apagados</small></div>
   </div>
   <div id="lista-orcamentos">
     <div class="empty"><div class="empty-icon">📋</div><p>Nenhum orçamento gerado ainda.</p></div>
@@ -1635,7 +1616,7 @@ function toggleProdForm(open) {
 function cancelProdForm() { toggleProdForm(false); clearProdForm(); }
 function clearProdForm() {
   ['inp-nome','inp-dim','inp-preco','inp-cat','inp-obs'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-  Object.values(filtrosDef).flat().forEach(f => { const el=document.getElementById('inp-f-'+slugify(f)); if(el) el.value=''; });
+  filtrosSelForm = {};
   document.getElementById('edit-prod-id').value = '';
   document.getElementById('prod-form-title').textContent = 'Novo Produto';
   const acoesExtra = document.getElementById('prod-acoes-extra');
@@ -1654,9 +1635,8 @@ function clearProdForm() {
   currentFotosProjetoDirBase64 = []; renderProjetoDirThumbs();
   toggleLadoDireito();
   resetGlbUI();
-  // Reseta estado de combinação e volta para "Produto simples"
+  // Volta para "Produto simples"
   currentComponentes = [];
-  setComboMode(null);
   setTipoProduto('simples');
 }
 let currentFotoBase64 = null;
@@ -2050,7 +2030,7 @@ async function onFotoProjetoChange(e) {
       prod.fotosprojeto = [...currentFotosProjetoBase64];
       Promise.all([
         enfileirarSalvarFotosProjeto(prod.id),
-        ...(prod.ehVariacao ? [] : [enfileirarSalvarFotosClientes(prod.id)]),
+        enfileirarSalvarFotosClientes(prod.id),
       ])
         .then(() => setStatus('✅ Foto salva', 'ok'))
         .catch(e => {
@@ -2203,40 +2183,21 @@ async function saveProduto() {
   const preco = parseFloat(document.getElementById('inp-preco').value);
   const cat  = document.getElementById('inp-cat').value.trim();
   const obs  = document.getElementById('inp-obs').value.trim();
+  // Filtros do produto: seleção feita nos chips do formulário
   const filtros = {};
-  const catFs = filtrosDef[cat] || [];
-  catFs.forEach(f => { const el=document.getElementById('inp-f-'+slugify(f)); if(el) filtros[f]=el.value.trim(); });
-  const ehCombinacao = !!currentPaiId;
+  (filtrosDef[cat] || []).forEach(f => { if (filtrosSelForm[f.nome]) filtros[f.nome] = filtrosSelForm[f.nome]; });
   const ehEspelhavel = !!(document.getElementById('inp-espelhavel') && document.getElementById('inp-espelhavel').checked);
-  const tipoProd = (!ehCombinacao && document.getElementById('tipo-btn-conjunto').classList.contains('active')) ? 'conjunto' : 'simples';
+  const tipoProd = document.getElementById('tipo-btn-conjunto').classList.contains('active') ? 'conjunto' : 'simples';
   const componentes = tipoProd==='conjunto' ? [...currentComponentes] : [];
   const precoFinal = tipoProd==='conjunto'
     ? componentes.reduce((s,c)=>{ const p=produtos.find(x=>x.id===c.prodId); return s+(p?p.preco:0); },0)
     : preco;
 
-  // Nome: combinação herda o nome da família (pai); produto normal usa o campo Nome
-  const pai = ehCombinacao ? produtos.find(p => p.id === currentPaiId) : null;
-  const nome = ehCombinacao ? (pai ? pai.nome : '') : document.getElementById('inp-nome').value.trim();
+  const nome = document.getElementById('inp-nome').value.trim();
 
-  // Combo (valores dos eixos) — vale tanto pra combinação quanto pra padrão do principal
-  const eixosCat = eixosDef[cat] || [];
-  const combo = (eixosCat.length) ? readCombo() : null;
-
-  if (ehCombinacao && !pai) return alert('Produto principal não encontrado.');
-  if (!ehCombinacao && !nome) return alert('Informe o nome do produto.');
+  if (!nome) return alert('Informe o nome do produto.');
   if (tipoProd==='simples' && (isNaN(preco) || preco < 0)) return alert('Informe um valor válido.');
   if (tipoProd==='conjunto' && componentes.length===0) return alert('Adicione ao menos um componente ao conjunto.');
-  // Combinação exige um valor por eixo
-  if (ehCombinacao) {
-    if (!eixosCat.length) return alert('A categoria "'+cat+'" não tem eixos definidos. Defina os eixos em "Categorias e Filtros".');
-    const faltando = eixosCat.filter(e => !combo || !combo[e.nome]);
-    if (faltando.length) return alert('Escolha um valor para: ' + faltando.map(e=>e.nome).join(', '));
-    // Evita combinação duplicada no mesmo principal
-    const eidNum = document.getElementById('edit-prod-id').value;
-    const dup = produtos.find(p => p.ehVariacao && p.paiId===currentPaiId && String(p.id)!==String(eidNum)
-      && p.combo && JSON.stringify(p.combo)===JSON.stringify(combo));
-    if (dup) return alert('Já existe uma combinação idêntica neste produto: ' + Object.values(combo).join(' · '));
-  }
 
   const eid = document.getElementById('edit-prod-id').value;
   const prodId = eid ? parseInt(eid) : Date.now();
@@ -2261,13 +2222,10 @@ async function saveProduto() {
     if (idx >= 0) {
       const codigoExistente = produtos[idx].codigo;
       let codigoFinal = codigoExistente;
-      if (ehCombinacao) codigoFinal = codigoCombinacao(currentPaiId, combo, prodId);
-      else if (String(codigoFinal || '').includes('-')) codigoFinal = proximoCodigoLivrePorCat(cat);
+      // Códigos antigos de combinação (ex: FOG01-180) ganham um código limpo da categoria ao editar
+      if (String(codigoFinal || '').includes('-')) codigoFinal = proximoCodigoLivrePorCat(cat);
       produtos[idx] = { ...produtos[idx], nome, dim, preco:precoFinal, cat, obs, codigo:codigoFinal, filtros, tipoProd, componentes,
-        ehVariacao: ehCombinacao, paiId: ehCombinacao ? currentPaiId : null,
-        combo: ehCombinacao ? combo : null,
-        comboPadrao: (!ehCombinacao && combo) ? combo : (produtos[idx].comboPadrao || null),
-        eixo: null,   // campo antigo de eixo único não é mais usado
+        ehVariacao: false, paiId: null, combo: null, comboPadrao: null, eixo: null,
         modelo3d: modelo3dUrl || produtos[idx].modelo3d || null, espelhavel: ehEspelhavel };
       if (currentFotoBase64 !== null) produtos[idx].foto = currentFotoBase64;
       produtos[idx].fotosprojeto = [...currentFotosProjetoBase64];
@@ -2275,12 +2233,9 @@ async function saveProduto() {
       produtos[idx].fotosprojetoDir = [...currentFotosProjetoDirBase64];
     }
   } else {
-    const proximoCodigo = ehCombinacao ? codigoCombinacao(currentPaiId, combo) : proximoCodigoLivrePorCat(cat);
+    const proximoCodigo = proximoCodigoLivrePorCat(cat);
     produtos.push({ id: prodId, nome, dim, preco:precoFinal, cat, obs, codigo:proximoCodigo, filtros, tipoProd, componentes,
-      ehVariacao: ehCombinacao, paiId: ehCombinacao ? currentPaiId : null,
-      combo: ehCombinacao ? combo : null,
-      comboPadrao: (!ehCombinacao && combo) ? combo : null,
-      eixo: null,
+      ehVariacao: false, paiId: null, combo: null, comboPadrao: null, eixo: null,
       foto: currentFotoBase64 || '', fotosprojeto: [...currentFotosProjetoBase64], modelo3d: modelo3dUrl || null, espelhavel: ehEspelhavel,
       fotoDir: currentFotoDirBase64 || null, fotosprojetoDir: [...currentFotosProjetoDirBase64] });
   }
@@ -2294,25 +2249,14 @@ function editProduto(id) {
   populateCatSelect();
   document.getElementById('inp-cat').value  = p.cat || '';
   document.getElementById('inp-obs').value  = p.obs || '';
+  filtrosSelForm = { ...(p.filtros || {}) };
   renderFiltrosExtrasForm();
-  const catFsEdit = filtrosDef[p.cat] || [];
-  catFsEdit.forEach(f => { const el=document.getElementById('inp-f-'+slugify(f)); if(el) el.value=(p.filtros&&p.filtros[f])||''; });
   currentComponentes = p.componentes ? [...p.componentes] : [];
-  // Carrega estado de combinação (produto-filho) ou produto principal
-  if (p.ehVariacao) {
-    setComboMode(p.paiId || null);
-    renderComboWrap(p.combo || null);
-  } else {
-    setComboMode(null);
-    setTipoProduto(p.tipoProd || 'simples');
-    renderComboWrap(p.comboPadrao || null);
-  }
+  setTipoProduto(p.tipoProd || 'simples');
   document.getElementById('edit-prod-id').value = p.id;
-  document.getElementById('prod-form-title').textContent = p.ehVariacao ? 'Editar Combinação' : 'Editar Produto';
+  document.getElementById('prod-form-title').textContent = 'Editar Produto';
   const acoesExtra = document.getElementById('prod-acoes-extra');
   if (acoesExtra) acoesExtra.style.display = 'flex';
-  const btnVarExtra = document.getElementById('btn-prod-variacao');
-  if (btnVarExtra) btnVarExtra.style.display = (p.tipoProd === 'conjunto' || p.ehVariacao) ? 'none' : '';
   currentFotoBase64 = null; // preserve existing unless changed
   if (p.foto) { applyFotoUI(p.foto); }
   else resetFotoUI();
@@ -2325,16 +2269,10 @@ function editProduto(id) {
     currentFotosProjetoBase64 = Array.isArray(p.fotosprojeto) ? [...p.fotosprojeto] : [];
     renderProjetoThumbs();
   });
-  if (p.ehVariacao) {
-    // Variação não tem fotos de clientes próprias — ficam no produto principal
-    currentFotosClientesBase64 = [];
+  carregarFotosClientes(p.id).then(fc => {
+    currentFotosClientesBase64 = fc || [];
     renderClienteThumbs();
-  } else {
-    carregarFotosClientes(p.id).then(fc => {
-      currentFotosClientesBase64 = fc || [];
-      renderClienteThumbs();
-    });
-  }
+  });
   // Restaura modelo 3D
   currentGlbFile = null;
   if (p.modelo3d) {
@@ -2487,23 +2425,17 @@ function normalizarProdutos() {
 function deleteProduto(id) {
   const prod = produtos.find(p => p.id == id);
   const cod = prod ? prod.codigo : null;
-  // Se for produto principal, recolhe as variações para excluir junto
-  const variacoes = prod ? produtos.filter(p => p.ehVariacao && p.paiId == id) : [];
-  const idsExcluir = [id, ...variacoes.map(v => v.id)];
-  const msgVar = variacoes.length
-    ? ` Este produto tem ${variacoes.length} ${variacoes.length===1?'combinação':'combinações'} — ${variacoes.length===1?'ela será excluída':'elas serão excluídas'} junto.`
-    : '';
+  const idsExcluir = [id];
   showConfirm(
     'Excluir Produto',
     'Tem certeza que deseja excluir este produto?' +
-      (cod != null ? ' O código ' + cod + ' ficará livre para reuso.' : '') + msgVar,
+      (cod != null ? ' O código ' + cod + ' ficará livre para reuso.' : ''),
     async () => {
-      // Se o produto excluído (ou uma de suas variações) estiver aberto no
-      // painel de edição, fecha o painel para não deixá-lo "editando" algo
-      // que não existe mais.
+      // Se o produto excluído estiver aberto no painel de edição, fecha o
+      // painel para não deixá-lo "editando" algo que não existe mais.
       const idEmEdicao = document.getElementById('edit-prod-id')?.value;
       if (idEmEdicao && idsExcluir.some(x => x == idEmEdicao)) cancelProdForm();
-      // 1) tira da memória (produto + variações) e atualiza a tela na hora
+      // 1) tira da memória e atualiza a tela na hora
       produtos = produtos.filter(p => !idsExcluir.some(x => x == p.id));
       renderProdutos();
       // 2) apaga os documentos no Firestore (cada id: doc do produto + fotos)
@@ -2597,105 +2529,33 @@ function renderFiltrosDefPanel(){
             <button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:11px" onclick="removeCategoria('${cat.replace(/'/g,"\\'")}')">✕</button>
           </div>
         </div>
-        <div class="cat-filtros-row" id="filtros-row-${slug}">
-          ${fs.length
-            ? fs.map((f,i)=>`<span class="cat-filtro-chip">${f}<button onclick="removeFiltroDef('${cat.replace(/'/g,"\\'")}',${i})" title="Remover filtro">✕</button></span>`).join('')
-            : '<span style="font-size:11px;color:#bbb">Nenhum filtro — adicione abaixo</span>'}
+        <div class="cat-eixos" style="margin-top:8px">
+          ${fs.length ? fs.map((f,i)=>`
+            <div class="eixo-row">
+              <div class="eixo-row-head">
+                <span class="eixo-nome">🎚️ ${f.nome}</span>
+                <button class="btn btn-ghost btn-sm" style="padding:1px 8px;font-size:11px;color:#a32d2d;border-color:#f0c5c5" onclick="removeFiltroDef('${cat.replace(/'/g,"\\'")}',${i})" title="Remover filtro">🗑 filtro</button>
+              </div>
+              <div class="eixo-opcoes">
+                ${(f.opcoes||[]).length
+                  ? (f.opcoes||[]).map((o,j)=>`<span class="eixo-opc-chip">${o}<button onclick="removeValorFiltroDef('${cat.replace(/'/g,"\\'")}',${i},${j})" title="Remover valor">✕</button></span>`).join('')
+                  : '<span style="font-size:11px;color:#bbb">Sem valores — adicione abaixo</span>'}
+              </div>
+              <div class="eixo-add-row">
+                <input class="form-input" id="inp-fval-${slug}-${i}" placeholder="Novo valor (ex: Ilha, 150 cm)" style="font-size:12px;padding:4px 8px" onkeydown="if(event.key==='Enter')addValorFiltroDef('${cat.replace(/'/g,"\\'")}',${i})"/>
+                <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap" onclick="addValorFiltroDef('${cat.replace(/'/g,"\\'")}',${i})">＋ valor</button>
+              </div>
+            </div>`).join('')
+            : '<div style="font-size:11px;color:#bbb;margin-bottom:8px">Nenhum filtro. Crie o primeiro abaixo — ex: Posição, Tamanho, Tipo de fogão, Com bancada de pia.</div>'}
+          <div class="eixo-add-row">
+            <input class="form-input" id="inp-f-novo-${slug}" placeholder="Novo filtro (ex: Posição)" style="font-size:12px;padding:5px 8px" onkeydown="if(event.key==='Enter')addFiltroDef('${cat.replace(/'/g,"\\'")}')"/>
+            <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;color:#185FA5;border-color:#B5D4F4" onclick="addFiltroDef('${cat.replace(/'/g,"\\'")}')">＋ Filtro</button>
+          </div>
         </div>
-        <div class="cat-add-filtro-row">
-          <input class="form-input" id="inp-f-novo-${slug}" placeholder="Novo filtro (ex: Largura)" style="font-size:12px;padding:5px 8px" onkeydown="if(event.key==='Enter')addFiltroDef('${cat.replace(/'/g,"\\'")}')"/>
-          <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap" onclick="addFiltroDef('${cat.replace(/'/g,"\\'")}')">＋ Filtro</button>
-        </div>
-        ${eixosDefCardHTML(cat, slug)}
       </div>`;
     }).join('');
   }
   populateCatSelect();
-}
-
-/* ── EIXOS DE VARIAÇÃO (definidos por categoria) ──────────────────
-   Estrutura: eixosDef[cat] = [{ nome:"Comprimento", opcoes:["130 cm","140 cm"] }, ...]
-   Cada produto da categoria herda esses eixos; as combinações são cadastradas no produto. */
-function eixosDefCardHTML(cat, slug){
-  const esc = s => String(s).replace(/'/g,"\\'");
-  const eixos = eixosDef[cat] || [];
-  const linhas = eixos.map((e, i) => `
-    <div class="eixo-row">
-      <div class="eixo-row-head">
-        <span class="eixo-nome">🔀 ${e.nome}</span>
-        <button class="btn btn-ghost btn-sm" style="padding:1px 8px;font-size:11px;color:#a32d2d;border-color:#f0c5c5" onclick="removeEixoDef('${esc(cat)}',${i})" title="Remover eixo">🗑 eixo</button>
-      </div>
-      <div class="eixo-opcoes">
-        ${(e.opcoes||[]).length
-          ? (e.opcoes||[]).map((o,j)=>`<span class="eixo-opc-chip">${o}<button onclick="removeOpcaoEixoDef('${esc(cat)}',${i},${j})" title="Remover valor">✕</button></span>`).join('')
-          : '<span style="font-size:11px;color:#bbb">Sem valores — adicione abaixo</span>'}
-      </div>
-      <div class="eixo-add-row">
-        <input class="form-input" id="inp-opc-${slug}-${i}" placeholder="Novo valor (ex: 150 cm)" style="font-size:12px;padding:4px 8px" onkeydown="if(event.key==='Enter')addOpcaoEixoDef('${esc(cat)}',${i})"/>
-        <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap" onclick="addOpcaoEixoDef('${esc(cat)}',${i})">＋ valor</button>
-      </div>
-    </div>`).join('');
-  return `<div class="cat-eixos">
-    <div class="cat-eixos-label">🔀 Eixos de variação${eixos.length?` <span style="color:#bbb;font-weight:600">(${eixos.length})</span>`:''}</div>
-    ${linhas || '<div style="font-size:11px;color:#bbb;margin-bottom:8px">Nenhum eixo. Crie o primeiro abaixo — ex: Comprimento, Largura, Posição, Bocas.</div>'}
-    <div class="eixo-add-row">
-      <input class="form-input" id="inp-eixo-novo-${slug}" placeholder="Novo eixo (ex: Comprimento)" style="font-size:12px;padding:5px 8px" onkeydown="if(event.key==='Enter')addEixoDef('${esc(cat)}')"/>
-      <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;color:#6B3FA0;border-color:#D6C6EE" onclick="addEixoDef('${esc(cat)}')">＋ Eixo</button>
-    </div>
-  </div>`;
-}
-
-function addEixoDef(cat){
-  const inp = document.getElementById('inp-eixo-novo-'+slugify(cat));
-  if(!inp) return;
-  const nome = inp.value.trim();
-  if(!nome) return alert('Digite o nome do eixo (ex: Comprimento).');
-  if(!eixosDef[cat]) eixosDef[cat] = [];
-  if(eixosDef[cat].some(e => e.nome.toLowerCase() === nome.toLowerCase()))
-    return alert('Já existe um eixo "'+nome+'" nessa categoria.');
-  eixosDef[cat].push({ nome, opcoes: [] });
-  inp.value='';
-  renderFiltrosDefPanel();
-  saveConfig();
-  setTimeout(()=>{ const el=document.getElementById('inp-opc-'+slugify(cat)+'-'+(eixosDef[cat].length-1)); if(el) el.focus(); }, 30);
-}
-
-function removeEixoDef(cat, i){
-  const e = (eixosDef[cat]||[])[i];
-  if(!e) return;
-  showConfirm('Remover eixo "'+e.nome+'"',
-    'O eixo e seus valores serão removidos de "'+cat+'". As combinações já cadastradas nos produtos continuam salvas.',
-    ()=>{
-      eixosDef[cat].splice(i,1);
-      if(!eixosDef[cat].length) delete eixosDef[cat];
-      renderFiltrosDefPanel();
-      saveConfig();
-    });
-}
-
-function addOpcaoEixoDef(cat, i){
-  const inp = document.getElementById('inp-opc-'+slugify(cat)+'-'+i);
-  if(!inp) return;
-  const val = inp.value.trim();
-  if(!val) return alert('Digite o valor (ex: 150 cm).');
-  const e = (eixosDef[cat]||[])[i];
-  if(!e) return;
-  if(!e.opcoes) e.opcoes = [];
-  if(e.opcoes.some(o => o.toLowerCase() === val.toLowerCase()))
-    return alert('O valor "'+val+'" já existe no eixo "'+e.nome+'".');
-  e.opcoes.push(val);
-  inp.value='';
-  renderFiltrosDefPanel();
-  saveConfig();
-  setTimeout(()=>{ const el=document.getElementById('inp-opc-'+slugify(cat)+'-'+i); if(el) el.focus(); }, 30);
-}
-
-function removeOpcaoEixoDef(cat, i, j){
-  const e = (eixosDef[cat]||[])[i];
-  if(!e || !e.opcoes) return;
-  e.opcoes.splice(j,1);
-  renderFiltrosDefPanel();
-  saveConfig();
 }
 
 function populateCatSelect(){
@@ -2787,28 +2647,57 @@ function addFiltroDef(cat){
   const inp=document.getElementById('inp-f-novo-'+slugify(cat));
   if(!inp) return;
   const nome=inp.value.trim();
-  if(!nome) return alert('Digite o nome do filtro.');
+  if(!nome) return alert('Digite o nome do filtro (ex: Posição).');
   if(!filtrosDef[cat]) filtrosDef[cat]=[];
-  if(filtrosDef[cat].includes(nome)) return alert('Já existe um filtro "'+nome+'" nessa categoria.');
-  filtrosDef[cat].push(nome);
+  if(filtrosDef[cat].some(f=>f.nome.toLowerCase()===nome.toLowerCase())) return alert('Já existe um filtro "'+nome+'" nessa categoria.');
+  filtrosDef[cat].push({ nome, opcoes: [] });
   inp.value='';
   renderFiltrosDefPanel();
   renderFiltrosExtrasForm();
   saveConfig();
+  setTimeout(()=>{ const el=document.getElementById('inp-fval-'+slugify(cat)+'-'+(filtrosDef[cat].length-1)); if(el) el.focus(); }, 30);
 }
 
 function removeFiltroDef(cat, idx){
-  const nome = (filtrosDef[cat]||[])[idx];
-  if(!nome) return;
-  showConfirm('Remover filtro "'+nome+'"','O filtro será removido de "'+cat+'". Valores já salvos nos produtos continuarão armazenados.', ()=>{
+  const f = (filtrosDef[cat]||[])[idx];
+  if(!f) return;
+  showConfirm('Remover filtro "'+f.nome+'"','O filtro e seus valores serão removidos de "'+cat+'". Valores já salvos nos produtos continuarão armazenados.', ()=>{
     filtrosDef[cat].splice(idx,1);
     if(!filtrosDef[cat].length) delete filtrosDef[cat];
-    delete filtrosAtivos[nome];
+    delete filtrosAtivos[f.nome];
     renderFiltrosDefPanel();
     renderFiltrosExtrasForm();
     saveConfig();
     renderProdutos();
   });
+}
+
+// Adiciona um valor a um filtro da categoria (ex: Posição → "Ilha")
+function addValorFiltroDef(cat, i){
+  const inp = document.getElementById('inp-fval-'+slugify(cat)+'-'+i);
+  if(!inp) return;
+  const val = inp.value.trim();
+  if(!val) return alert('Digite o valor (ex: Ilha, 150 cm).');
+  const f = (filtrosDef[cat]||[])[i];
+  if(!f) return;
+  if(!f.opcoes) f.opcoes = [];
+  if(f.opcoes.some(o => o.toLowerCase() === val.toLowerCase()))
+    return alert('O valor "'+val+'" já existe no filtro "'+f.nome+'".');
+  f.opcoes.push(val);
+  inp.value='';
+  renderFiltrosDefPanel();
+  renderFiltrosExtrasForm();
+  saveConfig();
+  setTimeout(()=>{ const el=document.getElementById('inp-fval-'+slugify(cat)+'-'+i); if(el) el.focus(); }, 30);
+}
+
+function removeValorFiltroDef(cat, i, j){
+  const f = (filtrosDef[cat]||[])[i];
+  if(!f || !f.opcoes) return;
+  f.opcoes.splice(j,1);
+  renderFiltrosDefPanel();
+  renderFiltrosExtrasForm();
+  saveConfig();
 }
 
 async function saveConfig(){
@@ -2821,29 +2710,60 @@ async function saveConfig(){
   } catch(e){ console.error('saveConfig error',e); }
 }
 
-// ── Campos dinâmicos no formulário de produto ────────────────
+// ── Filtros do produto no formulário (chips de seleção) ─────────
+// filtrosSelForm guarda a seleção atual: { "Posição": "Ilha", ... }
+let filtrosSelForm = {};
+
 function renderFiltrosExtrasForm(){
   const wrap=document.getElementById('filtros-extras-form');
   if(!wrap) return;
-  wrap.innerHTML=''; return;   // Filtros removidos do cadastro — as variações fazem esse papel
-  // eslint-disable-next-line no-unreachable
   const sel=document.getElementById('inp-cat');
   const cat=(sel?.value||'').trim();
   const fs=filtrosDef[cat]||[];
   if(!cat||!fs.length){ wrap.innerHTML=''; return; }
+  const escJ = s => String(s).replace(/'/g,"\\'");
   wrap.innerHTML = `<div style="border-top:1px solid #f0f2f5;margin:10px 0 10px;padding-top:10px">
-    <div style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Filtros de ${cat}</div>
-    <div class="grid2">` +
+    <div style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">🎚️ Filtros de ${cat}</div>
+    <div style="font-size:11px;color:#aaa;margin-bottom:10px">Marque os valores deste produto — é assim que o cliente vai encontrá-lo filtrando na loja. Deixe em branco o que não se aplica.</div>` +
     fs.map((f,i)=>{
-      const vals=[...new Set(produtos.filter(p=>p.cat===cat).map(p=>p.filtros&&p.filtros[f]).filter(Boolean))];
-      const dl='dl-f-'+slugify(f);
-      return `<div class="form-group" style="margin-bottom:0">
-        <label class="form-label">${f}</label>
-        <input class="form-input" id="inp-f-${slugify(f)}" placeholder="${f}..." list="${dl}"/>
-        <datalist id="${dl}">${vals.map(v=>`<option value="${v}">`).join('')}</datalist>
+      const c=corFiltro(i);
+      const atual = filtrosSelForm[f.nome]||'';
+      const chips = (f.opcoes||[]).map(o=>{
+        const on = atual===o;
+        return `<button type="button" class="sub-chip" style="${on?'background:'+c.active+';color:#fff;border-color:'+c.active:'background:'+c.bg+';border-color:'+c.border+';color:'+c.text}" onclick="setFiltroForm('${escJ(f.nome)}','${escJ(o)}')">${o}</button>`;
+      }).join('');
+      return `<div style="margin-bottom:9px">
+        <div style="font-size:12px;font-weight:700;color:${c.text};margin-bottom:5px">${f.nome}${atual?'':' <span style="font-weight:400;color:#bbb;font-size:10.5px">(não definido)</span>'}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
+          ${chips || '<span style="font-size:11px;color:#bbb">Sem valores cadastrados</span>'}
+          <input class="form-input" id="inp-fnovo-${slugify(f.nome)}" placeholder="＋ novo valor" style="font-size:11.5px;padding:3px 8px;width:110px" onkeydown="if(event.key==='Enter'){event.preventDefault();addValorFiltroForm('${escJ(cat)}','${escJ(f.nome)}')}"/>
+        </div>
       </div>`;
     }).join('') +
-    `</div></div>`;
+    `</div>`;
+}
+
+// Clica num chip: seleciona (ou desmarca, se já estava selecionado)
+function setFiltroForm(nome, valor){
+  if(filtrosSelForm[nome]===valor) delete filtrosSelForm[nome];
+  else filtrosSelForm[nome]=valor;
+  renderFiltrosExtrasForm();
+}
+
+// Cria um valor novo direto do formulário do produto e já seleciona
+function addValorFiltroForm(cat, nome){
+  const inp = document.getElementById('inp-fnovo-'+slugify(nome));
+  if(!inp) return;
+  const val = inp.value.trim();
+  if(!val) return;
+  const f = (filtrosDef[cat]||[]).find(x=>x.nome===nome);
+  if(!f) return;
+  if(!f.opcoes) f.opcoes=[];
+  const existente = f.opcoes.find(o=>o.toLowerCase()===val.toLowerCase());
+  if(!existente){ f.opcoes.push(val); saveConfig(); }
+  filtrosSelForm[nome] = existente || val;
+  renderFiltrosExtrasForm();
+  renderFiltrosDefPanel();
 }
 
 function renderProdutos() {
@@ -2855,22 +2775,24 @@ function renderProdutos() {
 
   /* ── Lista filtrada por categoria (variações ficam aninhadas, fora do topo) ── */
   const busca = (document.getElementById('prod-search')?.value||'').toLowerCase();
-  let lista = (filtroCategoria ? produtos.filter(p => p.cat === filtroCategoria) : [...produtos]).filter(p => !p.ehVariacao);
+  let lista = filtroCategoria ? produtos.filter(p => p.cat === filtroCategoria) : [...produtos];
 
-  /* ── Subfilters dinâmicos ── */
+  /* ── Subfilters dinâmicos (filtros com valores da categoria) ── */
   const sw = document.getElementById('subfilters-wrap');
   const catFiltros = filtrosDef[filtroCategoria] || [];
   if(filtroCategoria && catFiltros.length){
     sw.style.display='';
     sw.innerHTML = catFiltros.map((f,i)=>{
-      const vals=[...new Set(lista.map(p=>p.filtros&&p.filtros[f]).filter(Boolean))];
+      // valores realmente usados por algum produto (na ordem cadastrada)
+      const usados = new Set(lista.map(p=>p.filtros&&p.filtros[f.nome]).filter(Boolean));
+      const vals = [...(f.opcoes||[]).filter(o=>usados.has(o)), ...[...usados].filter(v=>!(f.opcoes||[]).includes(v))];
       if(!vals.length) return '';
       const c=corFiltro(i);
-      const ativo=filtrosAtivos[f]||'';
+      const ativo=filtrosAtivos[f.nome]||'';
       return `<div class="subfilter-row">
-        <span class="subfilter-label" style="color:${c.text}">${f}</span>
-        <button class="sub-chip" style="${!ativo?'background:'+c.bg+';border-color:'+c.border+';color:'+c.text:''}" onclick="setFiltroAtivo('${f.replace(/'/g,"\\'")}','')">Todos</button>
-        ${vals.map(v=>`<button class="sub-chip" style="${ativo===v?'background:'+c.active+';color:#fff;border-color:'+c.active:''}" onclick="setFiltroAtivo('${f.replace(/'/g,"\\'")}','${v.replace(/'/g,"\\'")}')">
+        <span class="subfilter-label" style="color:${c.text}">${f.nome}</span>
+        <button class="sub-chip" style="${!ativo?'background:'+c.bg+';border-color:'+c.border+';color:'+c.text:''}" onclick="setFiltroAtivo('${f.nome.replace(/'/g,"\\'")}','')">Todos</button>
+        ${vals.map(v=>`<button class="sub-chip" style="${ativo===v?'background:'+c.active+';color:#fff;border-color:'+c.active:''}" onclick="setFiltroAtivo('${f.nome.replace(/'/g,"\\'")}','${v.replace(/'/g,"\\'")}')">
           ${v}</button>`).join('')}
       </div>`;
     }).join('');
@@ -2898,17 +2820,15 @@ function renderProdutos() {
   } else {
     tbody.innerHTML = lista.map((p) => {
       const filtroBadges = (filtrosDef[p.cat]||[]).map((f,i)=>{
-        const v=p.filtros&&p.filtros[f]; if(!v) return '';
+        const v=p.filtros&&p.filtros[f.nome]; if(!v) return '';
         const c=corFiltro(i);
-        return `<span style="background:${c.bg};color:${c.text};border:1px solid ${c.border};font-size:10px;padding:1px 7px;border-radius:20px;font-weight:600">${f}: ${v}</span>`;
+        return `<span style="background:${c.bg};color:${c.text};border:1px solid ${c.border};font-size:10px;padding:1px 7px;border-radius:20px;font-weight:600">${f.nome}: ${v}</span>`;
       }).join('');
       // Conjuntos que contêm este produto
       const conjsDoP = produtos.filter(x=>x.tipoProd==='conjunto'&&x.componentes&&x.componentes.some(c=>c.prodId===p.id));
       // Componentes se for conjunto
       const isConj = p.tipoProd==='conjunto';
       const compNames = isConj && p.componentes ? p.componentes.map(c=>{ const px=produtos.find(x=>x.id===c.prodId); return px?px.nome:'?'; }) : [];
-      // Variações deste produto principal
-      const variacoes = produtos.filter(x=>x.ehVariacao && x.paiId===p.id);
       return `
       <tr draggable="true" data-id="${p.id}" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="dragDrop(event)" ondragleave="dragLeave(event)" ondragend="dragEnd(event)">
         <td data-cell="drag" style="padding:0 4px"><span class="drag-handle" title="Arrastar para reordenar">⠿</span></td>
@@ -2918,7 +2838,6 @@ function renderProdutos() {
           <div style="display:flex;align-items:center;gap:6px;font-weight:600">
             ${p.nome}
             ${isConj?`<span style="background:#E6F1FB;color:#185FA5;font-size:10px;padding:1px 7px;border-radius:20px;border:1px solid #B5D4F4;font-weight:600">📦 ${p.componentes?p.componentes.length:0} itens</span>`:''}
-            ${variacoes.length?`<span style="background:#F1ECFB;color:#6B3FA0;font-size:10px;padding:1px 7px;border-radius:20px;border:1px solid #D6C6EE;font-weight:600">🔀 ${variacoes.length} ${variacoes.length===1?'combinação':'combinações'}</span>`:''}
           </div>
           ${p.dim ? `<div style="font-size:12px;color:#888">${p.dim}</div>` : ''}
           ${isConj && compNames.length ? `<div style="font-size:11px;color:#888;margin-top:2px">↳ ${compNames.join(' · ')}</div>` : ''}
@@ -2927,16 +2846,6 @@ function renderProdutos() {
             <span style="font-size:10px;color:#888">Conjuntos:</span>
             ${conjsDoP.map(cj=>`<span class="badge-conj" title="Ver conjunto" onclick="editProduto(${cj.id})">📦 ${cj.nome}</span>`).join('')}
           </div>` : ''}
-          ${variacoes.length ? `<div style="margin-top:5px;border-left:2px solid #E9E2F6;padding-left:8px;display:flex;flex-direction:column;gap:1px">
-            ${variacoes.map(v=>`<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#555">
-              <span style="color:#6B3FA0;font-weight:600">🔀 ${v.combo ? Object.values(v.combo).join(' · ') : (v.eixo?v.eixo+': ':'')+(v.nome||'')}</span>
-              <span style="color:#999">${[v.codigo, fmtBRL(v.preco)].filter(Boolean).join(' · ')}</span>
-              ${v.modelo3d?'<span title="Tem modelo 3D">🧊</span>':''}
-              <button class="btn btn-ghost btn-sm" style="padding:0 6px;font-size:10px" onclick="editProduto(${v.id})" title="Editar combinação">✏️</button>
-              <button class="btn btn-danger btn-sm" style="padding:0 6px;font-size:10px" onclick="deleteProduto(${v.id})" title="Excluir combinação">🗑️</button>
-            </div>`).join('')}
-            <div><button class="btn btn-ghost btn-sm" style="padding:1px 7px;font-size:10.5px;color:#6B3FA0;margin-top:3px" onclick="novaCombinacaoDe(${p.id})" title="Adicionar combinação">🔀 + Combinação</button></div>
-          </div>` : (p.tipoProd!=='conjunto' ? `<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="padding:1px 7px;font-size:10.5px;color:#6B3FA0" onclick="novaCombinacaoDe(${p.id})" title="Adicionar combinação">🔀 + Combinação</button></div>` : '')}
           ${p.obs ? `<div style="font-size:11px;color:#bbb;margin-top:2px">${p.obs}</div>` : ''}
         </td>
         <td data-label="Categoria">${p.cat ? `<span class="badge-cat" style="cursor:pointer" title="Filtrar por ${p.cat}" data-cat="${p.cat}" onclick="setFiltroCategoria(this.dataset.cat)">${p.cat}</span>` : '<span style="color:#ccc">—</span>'}</td>
@@ -2963,100 +2872,78 @@ function setTipoProduto(tipo) {
   const inp = document.getElementById('inp-preco');
   if(inp) inp.readOnly = isCj;
   if(isCj) renderCompList();
-  renderComboWrap();
 }
 
-// ── COMBINAÇÕES (eixos por categoria) ─────────────────────────────
-// Entra/sai do modo "combinação" (produto-filho de um principal).
-function setComboMode(paiId) {
-  currentPaiId = paiId || null;
-  const banner  = document.getElementById('combo-banner');
-  const tabs    = document.querySelector('.tipo-toggle');
-  const nomeInp = document.getElementById('inp-nome');
-  const nomeGrp = nomeInp ? nomeInp.closest('.form-group') : null;
-  const grpCli  = document.getElementById('grupo-fotos-clientes');
-  if (currentPaiId) {
-    const pai = produtos.find(p => p.id === currentPaiId);
-    document.getElementById('combo-banner-nome').textContent = pai ? pai.nome : '';
-    banner.style.display = 'flex';
-    if (tabs) tabs.style.display = 'none';
-    if (nomeGrp) nomeGrp.style.display = 'none';
-    if (grpCli) grpCli.style.display = 'none';   // fotos de cliente ficam no principal
-    if (pai && pai.cat) { const c=document.getElementById('inp-cat'); if(c){ c.value=pai.cat; renderFiltrosExtrasForm(); } }
-  } else {
-    banner.style.display = 'none';
-    if (tabs) tabs.style.display = '';
-    if (nomeGrp) nomeGrp.style.display = '';
-    if (grpCli) grpCli.style.display = '';
-  }
-  renderComboWrap();
+// ── MIGRAÇÃO: combinações → produtos independentes + filtros ─────
+// Roda uma vez ao carregar. É ADITIVA: nenhum dado é apagado — variações
+// viram produtos normais (nome = família + valores), os valores dos eixos
+// viram filtros do produto, e os eixos da categoria viram filtros com valores.
+function migrarParaFiltros() {
+  let mudou = false;
+
+  // 1) filtrosDef: formato antigo (strings) → {nome, opcoes:[]}
+  Object.keys(filtrosDef).forEach(cat => {
+    const fs = filtrosDef[cat] || [];
+    const conv = fs.map(f => (typeof f === 'string') ? { nome: f, opcoes: [] } : f);
+    if (fs.some(f => typeof f === 'string')) mudou = true;
+    filtrosDef[cat] = conv;
+  });
+
+  // 2) eixosDef (mesma estrutura) é incorporado aos filtros da categoria
+  Object.keys(eixosDef || {}).forEach(cat => {
+    (eixosDef[cat] || []).forEach(e => {
+      if (!filtrosDef[cat]) filtrosDef[cat] = [];
+      let f = filtrosDef[cat].find(x => x.nome.toLowerCase() === String(e.nome).toLowerCase());
+      if (!f) { f = { nome: e.nome, opcoes: [] }; filtrosDef[cat].push(f); mudou = true; }
+      (e.opcoes || []).forEach(o => { if (!f.opcoes.includes(o)) { f.opcoes.push(o); mudou = true; } });
+    });
+  });
+
+  // 3) variações viram produtos independentes
+  produtos.forEach(p => {
+    if (p.ehVariacao) {
+      const pai = produtos.find(x => x.id === p.paiId);
+      const vals = p.combo ? Object.values(p.combo).filter(Boolean)
+                 : (p.eixo && p.nome ? [p.nome] : []);
+      const nomeBase = (pai && pai.nome) || p.nome || '';
+      p.nome = vals.length ? (nomeBase + ' ' + vals.join(' · ')) : nomeBase;
+      p.filtros = { ...(p.combo || {}), ...(p.filtros || {}) };
+      p.ehVariacao = false; p.paiId = null;
+      mudou = true;
+    }
+    // combinação padrão do produto principal vira filtros dele
+    if (p.comboPadrao && Object.keys(p.comboPadrao).length) {
+      p.filtros = { ...p.comboPadrao, ...(p.filtros || {}) };
+      p.comboPadrao = null;
+      mudou = true;
+    }
+    // registra os valores usados pelos produtos como opções dos filtros da categoria
+    if (p.cat && p.filtros) {
+      Object.entries(p.filtros).forEach(([nome, v]) => {
+        if (!v) return;
+        if (!filtrosDef[p.cat]) filtrosDef[p.cat] = [];
+        let f = filtrosDef[p.cat].find(x => x.nome.toLowerCase() === String(nome).toLowerCase());
+        if (!f) { f = { nome, opcoes: [] }; filtrosDef[p.cat].push(f); mudou = true; }
+        if (!f.opcoes.includes(v)) { f.opcoes.push(v); mudou = true; }
+      });
+    }
+  });
+
+  return mudou;
 }
 
-// Renderiza um <select> por eixo da categoria. prefill = {Eixo:valor} opcional.
-function renderComboWrap(prefill) {
-  const wrap  = document.getElementById('combo-wrap');
-  const cont  = document.getElementById('combo-selects');
-  const label = document.getElementById('combo-label');
-  const hint  = document.getElementById('combo-hint');
-  if (!wrap || !cont) return;
-  const cat = document.getElementById('inp-cat').value.trim();
-  const eixos = eixosDef[cat] || [];
-  const isCombo = !!currentPaiId;
-  const isConjunto = document.getElementById('tipo-btn-conjunto').classList.contains('active');
-  if (!eixos.length || (isConjunto && !isCombo)) { wrap.style.display='none'; cont.innerHTML=''; return; }
-  // Preserva o que já está escolhido (se não veio prefill)
-  const sel = prefill || (() => {
-    const cur = {}; cont.querySelectorAll('select[data-eixo]').forEach(s => cur[s.dataset.eixo]=s.value); return cur;
-  })();
-  wrap.style.display = 'block';
-  label.textContent = isCombo ? '🔀 Valores desta combinação' : '🔀 Combinação padrão — o que este produto representa';
-  hint.textContent = isCombo
-    ? 'Escolha um valor por eixo. Esta combinação tem seu próprio preço, foto, medidas e 3D.'
-    : 'Marque o valor de cada eixo que o produto principal representa. As outras combinações você adiciona em "🔀 + Combinação".';
-  const escA = s => String(s).replace(/"/g,'&quot;');
-  cont.innerHTML = eixos.map(e => `
-    <div class="form-group" style="margin:0;min-width:130px;flex:1">
-      <label class="form-label" style="font-size:11px">${e.nome}</label>
-      <select class="form-input" data-eixo="${escA(e.nome)}" style="cursor:pointer">
-        ${(e.opcoes||[]).map(o => `<option value="${escA(o)}"${(sel[e.nome]===o)?' selected':''}>${o}</option>`).join('')}
-      </select>
-    </div>`).join('');
-}
-
-// Lê os selects de eixo no objeto combo {Eixo:valor}.
-function readCombo() {
-  const combo = {};
-  document.querySelectorAll('#combo-selects select[data-eixo]').forEach(s => { combo[s.dataset.eixo] = s.value; });
-  return combo;
-}
-
-// Código da combinação: BASE + tokens dos valores. Evita colisão exata.
-function codigoCombinacao(paiId, combo, excludeId) {
-  const pai = produtos.find(p => p.id === paiId);
-  const base = pai ? (pai.codigo || pai.id) : paiId;
-  let cod = gerarCodigoVariacao(base, Object.values(combo || {}));
-  const usados = new Set(produtos
-    .filter(p => p.ehVariacao && p.paiId===paiId && p.codigo && p.id != excludeId)
-    .map(p => String(p.codigo)));
-  if (usados.has(cod)) { let k=2; while(usados.has(`${cod}-${k}`)) k++; cod=`${cod}-${k}`; }
-  return cod;
-}
-
-// Abre o form pronto pra cadastrar uma combinação de um produto principal.
-function novaCombinacaoDe(paiId) {
-  const pai = produtos.find(p => p.id === paiId);
-  if (!pai) return;
-  if (!(eixosDef[pai.cat] || []).length) {
-    return alert('A categoria "'+(pai.cat||'—')+'" ainda não tem eixos de variação.\n\nDefina os eixos primeiro em "🗂️ Categorias e Filtros" → bloco "🔀 Eixos de variação".');
-  }
-  clearProdForm();
-  toggleProdForm(true);
-  populateCatSelect();
-  document.getElementById('inp-cat').value = pai.cat || '';
-  renderFiltrosExtrasForm();
-  setComboMode(paiId);          // mostra banner + selects de eixo
-  document.getElementById('prod-form-title').textContent = 'Nova Combinação';
-  document.getElementById('prod-form-panel').scrollIntoView({ behavior: 'smooth' });
+// ── LIMPEZA AUTOMÁTICA: orçamentos com mais de 30 dias são apagados.
+//    Pedidos NUNCA são apagados.
+function limparOrcamentosAntigos() {
+  const limite = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const antes = orcamentos.length;
+  orcamentos = orcamentos.filter(o => {
+    const ref = o.criadoEm ? Date.parse(o.criadoEm)
+              : (o.data ? Date.parse(o.data + 'T12:00:00') : NaN);
+    if (!Number.isFinite(ref)) return true;   // sem data confiável → mantém (segurança)
+    return ref >= limite;
+  });
+  return antes - orcamentos.length;
 }
 
 function renderConjDropdown(q) {
@@ -3064,23 +2951,20 @@ function renderConjDropdown(q) {
   if (!q.trim()) { dd.classList.remove('open'); return; }
   const ql = q.toLowerCase();
   const ids = currentComponentes.map(c=>c.prodId);
-  const nomePai = p => { const pai = p.ehVariacao ? produtos.find(x=>x.id===p.paiId) : null; return pai ? pai.nome : ''; };
   const res = produtos.filter(p =>
     p.tipoProd !== 'conjunto' &&
     !ids.includes(p.id) &&
     (p.nome.toLowerCase().includes(ql) || (p.cat||'').toLowerCase().includes(ql) ||
-     (p.dim||'').toLowerCase().includes(ql) || nomePai(p).toLowerCase().includes(ql))
+     (p.dim||'').toLowerCase().includes(ql) || String(p.codigo||'').toLowerCase().includes(ql))
   ).slice(0,8);
   if(!res.length){ dd.classList.remove('open'); return; }
   dd.innerHTML = res.map(p=>{
-    const disp = p.ehVariacao && nomePai(p) ? `${nomePai(p)} · ${p.nome}` : p.nome;
-    const sub  = p.ehVariacao ? ['🔀 '+(p.combo?Object.values(p.combo).join(' · '):(p.eixo||'combinação')), p.codigo].filter(Boolean).join(' · ')
-                              : [p.cat,p.dim].filter(Boolean).join(' · ');
+    const sub  = [p.codigo, p.cat, p.dim].filter(Boolean).join(' · ');
     return `
     <div class="conj-opt" onmousedown="addComponente(${p.id})">
-      ${p.foto?`<img src="${p.foto}" class="conj-opt-img"/>`:`<div class="conj-opt-img" style="display:flex;align-items:center;justify-content:center;font-size:18px">${p.ehVariacao?'🔀':'📦'}</div>`}
+      ${p.foto?`<img src="${p.foto}" class="conj-opt-img"/>`:`<div class="conj-opt-img" style="display:flex;align-items:center;justify-content:center;font-size:18px">📦</div>`}
       <div class="conj-opt-info">
-        <div class="conj-opt-nome">${disp}</div>
+        <div class="conj-opt-nome">${p.nome}</div>
         <div class="conj-opt-sub">${sub}</div>
       </div>
       <div class="conj-opt-preco">${fmtBRL(p.preco)}</div>
@@ -3123,13 +3007,11 @@ function renderCompList() {
     const p = produtos.find(x=>x.id===c.prodId);
     if(!p) return '';
     total += p.preco||0;
-    const pai = p.ehVariacao ? produtos.find(x=>x.id===p.paiId) : null;
-    const dispNome = pai ? `${pai.nome} · ${p.nome}` : p.nome;
-    const dispSub = p.ehVariacao ? ['🔀 '+(p.combo?Object.values(p.combo).join(' · '):(p.eixo||'combinação')), p.codigo].filter(Boolean).join(' · ') : [p.cat,p.dim].filter(Boolean).join(' · ');
+    const dispSub = [p.codigo, p.cat, p.dim].filter(Boolean).join(' · ');
     return `<div class="comp-row">
-      ${p.foto?`<img src="${p.foto}" class="comp-row-img"/>`:`<div class="comp-row-img">${p.ehVariacao?'🔀':'📦'}</div>`}
+      ${p.foto?`<img src="${p.foto}" class="comp-row-img"/>`:`<div class="comp-row-img">📦</div>`}
       <div class="comp-row-info">
-        <div class="comp-row-nome">${dispNome}</div>
+        <div class="comp-row-nome">${p.nome}</div>
         <div class="comp-row-sub">${dispSub}</div>
       </div>
       <div class="comp-row-preco">${fmtBRL(p.preco)}</div>
@@ -3139,25 +3021,6 @@ function renderCompList() {
   if(totEl){ totEl.style.display=''; }
   if(totVal){ totVal.textContent = fmtBRL(total); }
   if(preco){ preco.value = total.toFixed(2); }
-}
-
-// ── COMBINAÇÕES — helpers de código ───────────────────────────────
-// currentPaiId guarda o produto principal quando se cadastra uma combinação.
-let currentPaiId = null;
-
-// Token a partir do valor do eixo: número puro p/ medidas, sigla curta p/ nomes.
-function tokenVariacao(valor) {
-  const v = String(valor || '').trim();
-  if (!v) return '';
-  if (/^\D*\d+\D*$/.test(v)) { const n = v.replace(/[^\d]/g, ''); if (n) return n; }   // "180cm" → "180"
-  const limpo = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                 .toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return limpo.length <= 4 ? limpo : limpo.slice(0, 3);   // ILHA / NAO / PAR / MAD
-}
-// Código da combinação: BASE + token(s). Aceita 1 valor ou vários (multi-eixo).
-function gerarCodigoVariacao(codigoBase, valores) {
-  const toks = (Array.isArray(valores) ? valores : [valores]).map(tokenVariacao).filter(Boolean);
-  return toks.length ? `${codigoBase}-${toks.join('-')}` : String(codigoBase);
 }
 
 // ── DRAG & DROP ─────────────────────────────────────────
@@ -3598,6 +3461,7 @@ function getHTMLOrc(o) {
           ${o.fone?`<div class="pl-fone">📞 ${o.fone}</div>`:''}
         </div>
       </div>
+      ${o.obs?`<div class="pl-obs-wrap"><div class="pl-obs">📌 ${o.obs}</div></div>`:''}
       <div class="pl-draw">
         <img src="${foto.src}"/>
       </div>
@@ -3628,6 +3492,10 @@ function getHTMLOrc(o) {
   .projeto-land .pl-doc-page{font-size:13pt;font-weight:700;color:#fff;letter-spacing:.4px}
   .projeto-land .pl-city{font-size:13pt;font-weight:700;color:#fff;letter-spacing:.4px;text-align:center;white-space:nowrap}
   .projeto-land .pl-fone{font-size:13pt;font-weight:700;color:#fff;letter-spacing:.4px;text-align:center;white-space:nowrap}
+  /* Observação do projeto: tarja amarela sutil que FLUTUA sobre a margem do desenho
+     (wrap com height:0 → não diminui em nada o espaço atual do desenho) */
+  .projeto-land .pl-obs-wrap{height:0;overflow:visible;position:relative;z-index:5;text-align:center;flex-shrink:0}
+  .projeto-land .pl-obs{display:inline-block;margin-top:5px;background:#FFF176;border:2px solid #F9A825;color:#111;font-weight:700;padding:3px 16px;border-radius:16px;max-width:88%;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.08)}
   .projeto-land .pl-draw{flex:1;display:flex;align-items:center;justify-content:center;padding:4mm 6mm;background:#fff;min-height:0;overflow:hidden}
   .projeto-land .pl-draw img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;image-rendering:auto}
   @media screen{.projeto-land{display:none!important}}
@@ -3803,6 +3671,27 @@ function getHTMLOrc(o) {
 
 ${projetoPrintHtml}
 
+<script>
+(function(){
+  function ajustarObsProjeto(){
+    document.querySelectorAll('.pl-obs').forEach(function(el){
+      var wrap = el.closest('.projeto-land') || el.parentElement;
+      var maxW = (wrap.clientWidth || wrap.offsetWidth || 1000) * 0.88;
+      var size = 9.5; // pt — tamanho inicial (igual ao CSS)
+      el.style.fontSize = size + 'pt';
+      var guard = 0;
+      while (el.scrollWidth > maxW && size > 4.5 && guard < 60) {
+        size -= 0.25;
+        el.style.fontSize = size.toFixed(2) + 'pt';
+        guard++;
+      }
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ajustarObsProjeto);
+  else ajustarObsProjeto();
+  window.ajustarObsProjeto = ajustarObsProjeto; // re-chamável após redimensionar/capturar
+})();
+<\/script>
 </body></html>`;
 }
 
@@ -3883,7 +3772,28 @@ function fmtDate(iso) { if(!iso) return '—'; const [y,m,d]=iso.split('-'); ret
 (async function init() {
   renderProdutos(); updateBadge(); // render vazio enquanto carrega
 
-  await loadFromFirebase();
+  const carregouOnline = await loadFromFirebase();
+
+  // Migração combinações → filtros (aditiva; roda uma vez e persiste)
+  try {
+    if (migrarParaFiltros() && carregouOnline && produtos.length) {
+      console.log('🔁 Migração: combinações viraram produtos independentes com filtros.');
+      await save();
+    }
+  } catch(e) { console.warn('Migração de filtros:', e); }
+
+  // Limpeza automática: orçamentos com mais de 30 dias (pedidos nunca são apagados).
+  // Só roda com os dados vindos do servidor — nunca sobre cópia local antiga.
+  try {
+    if (carregouOnline) {
+      const removidos = limparOrcamentosAntigos();
+      if (removidos > 0) {
+        await save();
+        setStatus(`🧹 ${removidos} orçamento(s) com mais de 30 dias removido(s)`, 'ok');
+        console.log(`🧹 ${removidos} orçamento(s) antigos removidos automaticamente.`);
+      }
+    }
+  } catch(e) { console.warn('Limpeza de orçamentos:', e); }
 
   // Bug fix (jun/2026): antes, "produtos.length === 0" era tratado sempre como
   // "primeira vez usando o sistema" e disparava save() na hora — sobrescrevendo
@@ -5121,6 +5031,8 @@ function getHTMLPed(p) {
         </div>
       </div>
 
+      ${p.obs?`<div class="pl-obs-wrap"><div class="pl-obs">📌 ${p.obs}</div></div>`:''}
+
       <!-- DESENHO centralizado e maximizado -->
       <div class="pl-draw">
         <img src="${foto.src}"/>
@@ -5173,6 +5085,10 @@ function getHTMLPed(p) {
   .projeto-land .pl-doc-page{font-size:13pt;font-weight:700;color:#fff;letter-spacing:.4px}
   .projeto-land .pl-city{font-size:13pt;font-weight:700;color:#fff;letter-spacing:.4px;text-align:center;white-space:nowrap}
   .projeto-land .pl-fone{font-size:13pt;font-weight:700;color:#fff;letter-spacing:.4px;text-align:center;white-space:nowrap}
+  /* Observação do projeto: tarja amarela sutil que FLUTUA sobre a margem do desenho
+     (wrap com height:0 → não diminui em nada o espaço atual do desenho) */
+  .projeto-land .pl-obs-wrap{height:0;overflow:visible;position:relative;z-index:5;text-align:center;flex-shrink:0}
+  .projeto-land .pl-obs{display:inline-block;margin-top:5px;background:#FFF176;border:2px solid #F9A825;color:#111;font-weight:700;padding:3px 16px;border-radius:16px;max-width:88%;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 
   /* DESENHO — flex:1 para pegar tudo entre header e rodapé */
   .projeto-land .pl-draw{flex:1;display:flex;align-items:center;justify-content:center;padding:4mm 6mm;background:#fff;min-height:0;overflow:hidden}
@@ -5431,6 +5347,27 @@ function getHTMLPed(p) {
 
 ${projetoPrintPedHtml}
 
+<script>
+(function(){
+  function ajustarObsProjeto(){
+    document.querySelectorAll('.pl-obs').forEach(function(el){
+      var wrap = el.closest('.projeto-land') || el.parentElement;
+      var maxW = (wrap.clientWidth || wrap.offsetWidth || 1000) * 0.88;
+      var size = 9.5; // pt — tamanho inicial (igual ao CSS)
+      el.style.fontSize = size + 'pt';
+      var guard = 0;
+      while (el.scrollWidth > maxW && size > 4.5 && guard < 60) {
+        size -= 0.25;
+        el.style.fontSize = size.toFixed(2) + 'pt';
+        guard++;
+      }
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ajustarObsProjeto);
+  else ajustarObsProjeto();
+  window.ajustarObsProjeto = ajustarObsProjeto;
+})();
+<\/script>
 </body></html>`;
 }
 
@@ -5722,7 +5659,7 @@ async function baixarProjeto(tipo, btn) {
     'body{margin:0;padding:0}' +
     '</style></head>');
 
-  const lW = 850; // Retrato — mesma largura do PDF principal do orçamento
+  const lW = 1122; // A4 paisagem @ 96dpi — o PDF do projeto sai em paisagem normal (pra enviar direto ao cliente)
   const lFrame = document.createElement('iframe');
   lFrame.style.cssText = `position:fixed;left:-9999px;top:0;width:${lW}px;height:1px;border:none;opacity:0;pointer-events:none`;
   document.body.appendChild(lFrame);
@@ -5759,7 +5696,9 @@ async function baixarProjeto(tipo, btn) {
     });
 
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    // Página em PAISAGEM, prancha sem rotação — abre reto no celular/computador do cliente.
+    // (No PDF do PEDIDO o projeto continua girado em página retrato, que imprime melhor.)
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const lMargin = 6;
     const lCScale = lCanvas.width / lW;
     let firstPage = true;
@@ -5776,21 +5715,14 @@ async function baixarProjeto(tipo, btn) {
       lSlice.height = Math.ceil(srcH);
       lSlice.getContext('2d').drawImage(lCanvas, 0, srcY, lCanvas.width, srcH, 0, 0, lCanvas.width, Math.ceil(srcH));
 
-      const rotatedB2 = document.createElement('canvas');
-      rotatedB2.width  = Math.ceil(srcH);
-      rotatedB2.height = lCanvas.width;
-      const rCtxB2 = rotatedB2.getContext('2d');
-      rCtxB2.translate(rotatedB2.width, 0);
-      rCtxB2.rotate(Math.PI / 2);
-      rCtxB2.drawImage(lSlice, 0, 0);
-      const pW = 210, pH = 297;
+      const pW = 297, pH = 210;   // A4 paisagem
       const lAvailW = pW - lMargin * 2, lAvailH = pH - lMargin * 2;
-      const natH = (rotatedB2.height / rotatedB2.width) * lAvailW;
+      const natH = (lSlice.height / lSlice.width) * lAvailW;
       let rW = lAvailW, rH = natH;
       if (natH > lAvailH) { rH = lAvailH; rW = lAvailW * (lAvailH / natH); }
       const ox = lMargin + (lAvailW - rW) / 2;
       const oy = lMargin + (lAvailH - rH) / 2;
-      pdf.addImage(rotatedB2.toDataURL('image/jpeg', 0.92), 'JPEG', ox, oy, rW, rH);
+      pdf.addImage(lSlice.toDataURL('image/jpeg', 0.92), 'JPEG', ox, oy, rW, rH);
     }
 
     pdf.save(filename);
