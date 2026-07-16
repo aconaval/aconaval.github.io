@@ -129,7 +129,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 
 /* ── PRODUCT INFO ── */
-.prod-layout{display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start}
+.prod-layout{display:grid;grid-template-columns:1fr 350px;gap:24px;align-items:start}
 .prod-info{}
 .prod-cat{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--blue);background:var(--blue-light);padding:3px 11px;border-radius:20px;letter-spacing:.3px;text-transform:uppercase;margin-bottom:10px}
 .prod-name{font-family:'Inter',sans-serif;font-size:clamp(26px,4vw,36px);font-weight:700;color:var(--navy);line-height:1.15;margin-bottom:14px;letter-spacing:-.3px}
@@ -164,13 +164,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 /* ── FORM ── */
 .form-section{padding:16px 18px;border-top:1px solid var(--border);background:#fafcff}
 .form-title{font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:var(--navy);margin-bottom:12px}
-.form-group{margin-bottom:10px}
+.form-group{margin-bottom:9px}
 .form-label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
 .form-input,.form-textarea{
   width:100%;font-family:'DM Sans',sans-serif;font-size:14px;
-  padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;
+  padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;
   background:#fff;color:var(--text);transition:border-color .15s
 }
+.form-textarea{min-height:52px;resize:vertical}
 .form-input:focus,.form-textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(21,87,168,.1)}
 .form-input.err{border-color:var(--red)}
 .form-textarea{resize:vertical;min-height:64px}
@@ -281,7 +282,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
   /* Formulário: 16px evita zoom no iOS, grids colapsam */
   .form-input,.form-textarea,.form-select{font-size:16px}
-  #form-grid-cpf-fone,#form-grid-num,#form-grid-cidade{grid-template-columns:1fr !important}
+  #form-grid-email-cpf,#form-grid-fone-cep,#form-grid-rua-num,#form-grid-bairro-cidade-uf{grid-template-columns:1fr !important}
 
   /* Topbar */
   .topbar{padding:0 14px;height:52px}
@@ -407,47 +408,52 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
               <label class="form-label">Nome Completo <span style="color:var(--red)">*</span></label>
               <input class="form-input" id="f-nome" placeholder="Seu nome ou razão social">
             </div>
-            <div class="form-group">
-              <label class="form-label">E-mail</label>
-              <input class="form-input" id="f-email" type="email" placeholder="seu@email.com" inputmode="email" autocomplete="email">
-            </div>
-            <div id="form-grid-cpf-fone" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <!-- Desktop: campos agrupados em linhas de 2-3 colunas — o mesmo formulário
+                 do mobile, só reorganizado pra caber sem esticar a página. No mobile
+                 (@media max-width:700px) tudo colapsa de volta pra 1 coluna. -->
+            <div id="form-grid-email-cpf" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="form-group">
+                <label class="form-label">E-mail</label>
+                <input class="form-input" id="f-email" type="email" placeholder="seu@email.com" inputmode="email" autocomplete="email">
+              </div>
               <div class="form-group">
                 <label class="form-label">CPF / CNPJ</label>
                 <input class="form-input" id="f-cpf" placeholder="000.000.000-00" oninput="maskDoc(this)" maxlength="18">
               </div>
+            </div>
+            <div id="form-grid-fone-cep" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
               <div class="form-group">
                 <label class="form-label">WhatsApp <span style="color:var(--red)">*</span></label>
                 <input class="form-input" id="f-fone" placeholder="(51) 99999-9999" oninput="maskFone(this)" inputmode="tel" maxlength="15">
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Rua / Avenida <span style="color:var(--red)">*</span></label>
-              <input class="form-input" id="f-rua" placeholder="Ex: Rua das Flores">
-            </div>
-            <div id="form-grid-num" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-              <div class="form-group">
-                <label class="form-label">Número</label>
-                <input class="form-input" id="f-num" placeholder="123">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Bairro</label>
-                <input class="form-input" id="f-bairro" placeholder="Centro">
               </div>
               <div class="form-group">
                 <label class="form-label">CEP</label>
                 <input class="form-input" id="f-cep" placeholder="00000-000" oninput="maskCEP(this)">
               </div>
             </div>
-            <div id="form-grid-cidade" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div id="form-grid-rua-num" style="display:grid;grid-template-columns:3fr 1fr;gap:10px">
+              <div class="form-group">
+                <label class="form-label">Rua / Avenida <span style="color:var(--red)">*</span></label>
+                <input class="form-input" id="f-rua" placeholder="Ex: Rua das Flores">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Número</label>
+                <input class="form-input" id="f-num" placeholder="123">
+              </div>
+            </div>
+            <div id="form-grid-bairro-cidade-uf" style="display:grid;grid-template-columns:1fr 1fr 66px;gap:10px">
+              <div class="form-group">
+                <label class="form-label">Bairro</label>
+                <input class="form-input" id="f-bairro" placeholder="Centro">
+              </div>
               <div class="form-group">
                 <label class="form-label">Cidade <span style="color:var(--red)">*</span></label>
                 <input class="form-input" id="f-cidade" placeholder="Ex: Porto Alegre">
               </div>
               <div class="form-group">
-                <label class="form-label">Estado</label>
-                <select class="form-input" id="f-estado" style="cursor:pointer">
-                  <option value="">Selecione...</option>
+                <label class="form-label">UF</label>
+                <select class="form-input" id="f-estado" style="cursor:pointer;padding-left:6px;padding-right:2px">
+                  <option value="">--</option>
                   <option>AC</option><option>AL</option><option>AP</option><option>AM</option>
                   <option>BA</option><option>CE</option><option>DF</option><option>ES</option>
                   <option>GO</option><option>MA</option><option>MT</option><option>MS</option>

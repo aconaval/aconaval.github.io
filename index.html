@@ -655,8 +655,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="section-title">
         Catálogo de Produtos
         <small id="prod-count-label">Carregando...</small>
-        <button id="cat-share-btn" onclick="compartilharCategoria()" title="Compartilhar esta categoria no WhatsApp"
-          style="display:none;align-items:center;gap:5px;margin-left:10px;padding:5px 12px;border-radius:16px;border:1.5px solid #B5D4F4;background:var(--blue-light);color:var(--blue);font-size:12px;font-weight:700;cursor:pointer;vertical-align:middle">🔗 Compartilhar</button>
       </div>
     </div>
 
@@ -1053,26 +1051,6 @@ async function loadProdutos() {
   renderTudo();
 }
 
-// ── COMPARTILHAR CATEGORIA ────────────────────────────────────────
-// Gera o link com prévia bonita no WhatsApp (o Worker monta título + foto).
-// No celular abre a folha de compartilhar; no PC copia a mensagem pronta.
-async function compartilharCategoria() {
-  if (!filtroAtivo || filtroAtivo === 'Todos') return;
-  const url = 'https://loja.contato-aconaval.workers.dev/?cat=' + slugCat(filtroAtivo);
-  const msg = 'Dá uma olhada nos nossos produtos de ' + filtroAtivo + ' 😄🔥\n' + url;
-  if (navigator.share) {
-    try { await navigator.share({ text: msg }); return; }
-    catch(e) { if (e && e.name === 'AbortError') return; }
-  }
-  try { await navigator.clipboard.writeText(msg); showToast('✅ Link copiado! Agora cola no WhatsApp'); }
-  catch(e) {
-    const el = document.createElement('textarea');
-    el.value = msg; document.body.appendChild(el); el.select();
-    document.execCommand('copy'); el.remove();
-    showToast('✅ Link copiado!');
-  }
-}
-
 // ── CATEGORIES ───────────────────────────────────────────────────
 const isCano = p => (p.cat||'').toLowerCase().includes('cano');
 
@@ -1223,8 +1201,6 @@ function renderCatalog() {
 
   const label = document.getElementById('prod-count-label');
   label.textContent = `${filtered.length} produto${filtered.length !== 1 ? 's' : ''} encontrado${filtered.length !== 1 ? 's' : ''}`;
-  const shareBtn = document.getElementById('cat-share-btn');
-  if (shareBtn) shareBtn.style.display = filtroAtivo !== 'Todos' ? 'inline-flex' : 'none';
 
   if (!filtered.length) {
     const temFiltro = Object.values(subFiltros).some(Boolean);
