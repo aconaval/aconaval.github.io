@@ -2648,6 +2648,7 @@ function removeCategoria(cat){
   showConfirm('Remover categoria "'+cat+'"','A categoria e todos os seus filtros serão removidos.'+aviso, ()=>{
     categorias = categorias.filter(c=>c!==cat);
     delete filtrosDef[cat];
+    delete eixosDef[cat];   // sem isto, a migração recriava os filtros da categoria a partir dos eixos antigos
     delete catPrefixes[cat];
     renderFiltrosDefPanel();
     renderFiltrosExtrasForm();
@@ -2674,14 +2675,35 @@ function addFiltroDef(cat){
 function removeFiltroDef(cat, idx){
   const f = (filtrosDef[cat]||[])[idx];
   if(!f) return;
-  showConfirm('Remover filtro "'+f.nome+'"','O filtro e seus valores serão removidos de "'+cat+'". Valores já salvos nos produtos continuarão armazenados.', ()=>{
+  showConfirm('Remover filtro "'+f.nome+'"','O filtro será removido de "'+cat+'" e também limpo dos produtos que o usam.', async ()=>{
     filtrosDef[cat].splice(idx,1);
     if(!filtrosDef[cat].length) delete filtrosDef[cat];
     delete filtrosAtivos[f.nome];
+    // BUG FIX "filtro que volta sozinho": a migrarParaFiltros() roda a cada
+    // carregamento e RECRIAVA o filtro apagado a partir de dois lugares:
+    // 1) dos eixos antigos (eixosDef) — o filtro precisa sair de lá também;
+    if (eixosDef && eixosDef[cat]) {
+      eixosDef[cat] = eixosDef[cat].filter(e => String(e.nome).toLowerCase() !== f.nome.toLowerCase());
+      if (!eixosDef[cat].length) delete eixosDef[cat];
+    }
+    // 2) dos valores gravados dentro dos produtos — sem limpar aqui, qualquer
+    //    produto com o valor salvo ressuscitava o filtro no próximo F5.
+    let limpos = 0;
+    produtos.forEach(p => {
+      if (p.cat !== cat || !p.filtros) return;
+      Object.keys(p.filtros).forEach(k => {
+        if (k.toLowerCase() === f.nome.toLowerCase()) { delete p.filtros[k]; limpos++; }
+      });
+    });
     renderFiltrosDefPanel();
     renderFiltrosExtrasForm();
-    saveConfig();
     renderProdutos();
+    if (limpos) {
+      await save();   // persiste produtos + config juntos
+      setStatus('✅ Filtro removido e limpo de ' + limpos + ' produto' + (limpos > 1 ? 's' : ''), 'ok');
+    } else {
+      saveConfig();
+    }
   });
 }
 
@@ -2707,10 +2729,25 @@ function addValorFiltroDef(cat, i){
 function removeValorFiltroDef(cat, i, j){
   const f = (filtrosDef[cat]||[])[i];
   if(!f || !f.opcoes) return;
+  const val = f.opcoes[j];
   f.opcoes.splice(j,1);
+  // Mesmo bug do filtro que voltava: se algum produto ainda usa esse valor,
+  // a migração o recolocava nas opções ao recarregar. Limpa dos produtos também.
+  let limpos = 0;
+  produtos.forEach(p => {
+    if (p.cat !== cat || !p.filtros) return;
+    Object.keys(p.filtros).forEach(k => {
+      if (k.toLowerCase() === f.nome.toLowerCase() && p.filtros[k] === val) { delete p.filtros[k]; limpos++; }
+    });
+  });
   renderFiltrosDefPanel();
   renderFiltrosExtrasForm();
-  saveConfig();
+  renderProdutos();
+  if (limpos) {
+    save().then(() => setStatus('✅ Valor "' + val + '" removido e limpo de ' + limpos + ' produto' + (limpos > 1 ? 's' : ''), 'ok'));
+  } else {
+    saveConfig();
+  }
 }
 
 async function saveConfig(){
