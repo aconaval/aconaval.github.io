@@ -552,15 +552,15 @@ tbody tr:hover{background:#fafbfc}
         <input type="file" id="inp-glb" accept=".glb,.gltf" style="display:none" onchange="onGlbChange(event)"/>
         <label style="display:flex;align-items:flex-start;gap:8px;margin-top:10px;font-size:13px;color:#444;cursor:pointer;line-height:1.4">
           <input type="checkbox" id="inp-espelhavel" style="margin-top:2px" onchange="toggleLadoDireito()"/>
-          <span>🔁 <b>Permite espelhar (Esquerda / Direita)</b> — mostra ao cliente a opção de virar o lado usando o mesmo GLB, sem precisar de outro arquivo. A foto/projeto acima são do lado <b>Esquerda</b>; o lado <b>Direita</b> tem seu próprio conjunto abaixo.</span>
+          <span>🔁 <b>Permite espelhar (Esquerda / Direita)</b> — mostra ao cliente a opção de virar o lado usando o mesmo GLB, sem precisar de outro arquivo. A foto/projeto acima são do lado <b>Direita</b> (padrão); o lado <b>Esquerda</b> tem seu próprio conjunto abaixo.</span>
         </label>
         <div id="grupo-lado-direito" style="display:none;border-left:3px solid #D6C6EE;padding-left:14px;margin-top:12px">
-          <div style="font-size:12px;font-weight:700;color:#6B3FA0;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">◨ Lado Direito — foto e projeto próprios</div>
-          <label class="form-label">Foto do Produto (Direita)</label>
+          <div style="font-size:12px;font-weight:700;color:#6B3FA0;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">◧ Lado Esquerdo — foto e projeto próprios</div>
+          <label class="form-label">Foto do Produto (Esquerda)</label>
           <div class="photo-upload-area" id="photo-drop-dir" onclick="document.getElementById('inp-foto-dir').click()">
             <div id="photo-placeholder-dir">
               <div style="font-size:22px;margin-bottom:6px">📷</div>
-              <div style="font-size:12px;color:#888">Foto do lado direito</div>
+              <div style="font-size:12px;color:#888">Foto do lado esquerdo</div>
             </div>
             <img id="photo-preview-img-dir" class="photo-preview" style="display:none"/>
           </div>
@@ -569,12 +569,12 @@ tbody tr:hover{background:#fafbfc}
             <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('inp-foto-dir').click()">🔄 Trocar</button>
             <button class="btn btn-danger btn-sm" type="button" onclick="removeFotoDir()">✕ Remover</button>
           </div>
-          <label class="form-label" style="margin-top:12px">📐 Fotos do Projeto (Direita)</label>
+          <label class="form-label" style="margin-top:12px">📐 Fotos do Projeto (Esquerda)</label>
           <div id="projeto-thumbs-wrap-dir" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
           <div class="photo-upload-area" id="projeto-drop-dir" onclick="document.getElementById('inp-foto-projeto-dir').click()">
             <div id="projeto-placeholder-dir">
               <div style="font-size:22px;margin-bottom:6px">📐</div>
-              <div style="font-size:12px;color:#888">Fotos de projeto do lado direito</div>
+              <div style="font-size:12px;color:#888">Fotos de projeto do lado esquerdo</div>
             </div>
           </div>
           <input type="file" id="inp-foto-projeto-dir" accept="image/*" multiple style="display:none" onchange="onFotoProjetoDirChange(event)"/>
@@ -1206,7 +1206,10 @@ function setStatus(msg, tipo) {
 }
 
 // ── COMPRIME FOTO PARA CABER NO FIRESTORE (max ~150KB base64) ────
-function comprimirFoto(base64, maxKB = 150, maxPx = 600) {
+// 1280px / 280KB: a galeria do produto.html exibe a foto com ~830px (e o dobro
+// em telas retina) — 600px ficava esticada/borrada. 280KB por foto mantém
+// foto + fotoDir juntas com folga dentro do limite de 1MB do documento.
+function comprimirFoto(base64, maxKB = 280, maxPx = 1280) {
   return new Promise(resolve => {
     if (!base64 || !base64.startsWith('data:')) { resolve(base64); return; }
     const img = new Image();
@@ -1300,7 +1303,7 @@ async function save() {
         p.foto = await comprimirFoto(p.foto);
       }
       if (p.fotoDir && p.fotoDir.startsWith('data:')) {
-        setStatus('🖼️ Comprimindo foto (direita)…');
+        setStatus('🖼️ Comprimindo foto (esquerda)…');
         p.fotoDir = await comprimirFoto(p.fotoDir);
       }
     }
@@ -1907,7 +1910,7 @@ let filaSalvarFotosProjetoDir = Promise.resolve();
 function enfileirarSalvarFotosProjetoDir(prodId) {
   filaSalvarFotosProjetoDir = filaSalvarFotosProjetoDir
     .then(() => salvarFotosProjetoDir(prodId, currentFotosProjetoDirBase64))
-    .catch(e => console.error('Erro ao salvar fotos de projeto (direita):', e));
+    .catch(e => console.error('Erro ao salvar fotos de projeto (esquerda):', e));
   return filaSalvarFotosProjetoDir;
 }
 let filaSalvarFotosClientes = Promise.resolve();
@@ -2068,7 +2071,10 @@ function renderProjetoThumbs() {
     </div>`).join('');
 }
 
-// ── LADO DIREITO (espelho): foto + projeto próprios ───────────────
+// ── LADO ESQUERDO (espelho): foto + projeto próprios ─────────────
+// ATENÇÃO: os campos no banco continuam chamando fotoDir / _fd{i} /
+// fotoDirCount (nomes históricos), mas desde a padronização eles guardam
+// o lado ESQUERDO — o produto principal (foto/projeto/GLB) é o lado DIREITA.
 let currentFotoDirBase64 = null;
 let currentFotosProjetoDirBase64 = [];
 
@@ -2121,8 +2127,8 @@ async function onFotoProjetoDirChange(e) {
     if (prod) {
       prod.fotosprojetoDir = [...currentFotosProjetoDirBase64];
       enfileirarSalvarFotosProjetoDir(prod.id)
-        .then(() => setStatus('✅ Foto (direita) salva', 'ok'))
-        .catch(err => { console.error(err); setStatus('⚠️ Erro ao salvar foto (direita)', 'erro'); });
+        .then(() => setStatus('✅ Foto (esquerda) salva', 'ok'))
+        .catch(err => { console.error(err); setStatus('⚠️ Erro ao salvar foto (esquerda)', 'erro'); });
     }
   }
 }
@@ -2145,7 +2151,7 @@ function renderProjetoDirThumbs() {
       <button onclick="removeFotoProjetoDir(${idx})" style="position:absolute;top:-6px;right:-6px;background:#A32D2D;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0;text-align:center">✕</button>
     </div>`).join('');
 }
-// Projeto do lado direito em docs separados: acn_prod_fotos/{id}_fd{i} + fotoDirCount
+// Projeto do lado ESQUERDO em docs separados: acn_prod_fotos/{id}_fd{i} + fotoDirCount (nome histórico)
 async function salvarFotosProjetoDir(prodId, fotos) {
   if (!db || !prodId) return;
   const arr = fotos || [];
@@ -2466,14 +2472,21 @@ let filtroCategoria = '';
 function setFiltroCategoria(cat) { filtroCategoria = cat; filtrosAtivos={}; renderProdutos(); }
 function setFiltroAtivo(nome, val) { filtrosAtivos[nome] = val; renderProdutos(); }
 
-// Copia o link público da categoria (catálogo do site) para a área de transferência.
-// "Todos" / categoria vazia copia o catálogo completo (sem ?cat=).
-// Usa encodeURIComponent para categorias com espaço/acento (ex.: ÁREA GOURMET SOB MEDIDA),
-// que o site decodifica de volta ao nome exato via URLSearchParams.
+// Slug igual ao usado na loja e no Worker (acentos fora, minúsculo, hífens).
+function slugCatWorker(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// Copia o link da categoria PRONTO PRA MANDAR NO WHATSAPP: passa pelo Worker,
+// que gera o card com título + foto de capa (sem isso o WhatsApp mostra só o
+// HTML cru do link, feio). "Todos" / categoria vazia copia o catálogo puro
+// (o catálogo geral não tem card de categoria — não faz sentido no Worker).
 function copiarLinkCategoria(cat) {
-  const base = 'https://www.aconaval.com/';
-  const link = cat ? base + '?cat=' + encodeURIComponent(cat) : base;
-  const ok = () => setStatus(cat ? `✅ Link de "${cat}" copiado!` : '✅ Link do catálogo copiado!', 'ok');
+  const link = cat
+    ? 'https://loja.contato-aconaval.workers.dev/?cat=' + slugCatWorker(cat)
+    : 'https://www.aconaval.com/';
+  const ok = () => setStatus(cat ? `✅ Link de "${cat}" copiado (com prévia)!` : '✅ Link do catálogo copiado!', 'ok');
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(link).then(ok).catch(() => prompt('Copie o link (Ctrl+C):', link));
   } else {
