@@ -341,13 +341,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="gallery-strip" id="gallery-strip"></div>
   </div>
 
-  <!-- TOGGLE LADO (espelho esq/dir) -->
+  <!-- TOGGLE SENTIDO (espelho esq/dir) — escolha OBRIGATÓRIA para comprar -->
+  <style>
+    #espelho-toggle.esp-erro{animation:espShake .35s ease}
+    #espelho-toggle.esp-erro .esp-chips .esp-chip{border-color:#c0392b}
+    #espelho-toggle.esp-erro #esp-hint{color:#c0392b;font-weight:700}
+    @keyframes espShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  </style>
   <div id="espelho-toggle" style="display:none;margin-top:12px">
-    <div class="var3d-grp-label">🔁 Lado</div>
+    <div class="var3d-grp-label">🔁 Sentido <span style="color:var(--red);font-weight:700">*</span></div>
     <div class="esp-chips">
-      <button class="esp-chip active" data-side="dir" onclick="setEspelho(false)">◨ Direita</button>
+      <button class="esp-chip" data-side="dir" onclick="setEspelho(false)">◨ Direita</button>
       <button class="esp-chip" data-side="esq" onclick="setEspelho(true)">◧ Esquerda</button>
     </div>
+    <div id="esp-hint" style="font-size:11.5px;color:var(--muted);margin-top:5px">Escolha o sentido do produto (obrigatório para fazer o pedido)</div>
   </div>
 
   <!-- CONTENT LAYOUT -->
@@ -492,9 +499,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     .dep-viewport{position:relative}
     .dep-track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 2px 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
     .dep-track::-webkit-scrollbar{display:none}
-    .dep-card{flex:0 0 auto;width:232px;scroll-snap-align:center;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#0b141a;cursor:zoom-in;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:transform .15s,box-shadow .15s}
-    .dep-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.13)}
-    .dep-card img{width:100%;display:block;max-height:410px;object-fit:contain}
+    /* Cartão segue o tamanho natural do print — sem fundo escuro nem faixas laterais */
+    .dep-card{flex:0 0 auto;height:400px;scroll-snap-align:center;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff;cursor:zoom-in;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:transform .15s,box-shadow .15s}
+    .dep-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.13);border-color:#b7d9c4}
+    .dep-card img{height:100%;width:auto;max-width:78vw;display:block}
     .dep-arrow{position:absolute;top:42%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:none;background:#fff;color:var(--blue);box-shadow:0 3px 14px rgba(0,0,0,.2);font-size:22px;line-height:1;cursor:pointer;z-index:3;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
     .dep-arrow.prev{left:-8px}.dep-arrow.next{right:-8px}
     .dep-arrow:disabled{opacity:0;pointer-events:none}
@@ -502,10 +510,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     .deplb{position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
     .deplb.open{display:flex}
     .deplb-row{display:flex;align-items:center;gap:16px;max-width:100%}
-    .deplb-row img{max-width:88vw;max-height:82vh;object-fit:contain;border-radius:10px;background:#0b141a}
+    .deplb-row img{max-width:88vw;max-height:82vh;object-fit:contain;border-radius:10px}
     .deplb-close{position:absolute;top:16px;right:16px;width:42px;height:42px;border-radius:9px;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:20px;cursor:pointer}
     .deplb-nav{flex:0 0 auto;background:rgba(255,255,255,.16);border:none;color:#fff;width:48px;height:48px;border-radius:50%;font-size:24px;line-height:1;cursor:pointer}
-    @media(max-width:640px){ .dep-card{width:64vw;max-width:300px} .dep-arrow{display:none} .deplb-nav{width:42px;height:42px;font-size:20px} }
+    @media(max-width:640px){ .dep-card{height:340px} .dep-arrow{display:none} .deplb-nav{width:42px;height:42px;font-size:20px} }
   </style>
 
   <div class="dep-section" id="dep-section" style="display:none">
@@ -1180,6 +1188,7 @@ let lbIdx    = 0;
 let varSelUrl   = null;   // URL do GLB da variação escolhida (null = principal)
 let varSelPoster = null;  // foto renderizada usada como prévia enquanto carrega
 let espelhado        = false;  // false = Direita (padrão/principal) · true = Esquerda (campos *Dir do banco)
+let espelhoEscolhido = false;  // vira true quando o CLIENTE clica em Direita/Esquerda — obrigatório p/ pedir
 let familiaEspelhavel = false; // produto permite espelhamento (esq/dir)
 let varAtual         = null;   // item atualmente exibido na galeria (o próprio produto)
 
@@ -1651,9 +1660,20 @@ function renderEspelhoToggle() {
   const box = document.getElementById('espelho-toggle');
   if (!box) return;
   box.style.display = familiaEspelhavel ? 'block' : 'none';
+  // Escolha do sentido é OBRIGATÓRIA: nenhum chip começa ativo — o cliente precisa clicar
+  espelhoEscolhido = false;
+  box.classList.remove('esp-erro');
+  box.querySelectorAll('.esp-chip').forEach(c => c.classList.remove('active'));
+  const hint = document.getElementById('esp-hint');
+  if (hint) hint.textContent = 'Escolha o sentido do produto (obrigatório para fazer o pedido)';
 }
 function setEspelho(on) {
   espelhado = on;
+  espelhoEscolhido = true;
+  const boxEsp = document.getElementById('espelho-toggle');
+  if (boxEsp) boxEsp.classList.remove('esp-erro');
+  const hintEsp = document.getElementById('esp-hint');
+  if (hintEsp) hintEsp.textContent = '✔ Sentido escolhido: ' + (on ? 'Esquerda' : 'Direita');
   document.querySelectorAll('#espelho-toggle .esp-chip')
     .forEach(c => c.classList.toggle('active', (c.dataset.side === 'esq') === on));
   // troca foto + projeto do lado e espelha o 3D (remontado com o lado certo)
@@ -1758,13 +1778,24 @@ async function enviarPedido() {
     showToast('⚠️ Telefone incompleto — confira o DDD e o número');
     return;
   }
+  // Sentido (Direita/Esquerda) é OBRIGATÓRIO quando o produto permite espelhar
+  if (familiaEspelhavel && !espelhoEscolhido) {
+    const boxEsp = document.getElementById('espelho-toggle');
+    if (boxEsp) {
+      boxEsp.classList.remove('esp-erro'); void boxEsp.offsetWidth; boxEsp.classList.add('esp-erro');
+      boxEsp.scrollIntoView({ behavior:'smooth', block:'center' });
+    }
+    showToast('⚠️ Escolha o sentido do produto: Direita ou Esquerda');
+    return;
+  }
 
   const btn = document.getElementById('btn-pedir');
   btn.disabled=true; btn.textContent='⏳ Enviando…';
 
   const sel       = varAtual || produto;
-  // Lado escolhido (só quando o produto permite espelhar)
-  const ladoTxt   = familiaEspelhavel ? (espelhado ? 'Lado: Esquerda' : 'Lado: Direita') : '';
+  // Sentido escolhido (só quando o produto permite espelhar)
+  const ladoItem  = familiaEspelhavel ? (espelhado ? 'Esquerda' : 'Direita') : '';
+  const ladoTxt   = ladoItem ? 'Sentido: ' + ladoItem : '';
   const nomeItem  = produto.nome + (ladoTxt ? ' — ' + ladoTxt : '');
   const dimItem   = sel.dim || produto.dim || '';
   const precoItem = (sel.preco != null ? sel.preco : produto.preco) || 0;
@@ -1799,6 +1830,7 @@ async function enviarPedido() {
         nome:  nomeItem,
         codigo: codItem,
         dim:   dimItem,
+        lado:  ladoItem || null,
         preco: precoItem,
         qty:   1,
         total: precoItem
@@ -1834,6 +1866,7 @@ async function enviarPedido() {
           itens: [{
             nome:  nomeItem,
             dim:   dimItem,
+            lado:  ladoItem || null,
             preco: precoItem,
           }],
           totalPedido: precoItem,

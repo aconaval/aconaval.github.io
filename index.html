@@ -552,7 +552,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
   /* Drawer (carrinho) largura total */
   .drawer{width:100vw}
-  .cart-btn span.label{display:none}
+  #cart-btn span.label{display:none}
+  #dep-nav-btn{font-size:11.5px;padding:7px 10px}
+  #dep-nav-btn span.label{display:inline;letter-spacing:.3px}
   .logo-img{width:40px;height:40px}
   .logo-text{font-size:18px}
 
@@ -608,7 +610,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   </div>
   <div style="display:flex;gap:10px;align-items:center">
     <button class="cart-btn" id="dep-nav-btn" onclick="showDepoimentos()" style="display:none;background:rgba(255,255,255,.14)">
-      💬 <span class="label">Depoimentos</span>
+      💬 <span class="label">DEPOIMENTOS</span>
     </button>
     <button class="cart-btn" onclick="openCart()" id="cart-btn" style="display:none">
       🛒 <span class="label">Carrinho</span>
@@ -881,7 +883,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .deplb{position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
   .deplb.open{display:flex}
   .deplb-row{display:flex;align-items:center;gap:16px;max-width:100%}
-  .deplb-row img{max-width:88vw;max-height:82vh;object-fit:contain;border-radius:10px;background:#0b141a}
+  .deplb-row img{max-width:88vw;max-height:82vh;object-fit:contain;border-radius:10px}
   .deplb-close{position:absolute;top:16px;right:16px;width:42px;height:42px;border-radius:9px;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:20px;cursor:pointer}
   .deplb-nav{flex:0 0 auto;background:rgba(255,255,255,.16);border:none;color:#fff;width:48px;height:48px;border-radius:50%;font-size:24px;line-height:1;cursor:pointer}
   @media(max-width:640px){ .deplb-nav{width:42px;height:42px;font-size:20px} }
@@ -1285,7 +1287,11 @@ function addToCart(prodId) {
     cart.push({
       prodId: p.id, nome: p.nome, dim: p.dim||'', preco: p.preco||0,
       foto: p.foto||'', qty: 1,
-      fotosprojeto: p.fotosprojeto || []
+      fotosprojeto: p.fotosprojeto || [],
+      // Sentido (Direita/Esquerda): obrigatório escolher no carrinho quando o produto permite espelhar
+      espelhavel: !!p.espelhavel,
+      fotoDir: p.fotoDir || '',
+      lado: null
     });
   }
   updateCartBadge();
@@ -1327,7 +1333,8 @@ function renderCart() {
     return;
   }
   body.innerHTML = cart.map(item => {
-    const fotos = item.fotosprojeto || [];
+    hidratarLadoItem(item);
+    const fotos = ladoFotosProjeto(item);
     const projetoHtml = fotos.length ? `
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e8edf2">
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px">📐 Projeto</div>
@@ -1336,14 +1343,24 @@ function renderCart() {
           ${fotos.length > 4 ? `<div style="width:40px;height:40px;border-radius:5px;background:#E6F1FB;border:1px solid #B5D4F4;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--blue);cursor:pointer" onclick="openLightboxCart(${item.prodId},4)">+${fotos.length-4}</div>` : ''}
         </div>
       </div>` : '';
+    const fotoItem = (item.lado === 'Esquerda' && item.fotoDir) ? item.fotoDir : item.foto;
+    const ladoHtml = item.espelhavel ? `
+      <div style="margin-top:7px">
+        <div style="font-size:10px;font-weight:700;color:${item.lado?'var(--green)':'var(--red)'};text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">🔁 Sentido ${item.lado?'· '+item.lado:'· escolha (obrigatório)'}</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="setCartLado(${item.prodId},'Direita')" style="flex:1;padding:6px 4px;border-radius:6px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid ${item.lado==='Direita'?'var(--blue)':'var(--border)'};background:${item.lado==='Direita'?'#E6F1FB':'#fff'};color:${item.lado==='Direita'?'var(--blue)':'#666'}">◨ Direita</button>
+          <button onclick="setCartLado(${item.prodId},'Esquerda')" style="flex:1;padding:6px 4px;border-radius:6px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid ${item.lado==='Esquerda'?'var(--blue)':'var(--border)'};background:${item.lado==='Esquerda'?'#E6F1FB':'#fff'};color:${item.lado==='Esquerda'?'var(--blue)':'#666'}">◧ Esquerda</button>
+        </div>
+      </div>` : '';
     return `
-    <div class="cart-item">
+    <div class="cart-item" id="cart-item-${item.prodId}">
       <div class="cart-item-img">
-        ${item.foto ? `<img src="${item.foto}" alt="${escHtml(item.nome)}">` : '⚙️'}
+        ${fotoItem ? `<img src="${fotoItem}" alt="${escHtml(item.nome)}">` : '⚙️'}
       </div>
       <div class="cart-item-info">
         <div class="cart-item-name">${escHtml(item.nome)}</div>
         <div class="cart-item-dim">${escHtml(item.dim)}</div>
+        ${ladoHtml}
         ${projetoHtml}
         <div class="cart-item-bottom">
           <div class="cart-item-price">R$ ${(item.preco*item.qty).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
@@ -1365,6 +1382,31 @@ function renderCart() {
     <div class="summary-total"><span>Total</span><span>R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></div>
     <div style="font-size:12px;color:var(--green);margin-top:5px">💰 À vista (PIX): R$ ${avista.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>`;
   footer.style.display = 'block';
+}
+
+// Itens antigos do carrinho (salvos antes desta versão) não têm os campos de sentido —
+// completa a partir do catálogo carregado, sem apagar nada do carrinho salvo.
+function hidratarLadoItem(item) {
+  if (item.espelhavel !== undefined) return;
+  const p = produtos.find(x => x.id == item.prodId);
+  item.espelhavel = !!(p && p.espelhavel);
+  item.fotoDir = (p && p.fotoDir) || '';
+  if (item.lado === undefined) item.lado = null;
+}
+// Fotos do projeto do lado escolhido (Esquerda usa o conjunto próprio, se existir)
+function ladoFotosProjeto(item) {
+  if (item.lado === 'Esquerda') {
+    const p = produtos.find(x => x.id == item.prodId);
+    if (p && Array.isArray(p.fotosprojetoDir) && p.fotosprojetoDir.length) return p.fotosprojetoDir;
+  }
+  return item.fotosprojeto || [];
+}
+function setCartLado(prodId, lado) {
+  const item = cart.find(c => c.prodId === prodId); if (!item) return;
+  item.lado = lado;
+  saveCart();
+  renderCart();
+  if (document.getElementById('checkout-view').classList.contains('active')) renderCheckoutSummary();
 }
 
 function openCart() {
@@ -1398,7 +1440,8 @@ function renderCheckoutSummary() {
   const itemsEl = document.getElementById('checkout-items-summary');
   const totalEl = document.getElementById('checkout-total-summary');
   itemsEl.innerHTML = cart.map(item => {
-    const fotos = item.fotosprojeto || [];
+    hidratarLadoItem(item);
+    const fotos = ladoFotosProjeto(item);
     const projetoHtml = fotos.length ? `
       <div style="margin-top:6px;display:flex;gap:4px;align-items:center;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--muted);font-weight:600">📐</span>
@@ -1410,7 +1453,7 @@ function renderCheckoutSummary() {
       <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
         <div style="display:flex;align-items:center">
           <span class="order-item-qty">${item.qty}x</span>
-          <span class="order-item-name">${escHtml(item.nome)}</span>
+          <span class="order-item-name">${escHtml(item.nome)}${item.espelhavel ? (item.lado ? ` <span style="color:var(--blue);font-weight:700;font-size:12px">· 🔁 ${item.lado}</span>` : ` <span style="color:var(--red);font-weight:700;font-size:12px">· ⚠️ escolha o sentido</span>`) : ''}</span>
         </div>
         <span class="order-item-price">R$ ${(item.preco*item.qty).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
       </div>
@@ -1446,6 +1489,18 @@ async function enviarPedido() {
     return;
   }
   if (!cart.length) { showToast('⚠️ Carrinho vazio'); return; }
+  // Sentido (Direita/Esquerda) é OBRIGATÓRIO para todo item espelhável
+  cart.forEach(hidratarLadoItem);
+  const semLado = cart.filter(c => c.espelhavel && !c.lado);
+  if (semLado.length) {
+    showToast('⚠️ Escolha o sentido (Direita ou Esquerda) de: ' + semLado.map(c => c.nome).join(', '));
+    openCart();
+    setTimeout(() => {
+      const el = document.getElementById('cart-item-' + semLado[0].prodId);
+      if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+    }, 250);
+    return;
+  }
 
   const btn = document.getElementById('btn-enviar');
   btn.disabled = true; btn.textContent = '⏳ Enviando...';
@@ -1480,8 +1535,9 @@ async function enviarPedido() {
       origem: 'loja_online',
       itens: cart.map(c => ({
         prodId: c.prodId,
-        nome: c.nome,
+        nome: c.nome + (c.lado ? ' — Sentido: ' + c.lado : ''),
         dim: c.dim,
+        lado: c.lado || null,
         preco: c.preco,
         qty: c.qty,
         total: c.preco * c.qty
@@ -1791,21 +1847,50 @@ async function loadDepoimentos(){
   const btn = document.getElementById('dep-nav-btn');
   if(btn) btn.style.display = depoimentos.some(d => d.ativo !== false) ? 'flex' : 'none';
   if(document.getElementById('dep-view').style.display === 'block'){ renderDepCategories(); renderDepGrid(); }
+  // Link direto: aconaval.com/#depoimentos (ou #depoimentos/<categoria>) abre a tela na hora
+  if (location.hash.indexOf('#depoimentos') === 0) {
+    aplicarFiltroDoHash();
+    showDepoimentos(true);
+  }
 }
 
-function showDepoimentos(){
+function depHashAtual(){
+  // Link específico dos depoimentos: #depoimentos ou #depoimentos/<categoria>
+  return '#depoimentos' + (depFiltro && depFiltro !== 'Todos' ? '/' + encodeURIComponent(depFiltro) : '');
+}
+function showDepoimentos(pularHistorico){
   document.getElementById('catalog-view').classList.add('hidden');
   document.getElementById('checkout-view').classList.remove('active');
   const hero = document.getElementById('main-hero'); if(hero) hero.style.display = 'none';
   document.getElementById('dep-view').style.display = 'block';
   renderDepCategories();
   renderDepGrid();
+  // Gera o link específico dos depoimentos na barra de endereço (dá pra copiar e compartilhar)
+  if (!pularHistorico && location.hash.indexOf('#depoimentos') !== 0) {
+    try { history.pushState({ dep:true }, '', depHashAtual()); } catch(e) {}
+  }
   window.scrollTo({ top:0, behavior:'smooth' });
 }
-function backToCatalogFromDep(){
+function backToCatalogFromDep(pularHistorico){
   document.getElementById('dep-view').style.display = 'none';
   const hero = document.getElementById('main-hero'); if(hero) hero.style.display = '';
   document.getElementById('catalog-view').classList.remove('hidden');
+  if (!pularHistorico && location.hash.indexOf('#depoimentos') === 0) {
+    try { history.pushState({}, '', location.pathname + location.search); } catch(e) {}
+  }
+}
+// Botão voltar do navegador entra/sai dos depoimentos naturalmente
+window.addEventListener('popstate', () => {
+  if (location.hash.indexOf('#depoimentos') === 0) {
+    aplicarFiltroDoHash();
+    showDepoimentos(true);
+  } else if (document.getElementById('dep-view').style.display === 'block') {
+    backToCatalogFromDep(true);
+  }
+});
+function aplicarFiltroDoHash(){
+  const m = location.hash.match(/^#depoimentos\/(.+)$/);
+  if (m) { try { depFiltro = decodeURIComponent(m[1]); } catch(e) {} }
 }
 
 function renderDepCategories(){
@@ -1819,6 +1904,9 @@ function setDepFiltro(c){
   depFiltro = c;
   renderDepCategories();
   renderDepGrid();
+  if (location.hash.indexOf('#depoimentos') === 0) {
+    try { history.replaceState({ dep:true }, '', depHashAtual()); } catch(e) {}
+  }
   const ativo = document.querySelector('#dep-cat-row .cat-chip.active');
   if(ativo) ativo.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' });
 }
@@ -1835,7 +1923,7 @@ function renderDepGrid(){
   if(!list.length){ grid.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
   grid.innerHTML = list.map((d,i) =>
-    `<div style="break-inside:avoid;margin-bottom:14px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#0b141a;cursor:zoom-in;box-shadow:0 1px 6px rgba(0,0,0,.07)" onclick="openDepLb(${i})"><img src="${d.foto}" loading="lazy" style="width:100%;display:block" alt="Depoimento"></div>`
+    `<div style="break-inside:avoid;margin-bottom:14px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff;cursor:zoom-in;box-shadow:0 1px 6px rgba(0,0,0,.07);transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow='0 1px 6px rgba(0,0,0,.07)'" onclick="openDepLb(${i})"><img src="${d.foto}" loading="lazy" style="width:100%;display:block" alt="Depoimento"></div>`
   ).join('');
 }
 
