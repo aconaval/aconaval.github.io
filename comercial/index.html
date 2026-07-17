@@ -3134,6 +3134,31 @@ function resetForm() {
   const title = document.querySelector('#page-novo .sec-title');
   if (title) title.firstChild.textContent = 'Novo Orçamento ';
 }
+// ── SENTIDO (Direita/Esquerda) — obrigatório em produtos espelháveis ──
+function prodDoItem(item) { return item && item.prodId ? produtos.find(p => p.id == item.prodId) : null; }
+function itemPrecisaLado(item) { const pr = prodDoItem(item); return !!(pr && pr.espelhavel); }
+// Remove a linha "Sentido:"/"Lado:" da descrição e insere a nova logo após o nome
+function aplicarLadoNaDesc(desc, lado) {
+  const linhas = (desc || '').split('\n').filter(l => !/^\s*(Sentido|Lado)\s*:/i.test(l));
+  if (lado) linhas.splice(Math.min(1, linhas.length), 0, 'Sentido: ' + lado);
+  return linhas.join('\n');
+}
+// Ao editar documentos antigos, recupera o lado escrito na descrição
+function inferirLadoDaDesc(item) {
+  if (item.lado) return;
+  const m = (item.desc || '').match(/(?:Sentido|Lado)\s*:\s*(Esquerda|Direita)/i);
+  if (m) item.lado = m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
+}
+// HTML dos chips de sentido de um item (fn = nome da função de clique)
+function ladoChipsHtml(item, fn, idKey) {
+  return `
+    <div style="grid-column:1 / -1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:-4px;padding:6px 10px;background:${item.lado?'#F2F8F2':'#FDF3F2'};border:1px dashed ${item.lado?'#A8D5A8':'#F0C4BE'};border-radius:6px">
+      <span style="font-size:11.5px;font-weight:700;color:${item.lado?'#2a6b3a':'#A32D2D'}">🔁 Sentido${item.lado?'':' (obrigatório)'}:</span>
+      <button type="button" onclick="${fn}(${idKey},'Direita')" style="padding:4px 12px;border-radius:14px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid ${item.lado==='Direita'?'#185FA5':'#d5dbe1'};background:${item.lado==='Direita'?'#E6F1FB':'#fff'};color:${item.lado==='Direita'?'#185FA5':'#666'}">◨ Direita</button>
+      <button type="button" onclick="${fn}(${idKey},'Esquerda')" style="padding:4px 12px;border-radius:14px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid ${item.lado==='Esquerda'?'#185FA5':'#d5dbe1'};background:${item.lado==='Esquerda'?'#E6F1FB':'#fff'};color:${item.lado==='Esquerda'?'#185FA5':'#666'}">◧ Esquerda</button>
+    </div>`;
+}
+
 function addItem() { items.push({ id: Date.now(), prodId: '', desc: '', preco: 0 }); renderItems(); }
 function removeItem(id) {
   if (items.length <= 1) return;
@@ -3175,7 +3200,17 @@ function renderItems() {
         <label class="form-label" style="visibility:hidden">X</label>
         <button class="btn btn-danger btn-sm" onclick="removeItem(${item.id})" ${items.length<=1?'disabled':''} style="padding:6px 9px">✕</button>
       </div>
+      ${itemPrecisaLado(item) ? ladoChipsHtml(item, 'setLadoOrc', item.id) : ''}
     </div>`).join('');
+}
+function setLadoOrc(id, lado) {
+  const item = items.find(i => i.id == id); if (!item) return;
+  item.lado = lado;
+  item.desc = aplicarLadoNaDesc(item.desc, lado);
+  // Miniatura acompanha o sentido: Esquerda usa a foto própria do lado esquerdo (se houver)
+  const pr = prodDoItem(item);
+  if (pr) item.foto = (lado === 'Esquerda' && pr.fotoDir) ? pr.fotoDir : (pr.foto || '');
+  renderItems(); updatePreview();
 }
 let acIndex = {};
 function onCodInputOrc(id, val) {
@@ -3232,6 +3267,8 @@ function selectProd(itemId, prodId) {
   item.desc = prod.nome + (prod.dim ? '\nDimensões: '+prod.dim : '') + (prod.obs ? '\n'+prod.obs : '');
   item.preco = prod.preco;
   item.foto = prod.foto || '';
+  // Produto espelhável: zera o sentido — a escolha é obrigatória antes de gerar
+  item.lado = null;
   // Embutir componentes do conjunto direto no item
   if (prod.tipoProd === 'conjunto' && prod.componentes && prod.componentes.length) {
     item.conjComponents = prod.componentes.map(c => {
@@ -3246,6 +3283,7 @@ function selectProd(itemId, prodId) {
   const descEl = document.getElementById('desc-'+itemId); if(descEl) descEl.value = item.desc;
   const precoEl = document.getElementById('preco-'+itemId); if(precoEl) precoEl.value = item.preco;
   const drop = document.getElementById('drop-'+itemId); if(drop) drop.classList.remove('open');
+  if (itemPrecisaLado(item)) renderItems();  // desenha a linha de escolha do sentido
   updatePreview();
 }
 document.addEventListener('click', e => {
@@ -3290,7 +3328,7 @@ function editarOrcamento(id) {
     if (numEl) numEl.value = o.num || '';
     // Preenche itens
     items = JSON.parse(JSON.stringify(o.items || [{id:Date.now(),prodId:'',desc:'',preco:0}]));
-    items.forEach(item => { if(!item.searchText) item.searchText = item.desc.split('\n')[0]; });
+    items.forEach(item => { if(!item.searchText) item.searchText = item.desc.split('\n')[0]; inferirLadoDaDesc(item); });
     // Restaurar desconto
     const dpEl=document.getElementById('inp-desc-pct'); if(dpEl) dpEl.value='';
     const dvEl=document.getElementById('inp-desc-val'); if(dvEl) dvEl.value='';
@@ -3312,6 +3350,12 @@ async function gerarOrcamento() {
   if (!cliente) return alert('Informe o nome do cliente.');
   const validItems = items.filter(i => i.desc.trim());
   if (!validItems.length) return alert('Adicione ao menos um item com descrição.');
+  // Sentido é OBRIGATÓRIO em todo item espelhável
+  const semLadoOrc = validItems.filter(i => itemPrecisaLado(i) && !i.lado);
+  if (semLadoOrc.length) {
+    return alert('⚠️ Escolha o sentido (Direita ou Esquerda) do item:\n\n• ' +
+      semLadoOrc.map(i => (i.desc || '').split('\n')[0]).join('\n• '));
+  }
 
   // Bug fix: remove fotos embutidas dos itens para não exceder o limite de 1MB
   // do Firestore — fotos ficam na coleção acn_produtos (referenciadas por prodId)
@@ -3399,9 +3443,35 @@ function deleteOrcamento(id) {
 }
 function updateBadge() { document.getElementById('badge-count').textContent = orcamentos.length; }
 
-function showOrcamento(id) {
+// Foto do item respeitando o sentido: Esquerda usa fotoDir (se houver)
+function fotoDoItemLado(item) {
+  const pr = prodDoItem(item);
+  if (!pr) return item.foto || '';
+  return (item.lado === 'Esquerda' && pr.fotoDir) ? pr.fotoDir : (pr.foto || item.foto || '');
+}
+// Fotos do projeto respeitando o sentido (Esquerda usa o conjunto próprio, se houver)
+function fotosProjetoDoItemLado(item) {
+  const pr = prodDoItem(item);
+  if (!pr) return [];
+  if (item.lado === 'Esquerda' && Array.isArray(pr.fotosprojetoDir) && pr.fotosprojetoDir.length) return pr.fotosprojetoDir;
+  return pr.fotosprojeto || [];
+}
+// Antes de renderizar/gerar PDF, garante que o projeto do lado ESQUERDO
+// (acn_prod_fotos/{id}_fd{i}) esteja carregado para os itens com sentido Esquerda
+async function prepararLadosDoc(doc) {
+  const itensEsq = (doc && doc.items ? doc.items : []).filter(i => i.lado === 'Esquerda' && i.prodId);
+  await Promise.all(itensEsq.map(async it => {
+    const pr = prodDoItem(it);
+    if (!pr || Array.isArray(pr.fotosprojetoDir)) return;
+    try { pr.fotosprojetoDir = await carregarFotosProjetoDir(pr.id) || []; }
+    catch(e) { pr.fotosprojetoDir = []; }
+  }));
+}
+
+async function showOrcamento(id) {
   const o = orcamentos.find(x => x.id == id); if (!o) return;
   currentOrcamento = o;
+  await prepararLadosDoc(o);
   // Renderiza o MESMO HTML do PDF dentro do modal via iframe
   const printHTML = getHTMLOrc(o);
   const blob = new Blob([printHTML], {type:'text/html'});
@@ -3428,8 +3498,8 @@ function getHTMLOrc(o) {
     const nomeB = `<strong>${lines[0]}</strong>`;
     const restoB = lines.slice(1).join('<br>');
     const descHtmlB = nomeB + (restoB ? '<br>' + restoB : '');
-    // Bug fix: foto buscada do catálogo pelo prodId (não embutida no item)
-    const prodFoto = item.prodId ? (produtos.find(p => p.id == item.prodId)||{}).foto || '' : (item.foto||'');
+    // Foto buscada do catálogo pelo prodId, respeitando o SENTIDO escolhido no item
+    const prodFoto = item.prodId ? fotoDoItemLado(item) : (item.foto||'');
     // Detalhamento do conjunto
     const prodRef = item.prodId ? produtos.find(p => p.id == item.prodId) : null;
     const conjHtml = (prodRef && prodRef.tipoProd==='conjunto' && prodRef.componentes && prodRef.componentes.length)
@@ -3452,7 +3522,7 @@ function getHTMLOrc(o) {
       <td class="idx" style="vertical-align:top;padding-top:10px">${String(idx+1).padStart(2,'0')}</td>
       <td>
         <div style="display:table;width:100%">
-          ${prodFoto ? `<div style="display:table-cell;width:90px;min-width:90px;max-width:90px;vertical-align:top;padding-right:12px"><div style="width:80px;height:80px;background:url('${prodFoto}') center/contain no-repeat #fff;border-radius:4px;flex-shrink:0"></div></div>` : ''}
+          ${prodFoto ? `<div style="display:table-cell;width:100px;min-width:100px;max-width:100px;vertical-align:top;padding-right:12px"><img src="${prodFoto}" style="width:92px;height:92px;object-fit:contain;background:#fff;border-radius:4px;display:block"/></div>` : ''}
           <div style="display:table-cell;vertical-align:top">${descHtmlB}${conjHtml}</div>
         </div>
       </td>
@@ -3470,8 +3540,7 @@ function getHTMLOrc(o) {
 
   // Fotos do projeto (buscadas do catálogo via prodId)
   const projetoItens = o.items.reduce((acc, item) => {
-    const prod = item.prodId ? (produtos.find(p => p.id == item.prodId) || {}) : {};
-    const fotos = (prod.fotosprojeto || []).filter(Boolean);
+    const fotos = (item.prodId ? fotosProjetoDoItemLado(item) : []).filter(Boolean);
     if (fotos.length) acc.push({ nome: item.desc ? item.desc.split('\n')[0] : '', fotos });
     return acc;
   }, []);
@@ -4042,14 +4111,20 @@ async function converterEmPedido() {
     // direto pela loja (o cliente escolhe os produtos no site e a solicitação
     // já chega com a lista de produtos pedidos em s.itens).
     if (s.itens && s.itens.length) {
-      itemsPedido = s.itens.map(it => ({
-        id:         Date.now() + Math.random(),
-        prodId:     it.prodId || it.id || '',
-        desc:       (it.nome || it.desc || 'Produto') + (it.dim ? '\nDimensões: ' + it.dim : ''),
-        searchText: it.nome || it.desc || '',
-        preco:      Number(it.preco || it.total || 0),
-        foto:       it.foto || '',
-      }));
+      itemsPedido = s.itens.map(it => {
+        const novo = {
+          id:         Date.now() + Math.random(),
+          prodId:     it.prodId || it.id || '',
+          desc:       (it.nome || it.desc || 'Produto') + (it.dim ? '\nDimensões: ' + it.dim : ''),
+          searchText: it.nome || it.desc || '',
+          preco:      Number(it.preco || it.total || 0),
+          foto:       it.foto || '',
+          lado:       it.lado || null,
+        };
+        inferirLadoDaDesc(novo);  // solicitações antigas trazem o sentido só no nome
+        if (novo.lado) novo.desc = aplicarLadoNaDesc(novo.desc.replace(/\s*—\s*(?:Sentido|Lado)\s*:\s*(?:Esquerda|Direita)/i, ''), novo.lado);
+        return novo;
+      });
       origemLabel = s.itens.length + ' item(ns) da Solicitação';
     }
     // Prioridade 2 (fluxo antigo): se não há itens na própria solicitação,
@@ -4063,7 +4138,9 @@ async function converterEmPedido() {
           desc:   it.desc   || '',
           preco:  it.preco  || 0,
           foto:   it.foto   || '',
+          lado:   it.lado   || null,
         }));
+        itemsPedido.forEach(inferirLadoDaDesc);
         origemLabel = orc.items.length + ' item(ns) do Orçamento #' + String(orc.num).padStart(3,'0');
       }
     }
@@ -4256,7 +4333,16 @@ function renderItemsPedido() {
         <label class="form-label" style="visibility:hidden">X</label>
         <button class="btn btn-danger btn-sm" onclick="removeItemPd(${idx})" ${itemsPedido.length<=1?'disabled':''} style="padding:6px 9px">✕</button>
       </div>
+      ${itemPrecisaLado(item) ? ladoChipsHtml(item, 'setLadoPd', idx) : ''}
     </div>`).join('');
+}
+function setLadoPd(idx, lado) {
+  const item = itemsPedido[idx]; if (!item) return;
+  item.lado = lado;
+  item.desc = aplicarLadoNaDesc(item.desc, lado);
+  const pr = prodDoItem(item);
+  if (pr) item.foto = (lado === 'Esquerda' && pr.fotoDir) ? pr.fotoDir : (pr.foto || '');
+  renderItemsPedido(); updatePreviewPd();
 }
 function addItemPedido() {
   itemsPedido.push({id:Date.now(),prodId:'',desc:'',preco:0});
@@ -4306,6 +4392,7 @@ function selectProdPd(idx, prodId) {
   item.codigoInput = prod.codigo ? String(prod.codigo) : '';
   item.desc=prod.nome+(prod.dim?'\nDimensões: '+prod.dim:'')+(prod.obs?'\n'+prod.obs:'');
   item.preco=prod.preco; item.foto=prod.foto||'';
+  item.lado = null;  // sentido obrigatório: precisa escolher antes de gerar
   if (prod.tipoProd === 'conjunto' && prod.componentes && prod.componentes.length) {
     item.conjComponents = prod.componentes.map(c => {
       const cp = produtos.find(x => x.id === c.prodId);
@@ -4667,7 +4754,7 @@ function editarPedido(id) {
     setVendedorSelect('pd-vendedor', p.vendedorId, p.vendedorNome);
     // Preenche os itens
     itemsPedido = JSON.parse(JSON.stringify(p.items || [{id:Date.now(),prodId:'',desc:'',preco:0}]));
-    itemsPedido.forEach(item => { if(!item.searchText) item.searchText = item.desc.split('\n')[0]; });
+    itemsPedido.forEach(item => { if(!item.searchText) item.searchText = item.desc.split('\n')[0]; inferirLadoDaDesc(item); });
     renderItemsPedido();
     updatePreviewPd();
     // Muda botão para "Salvar Alterações"
@@ -4687,6 +4774,12 @@ async function gerarPedido() {
   if (!numVal || numVal < 1) return alert('Informe o número do pedido.');
   const validItems = itemsPedido.filter(i => i.desc && i.desc.trim());
   if (!validItems.length) return alert('Adicione ao menos um item com descrição.');
+  // Sentido é OBRIGATÓRIO em todo item espelhável
+  const semLadoPd = validItems.filter(i => itemPrecisaLado(i) && !i.lado);
+  if (semLadoPd.length) {
+    return alert('⚠️ Escolha o sentido (Direita ou Esquerda) do item:\n\n• ' +
+      semLadoPd.map(i => (i.desc || '').split('\n')[0]).join('\n• '));
+  }
   const prazoVal = document.getElementById('pd-prazo').value.trim();
   if (!prazoVal) return alert('Selecione o prazo de entrega (verde ou vermelho).');
 
@@ -4962,6 +5055,7 @@ async function hidratarAssinaturaPedido(p){
 async function showPedido(id){
   const p=pedidos.find(x=>x.id==id); if(!p) return;
   await hidratarAssinaturaPedido(p);
+  await prepararLadosDoc(p);
   currentPedido=p;
   // Renderiza o MESMO HTML do PDF dentro do modal via iframe
   const printHTML = getHTMLPed(p);
@@ -5002,12 +5096,12 @@ function getHTMLPed(p) {
     const nome = `<strong style="text-transform:uppercase">${lines[0]}</strong>`;
     const resto = lines.slice(1).join('<br>');
     const descHtmlB = nome + (resto ? '<br><span style="font-weight:normal">' + resto + '</span>' : '');
-    const prodFotoPd = item.prodId ? (produtos.find(p => p.id == item.prodId)||{}).foto || '' : (item.foto||'');
+    const prodFotoPd = item.prodId ? fotoDoItemLado(item) : (item.foto||'');
     return `<tr>
       <td class="idx" style="vertical-align:top;padding-top:10px">${String(idx+1).padStart(2,'0')}</td>
       <td>
         <div style="display:table;width:100%">
-          ${prodFotoPd?`<div style="display:table-cell;width:90px;min-width:90px;max-width:90px;vertical-align:top;padding-right:12px"><div style="width:80px;height:80px;background:url('${prodFotoPd}') center/contain no-repeat #fff;border-radius:4px;flex-shrink:0"></div></div>`:''}
+          ${prodFotoPd?`<div style="display:table-cell;width:100px;min-width:100px;max-width:100px;vertical-align:top;padding-right:12px"><img src="${prodFotoPd}" style="width:92px;height:92px;object-fit:contain;background:#fff;border-radius:4px;display:block"/></div>`:''}
           <div style="display:table-cell;vertical-align:top">${descHtmlB}</div>
         </div>
       </td>
@@ -5037,8 +5131,7 @@ function getHTMLPed(p) {
 
   // Fotos do projeto (buscadas do catálogo via prodId)
   const projetoItensPed = p.items.reduce((acc, item) => {
-    const prod = item.prodId ? (produtos.find(x => x.id == item.prodId) || {}) : {};
-    const fotos = (prod.fotosprojeto || []).filter(Boolean);
+    const fotos = (item.prodId ? fotosProjetoDoItemLado(item) : []).filter(Boolean);
     if (fotos.length) acc.push({ nome: item.desc ? item.desc.split('\n')[0] : '', fotos });
     return acc;
   }, []);
@@ -5466,6 +5559,7 @@ async function baixarPDF(tipo, btn) {
   const o = tipo === 'orc' ? currentOrcamento : currentPedido;
   if (!o) return;
   if (tipo !== 'orc') await hidratarAssinaturaPedido(o);
+  await prepararLadosDoc(o);
   const origText = btn.innerHTML;
   btn.innerHTML = '⏳ Gerando...'; btn.disabled = true;
 
@@ -5538,8 +5632,9 @@ async function baixarPDF(tipo, btn) {
     if (!sections.length) sections.push({ start: 0, end: scrollH });
 
     // Captura canvas completo (páginas de projeto já visíveis)
+    // scale 3: miniaturas de produto e textos saem nítidos no PDF (2 ficava borrado)
     const canvas = await html2canvas(iDoc.body, {
-      scale: 2, backgroundColor: '#ffffff',
+      scale: 3, backgroundColor: '#ffffff',
       useCORS: true, allowTaint: true, logging: false,
       width: 850, windowWidth: 850,
       height: scrollH, scrollX: 0, scrollY: 0
@@ -5692,6 +5787,7 @@ async function baixarProjeto(tipo, btn) {
   const o = tipo === 'orc' ? currentOrcamento : currentPedido;
   if (!o) return;
   if (tipo !== 'orc') await hidratarAssinaturaPedido(o);
+  await prepararLadosDoc(o);
   const origText = btn.innerHTML;
   btn.innerHTML = '⏳ Gerando...'; btn.disabled = true;
 
