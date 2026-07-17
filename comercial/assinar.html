@@ -386,6 +386,8 @@ function mostrarFotoGaleria() {
   if (multi) counter.textContent = `${galeriaIdx+1} / ${galeriaAtual.length}`;
 }
 const prodFotos = {}; // mapa prodId -> foto carregado do acn_produtos (foto genérica do catálogo, usada só como fallback)
+const prodFotosDir = {}; // mapa prodId -> fotoDir (lado ESQUERDO)
+const prodFotosProjetoDir = {}; // mapa prodId -> [fotos do projeto do lado ESQUERDO] (acn_prod_fotos/{id}_fd{i})
 const prodCategorias = {}; // mapa prodId -> categoria (campo 'cat') carregado do acn_produtos
 const prodFotosProjeto = {}; // mapa prodId -> [fotos do PROJETO específico, vindas de acn_prod_fotos]
 
@@ -409,6 +411,23 @@ async function carregarFotosProjeto(prodId) {
   } catch { return []; }
 }
 
+// Projeto do lado ESQUERDO: mesma lógica do comercial (acn_prod_fotos/{id}_fd{i} + fotoDirCount)
+async function carregarFotosProjetoDir(prodId) {
+  if (!prodId) return [];
+  try {
+    const snap = await db.collection('acn_prod_fotos').doc(String(prodId)).get();
+    if (!snap.exists) return [];
+    const count = snap.data().fotoDirCount || 0;
+    if (!count) return [];
+    const snaps = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        db.collection('acn_prod_fotos').doc(`${prodId}_fd${i}`).get().catch(() => null)
+      )
+    );
+    return snaps.map(s => s && s.exists ? s.data().foto : null).filter(Boolean);
+  } catch { return []; }
+}
+
 // ── CARREGA PEDIDO ────────────────────────────────────────────────
 async function carregarPedido() {
   const params = new URLSearchParams(window.location.search);
@@ -425,7 +444,12 @@ async function carregarPedido() {
         ids.map(pid => db.collection('acn_produtos').doc(String(pid)).get())
       );
       prodSnaps.forEach(s => {
-        if (s.exists) { const d = s.data(); if (d.id && d.foto) prodFotos[String(d.id)] = d.foto; if (d.id && d.cat) prodCategorias[String(d.id)] = d.cat; }
+        if (s.exists) {
+          const d = s.data();
+          if (d.id && d.foto)    prodFotos[String(d.id)]    = d.foto;
+          if (d.id && d.fotoDir) prodFotosDir[String(d.id)] = d.fotoDir;
+          if (d.id && d.cat)     prodCategorias[String(d.id)] = d.cat;
+        }
       });
     }
 
@@ -439,6 +463,10 @@ async function carregarPedido() {
     const prodIdsItens = [...new Set((p.items||[]).map(it => it.prodId).filter(Boolean))];
     const fotosProjetoSnaps = await Promise.all(prodIdsItens.map(pid => carregarFotosProjeto(pid)));
     prodIdsItens.forEach((pid, i) => { prodFotosProjeto[String(pid)] = fotosProjetoSnaps[i]; });
+    // Itens com sentido ESQUERDA usam o projeto próprio do lado esquerdo (se existir)
+    const prodIdsEsq = [...new Set((p.items||[]).filter(it => it.lado === 'Esquerda' && it.prodId).map(it => it.prodId))];
+    const fotosDirSnaps = await Promise.all(prodIdsEsq.map(pid => carregarFotosProjetoDir(pid)));
+    prodIdsEsq.forEach((pid, i) => { prodFotosProjetoDir[String(pid)] = fotosDirSnaps[i]; });
 
     renderPedido(p);
     showScreen('pedido');
@@ -473,15 +501,24 @@ function renderPedido(p) {
 
   // Itens
   const itensEl = document.getElementById('p-itens');
-  itemsFotosProjetoAtual = (p.items||[]).map(item => (item.prodId ? prodFotosProjeto[String(item.prodId)] : []) || []);
+  itemsFotosProjetoAtual = (p.items||[]).map(item => {
+    if (!item.prodId) return [];
+    if (item.lado === 'Esquerda') {
+      const fdir = prodFotosProjetoDir[String(item.prodId)];
+      if (fdir && fdir.length) return fdir;
+    }
+    return prodFotosProjeto[String(item.prodId)] || [];
+  });
   itensEl.innerHTML = (p.items||[]).map((item,i) => {
     const lines = (item.desc||'').split('\n').filter(Boolean);
     const nome = lines[0]||'Item';
     const dims = lines.slice(1).join(' · ');
     const fotosProj = itemsFotosProjetoAtual[i];
     const temGaleria = fotosProj.length > 0;
-    // Miniatura usa a foto do próprio item/produto (não a do projeto)
-    const fotoSrc = item.foto || (item.prodId ? prodFotos[String(item.prodId)] : '') || '';
+    // Miniatura respeita o SENTIDO: Esquerda usa a foto própria do lado esquerdo (se houver)
+    const fotoSrc = (item.lado === 'Esquerda' && item.prodId && prodFotosDir[String(item.prodId)])
+      ? prodFotosDir[String(item.prodId)]
+      : (item.foto || (item.prodId ? prodFotos[String(item.prodId)] : '') || '');
     return `<div class="item-card">
       <div class="item-row">
         ${fotoSrc ? `<img src="${fotoSrc}" class="item-foto"/>` : `<div class="item-foto-ph">📦</div>`}

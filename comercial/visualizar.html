@@ -416,8 +416,13 @@ function buildItemHtml(item, idx) {
   var lines = (item.desc || '').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
   var nome  = lines[0] || '';
   var dims  = lines.slice(1).join(' · ');
-  // Busca foto pelo prodId (fotos removidas dos itens para economizar espaço no Firestore)
-  var fotoSrc = item.foto || (item.prodId ? prodFotos[String(item.prodId)] : '') || '';
+  // Busca foto pelo prodId respeitando o SENTIDO (Esquerda usa a foto própria do lado esquerdo)
+  var fotoSrc = '';
+  if (item.lado === 'Esquerda' && item.prodId && prodFotosDir[String(item.prodId)]) {
+    fotoSrc = prodFotosDir[String(item.prodId)];
+  } else {
+    fotoSrc = item.foto || (item.prodId ? prodFotos[String(item.prodId)] : '') || '';
+  }
   var fotoHtml = fotoSrc
     ? '<img src="' + fotoSrc + '" class="item-foto"/>'
     : '<div class="item-foto-ph">📦</div>';
@@ -484,7 +489,12 @@ function renderOrcamento(o) {
 
   // Itens — flex rows, sem tabela
   itemsFotosProjetoAtual = (o.items || []).map(function(item) {
-    return (item.prodId ? prodFotosProjeto[String(item.prodId)] : []) || [];
+    if (!item.prodId) return [];
+    if (item.lado === 'Esquerda') {
+      var fdir = prodFotosProjetoDir[String(item.prodId)];
+      if (fdir && fdir.length) return fdir;
+    }
+    return prodFotosProjeto[String(item.prodId)] || [];
   });
   var itemsHtml = '';
   for (var i = 0; i < o.items.length; i++) {
@@ -534,6 +544,10 @@ function renderOrcamento(o) {
   showForm();
 }
 
+// Mapa prodId -> fotoDir (lado ESQUERDO), preenchido ao carregar
+var prodFotosDir = {};
+// Mapa prodId -> [fotos do projeto do lado ESQUERDO] (acn_prod_fotos/{id}_fd{i})
+var prodFotosProjetoDir = {};
 // Mapa prodId -> foto, preenchido ao carregar
 var prodFotos = {};
 // Mapa prodId -> [fotos do PROJETO específico, vindas de acn_prod_fotos] — mesma lógica do assinar.html
@@ -588,6 +602,23 @@ async function carregarFotosProjeto(prodId) {
   } catch (e) { return []; }
 }
 
+// Projeto do lado ESQUERDO: mesma lógica do comercial (acn_prod_fotos/{id}_fd{i} + fotoDirCount)
+async function carregarFotosProjetoDir(prodId) {
+  if (!prodId) return [];
+  try {
+    var snap = await db.collection('acn_prod_fotos').doc(String(prodId)).get();
+    if (!snap.exists) return [];
+    var count = snap.data().fotoDirCount || 0;
+    if (!count) return [];
+    var snaps = await Promise.all(
+      Array.from({ length: count }, function(_, i) {
+        return db.collection('acn_prod_fotos').doc(prodId + '_fd' + i).get().catch(function(){ return null; });
+      })
+    );
+    return snaps.map(function(s){ return s && s.exists ? s.data().foto : null; }).filter(Boolean);
+  } catch (e) { return []; }
+}
+
 (async function() {
   var params = new URLSearchParams(location.search);
   var id = params.get('id');
@@ -601,7 +632,11 @@ async function carregarFotosProjeto(prodId) {
         ids.map(function(pid) { return db.collection('acn_produtos').doc(String(pid)).get(); })
       );
       prodSnaps.forEach(function(s) {
-        if (s.exists) { var d = s.data(); if (d.id && d.foto) prodFotos[String(d.id)] = d.foto; }
+        if (s.exists) {
+          var d = s.data();
+          if (d.id && d.foto)    prodFotos[String(d.id)]    = d.foto;
+          if (d.id && d.fotoDir) prodFotosDir[String(d.id)] = d.fotoDir;
+        }
       });
     }
 
@@ -615,6 +650,10 @@ async function carregarFotosProjeto(prodId) {
     var prodIdsItens = Array.from(new Set((orc.items || []).map(function(it){ return it.prodId; }).filter(Boolean)));
     var fotosProjetoSnaps = await Promise.all(prodIdsItens.map(function(pid){ return carregarFotosProjeto(pid); }));
     prodIdsItens.forEach(function(pid, i) { prodFotosProjeto[String(pid)] = fotosProjetoSnaps[i]; });
+    // Itens com sentido ESQUERDA usam o projeto próprio do lado esquerdo (se existir)
+    var prodIdsEsq = Array.from(new Set((orc.items || []).filter(function(it){ return it.lado === 'Esquerda' && it.prodId; }).map(function(it){ return it.prodId; })));
+    var fotosDirSnaps = await Promise.all(prodIdsEsq.map(function(pid){ return carregarFotosProjetoDir(pid); }));
+    prodIdsEsq.forEach(function(pid, i) { prodFotosProjetoDir[String(pid)] = fotosDirSnaps[i]; });
 
     renderOrcamento(orc);
   } catch(e) {
