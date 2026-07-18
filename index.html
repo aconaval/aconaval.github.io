@@ -666,8 +666,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     </div>
 
     <div class="product-grid" id="product-grid">
-      <!-- Skeletons -->
-      ${[1,2,3,4,5,6].map(()=>`
+      <!-- Skeletons (HTML puro — template literal aqui era JS solto no HTML e aparecia como texto na tela) -->
       <div class="skel-card">
         <div class="skel-img skeleton"></div>
         <div class="skel-body">
@@ -676,7 +675,52 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           <div style="height:20px"></div>
           <div class="skel-line tall skeleton"></div>
         </div>
-      </div>`).join('')}
+      </div>
+      <div class="skel-card">
+        <div class="skel-img skeleton"></div>
+        <div class="skel-body">
+          <div class="skel-line skeleton"></div>
+          <div class="skel-line short skeleton"></div>
+          <div style="height:20px"></div>
+          <div class="skel-line tall skeleton"></div>
+        </div>
+      </div>
+      <div class="skel-card">
+        <div class="skel-img skeleton"></div>
+        <div class="skel-body">
+          <div class="skel-line skeleton"></div>
+          <div class="skel-line short skeleton"></div>
+          <div style="height:20px"></div>
+          <div class="skel-line tall skeleton"></div>
+        </div>
+      </div>
+      <div class="skel-card">
+        <div class="skel-img skeleton"></div>
+        <div class="skel-body">
+          <div class="skel-line skeleton"></div>
+          <div class="skel-line short skeleton"></div>
+          <div style="height:20px"></div>
+          <div class="skel-line tall skeleton"></div>
+        </div>
+      </div>
+      <div class="skel-card">
+        <div class="skel-img skeleton"></div>
+        <div class="skel-body">
+          <div class="skel-line skeleton"></div>
+          <div class="skel-line short skeleton"></div>
+          <div style="height:20px"></div>
+          <div class="skel-line tall skeleton"></div>
+        </div>
+      </div>
+      <div class="skel-card">
+        <div class="skel-img skeleton"></div>
+        <div class="skel-body">
+          <div class="skel-line skeleton"></div>
+          <div class="skel-line short skeleton"></div>
+          <div style="height:20px"></div>
+          <div class="skel-line tall skeleton"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -730,11 +774,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
             <label class="form-label">Nome Completo <span class="req">*</span></label>
             <input class="form-input" id="f-nome" placeholder="Seu nome ou razão social">
           </div>
-          <div class="grid-2">
+          <div class="grid-2" style="margin-bottom:12px">
+            <div class="form-group">
+              <label class="form-label">E-mail</label>
+              <input class="form-input" id="f-email" type="email" placeholder="seu@email.com" inputmode="email" autocomplete="email">
+            </div>
             <div class="form-group">
               <label class="form-label">CPF / CNPJ</label>
               <input class="form-input" id="f-cpf" placeholder="000.000.000-00" oninput="maskDocLoja(this)" maxlength="18">
             </div>
+          </div>
+          <div class="grid-2">
             <div class="form-group">
               <label class="form-label">Telefone / WhatsApp <span class="req">*</span></label>
               <input class="form-input" id="f-fone" placeholder="(51) 99999-9999" oninput="maskFoneLoja(this)" inputmode="tel" maxlength="15">
@@ -910,6 +960,29 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </footer>
 
 <!-- Firebase SDK -->
+<script>
+/* Watchdog de carregamento — ES5 puro de propósito: precisa rodar até em
+   navegadores antigos onde o script principal (ES2017) falha no parse. */
+(function(){
+  window.__acnReady = false;
+  setTimeout(function(){
+    if (window.__acnReady) return;
+    var label = document.getElementById('prod-count-label');
+    var grid  = document.getElementById('product-grid');
+    if (label) label.textContent = 'Não foi possível carregar';
+    if (grid) grid.innerHTML =
+      '<div style="grid-column:1/-1;text-align:center;padding:40px 16px;color:#5a6b7f">' +
+      '<div style="font-size:34px;margin-bottom:10px">⚠️</div>' +
+      '<div style="font-weight:700;color:#12314f;font-size:16px;margin-bottom:6px">O catálogo não carregou</div>' +
+      '<div style="font-size:13.5px;margin-bottom:18px">Pode ser a conexão ou uma versão antiga do navegador.</div>' +
+      '<button onclick="location.reload()" style="background:#1557a8;color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer">↻ Tentar novamente</button>' +
+      '<div style="margin-top:14px"><a href="https://wa.me/555520182243?text=' + encodeURIComponent('olá, não consegui abrir o catálogo no site') + '" style="color:#156d3a;font-weight:700;font-size:13.5px;text-decoration:none">💬 Falar no WhatsApp</a></div>' +
+      '</div>';
+    var loading = document.getElementById('loading');
+    if (loading) loading.className = loading.className.replace(' active','').replace('active','');
+  }, 12000);
+})();
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
@@ -999,6 +1072,7 @@ function aplicarCatDaUrl() {
   if (achou) filtroAtivo = achou.cat;
 }
 function renderTudo() {
+  window.__acnReady = true;   // desarma o watchdog de tela travada
   aplicarCatDaUrl();
   renderCategories();
   renderSubFiltros();
@@ -1520,7 +1594,7 @@ async function enviarPedido() {
       id,
       num: nextNum,
       nome,
-      email: document.getElementById('f-email').value.trim(),
+      email: (document.getElementById('f-email') ? document.getElementById('f-email').value.trim() : ''),
       cpf: document.getElementById('f-cpf').value.trim(),
       fone,
       rua,
