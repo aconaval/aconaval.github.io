@@ -909,6 +909,17 @@ var ACN3D = (function() {
         dot.style.background = '#e0352b';
         lab.style.display = 'none';
       }
+      function uiStart() {
+        controls.autoRotate = false;        // voce controla o angulo enquanto narra
+        btn.style.background = 'rgba(255,255,255,.97)';
+        dot.style.borderRadius = '3px';      // vira quadrado (stop)
+        dot.style.background = '#c62828';
+        t0 = Date.now();
+        labTime.textContent = '0:00';
+        lab.style.display = 'inline-flex';
+        timer = setInterval(function(){ labTime.textContent = fmt(Math.floor((Date.now()-t0)/1000)); }, 500);
+        flash('Gravando… fale e gire o modelo. Toque no botao para encerrar.', 2800);
+      }
       function boostResolution(on) {
         try {
           if (on) {
@@ -978,11 +989,26 @@ var ACN3D = (function() {
           mixStream = cs;
         }
 
+        // ── CELULAR SEM MP4 NATIVO (Chrome/Android): o MediaRecorder só gera
+        // WEBM, e o WhatsApp recusa WEBM ("não foi possível enviar o vídeo").
+        // Solução: codificar H.264 + AAC com o WebCodecs (encoder de hardware
+        // do próprio aparelho) e montar o MP4 aqui mesmo com o mp4-muxer.
+        // Se qualquer etapa falhar, cai de volta pro MediaRecorder normal.
+        if (!inCentral && !preferWebm) {
+          var m0 = pickMime(false);
+          var precisaWC = m0 && m0.indexOf('mp4') === -1;  // '' = Safari (MP4 nativo)
+          if (precisaWC && window.VideoEncoder && window.AudioEncoder && window.VideoFrame && window.AudioData) {
+            var okWC = await startWebCodecs();
+            if (okWC) return;                              // gravando via WebCodecs
+            // falhou → segue no MediaRecorder abaixo (WEBM com instrução de Documento)
+          }
+        }
+
         // Dentro da Central, comeca preferindo WEBM direto (evita o MP4 que
         // costuma falhar calado ali). Fora da Central, continua preferindo
         // MP4 (melhor compatibilidade), com WEBM so como plano B automatico.
         var mime = pickMime(preferWebm || inCentral);
-        var opt = { videoBitsPerSecond: 14000000, audioBitsPerSecond: 256000 };
+        var opt = { videoBitsPerSecond: (isMobile ? 8000000 : 14000000), audioBitsPerSecond: (isMobile ? 128000 : 256000) };
         if (mime) opt.mimeType = mime;
         try {
           rec = new MediaRecorder(mixStream, opt);
@@ -995,15 +1021,7 @@ var ACN3D = (function() {
         rec.onstop = finish;
         rec.start(1000); // pedaços de 1s: da pro watchdog conferir se ta chegando byte de verdade
 
-        controls.autoRotate = false;        // voce controla o angulo enquanto narra
-        btn.style.background = 'rgba(255,255,255,.97)';
-        dot.style.borderRadius = '3px';      // vira quadrado (stop)
-        dot.style.background = '#c62828';
-        t0 = Date.now();
-        labTime.textContent = '0:00';
-        lab.style.display = 'inline-flex';
-        timer = setInterval(function(){ labTime.textContent = fmt(Math.floor((Date.now()-t0)/1000)); }, 500);
-        flash('Gravando… fale e gire o modelo. Toque no botao para encerrar.', 2800);
+        uiStart();
 
         // ── watchdog: se em 2.2s nao chegou NENHUM byte, o formato escolhido
         // esta falhando calado (visto dentro da Central com MP4/H264+AAC).
@@ -1020,6 +1038,151 @@ var ACN3D = (function() {
             flash('Ajustando o formato de gravação…', 1600);
             start(true); // recomeça já forçando WEBM
           }, 2200);
+        }
+      }
+
+      // ── Gravador WebCodecs (H.264 + AAC → MP4 via mp4-muxer) ──
+      var mp4MuxerPromise = null;
+      function carregarMp4Muxer() {
+        if (window.Mp4Muxer) return Promise.resolve(true);
+        if (mp4MuxerPromise) return mp4MuxerPromise;
+        var urls = [
+          'https://cdn.jsdelivr.net/npm/mp4-muxer@5/build/mp4-muxer.min.js',
+          'https://cdn.jsdelivr.net/npm/mp4-muxer@4/build/mp4-muxer.min.js',
+          'https://cdn.jsdelivr.net/npm/mp4-muxer@3/build/mp4-muxer.min.js'
+        ];
+        mp4MuxerPromise = new Promise(function(resolve) {
+          var i = 0;
+          (function tenta() {
+            if (window.Mp4Muxer) return resolve(true);
+            if (i >= urls.length) { mp4MuxerPromise = null; return resolve(false); }
+            var s = document.createElement('script');
+            s.src = urls[i++];
+            s.onload = function(){ resolve(!!window.Mp4Muxer); };
+            s.onerror = function(){ tenta(); };
+            document.head.appendChild(s);
+          })();
+        });
+        return mp4MuxerPromise;
+      }
+
+      async function startWebCodecs() {
+        try {
+          if (!(await carregarMp4Muxer())) return false;
+
+          // Dimensões PARES (exigência do H.264 4:2:0) via canvas intermediário
+          var w2 = Math.max(2, canvas.width  & ~1);
+          var h2 = Math.max(2, canvas.height & ~1);
+          var oc = document.createElement('canvas'); oc.width = w2; oc.height = h2;
+          var octx = oc.getContext('2d');
+
+          // Encoder de vídeo: tenta perfis do mais capaz ao mais básico
+          var vCfg = null;
+          var candidatos = ['avc1.640028','avc1.4D4028','avc1.42E028','avc1.42E01F','avc1.42E01E'];
+          for (var i = 0; i < candidatos.length; i++) {
+            var cfg = { codec: candidatos[i], width: w2, height: h2,
+                        bitrate: 8000000, framerate: 30, avc: { format: 'avc' } };
+            try {
+              var sup = await VideoEncoder.isConfigSupported(cfg);
+              if (sup && sup.supported) { vCfg = cfg; break; }
+            } catch(e) {}
+          }
+          if (!vCfg) return false;
+
+          // Encoder de áudio AAC (obrigatório: o WhatsApp não toca Opus em MP4)
+          var sr = (audioCtx && audioCtx.sampleRate) || 48000;
+          var aCfg = { codec: 'mp4a.40.2', sampleRate: sr, numberOfChannels: 1, bitrate: 128000 };
+          try {
+            var asup = await AudioEncoder.isConfigSupported(aCfg);
+            if (!asup || !asup.supported) return false;
+          } catch(e) { return false; }
+
+          var muxer = new Mp4Muxer.Muxer({
+            target: new Mp4Muxer.ArrayBufferTarget(),
+            video: { codec: 'avc', width: w2, height: h2 },
+            audio: { codec: 'aac', sampleRate: sr, numberOfChannels: 1 },
+            fastStart: 'in-memory'
+          });
+
+          var falhou = false;
+          var vEnc = new VideoEncoder({
+            output: function(chunk, meta){ try { muxer.addVideoChunk(chunk, meta); } catch(e) { falhou = true; } },
+            error:  function(){ falhou = true; }
+          });
+          vEnc.configure(vCfg);
+          var aEnc = new AudioEncoder({
+            output: function(chunk, meta){ try { muxer.addAudioChunk(chunk, meta); } catch(e) { falhou = true; } },
+            error:  function(){ falhou = true; }
+          });
+          aEnc.configure(aCfg);
+
+          // Áudio: PCM capturado do grafo já existente (srcNode → processor)
+          var spn = audioCtx.createScriptProcessor(4096, 1, 1);
+          var mute = audioCtx.createGain(); mute.gain.value = 0;
+          var aSamples = 0;
+          spn.onaudioprocess = function(ev) {
+            if (falhou) return;
+            var ch = ev.inputBuffer.getChannelData(0);
+            var data = new Float32Array(ch);           // cópia: o buffer é reutilizado
+            try {
+              aEnc.encode(new AudioData({
+                format: 'f32', sampleRate: sr, numberOfChannels: 1,
+                numberOfFrames: data.length,
+                timestamp: Math.round(aSamples / sr * 1e6),
+                data: data
+              }));
+            } catch(e) { falhou = true; }
+            aSamples += data.length;
+          };
+          srcNode.connect(spn); spn.connect(mute); mute.connect(audioCtx.destination);
+
+          // Vídeo: ~30 fps a partir do canvas do Three.js
+          var vT0 = performance.now(), vIdx = 0, vInt = null;
+          vInt = setInterval(function() {
+            if (falhou) return;
+            try {
+              octx.drawImage(canvas, 0, 0, w2, h2);
+              if (vEnc.encodeQueueSize > 8) return;    // encoder atolado: pula o frame
+              var fr = new VideoFrame(oc, { timestamp: Math.round((performance.now() - vT0) * 1000) });
+              vEnc.encode(fr, { keyFrame: (vIdx % 60) === 0 });
+              fr.close(); vIdx++;
+            } catch(e) { falhou = true; }
+          }, 1000 / 30);
+
+          var parado = false;
+          rec = {
+            state: 'recording',
+            mimeType: 'video/mp4',
+            onstop: null,
+            stop: function() {
+              if (parado) return; parado = true;
+              rec.state = 'inactive';
+              if (vInt) { clearInterval(vInt); vInt = null; }
+              try { srcNode.disconnect(spn); } catch(e) {}
+              try { spn.disconnect(); mute.disconnect(); } catch(e) {}
+              (async function() {
+                var blob = null;
+                try {
+                  await vEnc.flush(); await aEnc.flush();
+                  try { vEnc.close(); aEnc.close(); } catch(e) {}
+                  muxer.finalize();
+                  blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+                } catch(e) { falhou = true; }
+                stopTracks(); resetUI(); controls.autoRotate = !userStopped; rec = null;
+                if (destroyed) return;
+                if (falhou || !blob || !blob.size) {
+                  flash('Não consegui montar o MP4 neste aparelho. Grave de novo — vou usar o formato alternativo.', 6000);
+                  return;
+                }
+                await entregarVideo(blob, 'mp4');
+              })();
+            }
+          };
+          clearTimeout(watchdogT);   // o watchdog é só do MediaRecorder
+          uiStart();
+          return true;
+        } catch(e) {
+          return false;
         }
       }
 
@@ -1042,6 +1205,11 @@ var ACN3D = (function() {
           return;
         }
 
+        await entregarVideo(blob, ext);
+      }
+
+      // ── Entrega do vídeo pronto (Central / folha de compartilhar / download) ──
+      async function entregarVideo(blob, ext) {
         var base = (opts.nome || 'aconaval-3d').toString()
                     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
                     .replace(/[^\w\-]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase() || 'aconaval-3d';
@@ -1064,8 +1232,15 @@ var ACN3D = (function() {
           } catch(e) { /* qualquer falha aqui -> cai no download normal abaixo */ }
         }
 
-        // CELULAR: abre a folha de compartilhamento (WhatsApp aparece na lista)
-        if (isMobile && navigator.canShare && navigator.canShare({ files:[file] })) {
+        // Aviso de tamanho: o WhatsApp recusa vídeos muito grandes (~64 MB)
+        if (isMobile && blob.size > 62*1024*1024) {
+          flash('⚠️ O vídeo ficou grande (' + Math.round(blob.size/1024/1024) + ' MB) — o WhatsApp pode recusar. Grave um vídeo mais curto se falhar.', 6000);
+        }
+
+        // CELULAR: folha de compartilhamento — SÓ com MP4. WEBM o WhatsApp
+        // recusa com "não foi possível enviar o vídeo", então nem tenta:
+        // baixa o arquivo e ensina a enviar como Documento (que o WhatsApp aceita).
+        if (isMobile && ext === 'mp4' && navigator.canShare && navigator.canShare({ files:[file] })) {
           try {
             await navigator.share({ files:[file], title:'Aco Naval 3D' });
             flash('✅ Pronto! Escolha o WhatsApp na lista para enviar.', 3500);
@@ -1084,7 +1259,11 @@ var ACN3D = (function() {
         // no disco depois do clique — revogar em 4s abortava o download no meio
         // e o arquivo saía vazio/incompleto.
         setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 180000);
-        flash('✅ Video baixado! Arraste o arquivo pra conversa do WhatsApp.', 5000);
+        if (isMobile && ext === 'webm') {
+          flash('📎 Seu aparelho não gera MP4 — o vídeo foi baixado. No WhatsApp, use Anexar → Documento para enviá-lo (como vídeo o WhatsApp recusa WEBM).', 9000);
+        } else {
+          flash('✅ Video baixado! Arraste o arquivo pra conversa do WhatsApp.', 5000);
+        }
       }
 
       btn.addEventListener('click', function() {
