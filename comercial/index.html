@@ -157,6 +157,12 @@ body{background:#f5f7fa;color:#222;min-height:100vh}
 .drag-handle:active{cursor:grabbing}
 tr.drag-over td{background:#EEF5FF!important;border-top:2px solid #185FA5}
 tr.dragging{opacity:.4}
+.reo-h{cursor:grab;color:#b3bcc8;font-size:13px;padding:0 4px 0 0;user-select:none;touch-action:none;line-height:1;flex-shrink:0}
+.reo-h:active{cursor:grabbing}
+.eixo-opc-chip[data-reo]{display:inline-flex;align-items:center;gap:2px}
+.eixo-opc-chip.reo-dragging,.eixo-row.reo-dragging{opacity:.4}
+.eixo-opc-chip.reo-over{outline:2px solid #185FA5;outline-offset:1px}
+.eixo-row.reo-over{background:#EEF5FF;border-radius:6px;box-shadow:inset 0 0 0 2px #B5D4F4}
 .table-wrap{border-radius:8px;overflow:hidden;border:1px solid #e0e4e8}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:#f5f7fa;color:#666;font-weight:600;text-align:left;padding:10px 12px;border-bottom:1px solid #e0e4e8;font-size:11px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
@@ -407,6 +413,152 @@ tbody tr:hover{background:#fafbfc}
 </style>
 </head>
 <body>
+
+<!-- ══════════ TELA DE ACESSO (Aço Naval) ══════════
+     Barreira simples de acesso. Observação: por ser 100% no navegador,
+     protege contra acesso casual — quem abrir o código-fonte consegue ver
+     as credenciais. Para trocar usuário/senha, edite ACN_USER / ACN_PASS abaixo. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+#acn-gate{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:22px;
+  font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  background:radial-gradient(1000px 520px at 50% -160px,rgba(242,169,59,.16),transparent 65%),
+             linear-gradient(140deg,#04182F,#003366 58%,#0A4E8C)}
+#acn-gate .g-glow{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+#acn-gate .g-glow::before{content:"";position:absolute;top:-120px;right:-90px;width:360px;height:360px;
+  background:radial-gradient(circle,rgba(242,169,59,.22),transparent 62%)}
+#acn-gate .g-card{position:relative;width:100%;max-width:380px;background:#fff;border-radius:22px;
+  padding:34px 28px 28px;box-shadow:0 30px 80px rgba(4,24,47,.55);border:1px solid rgba(255,255,255,.6);
+  animation:gRise .5s cubic-bezier(.16,.84,.44,1) both}
+@keyframes gRise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+#acn-gate .g-brand{text-align:center;margin-bottom:22px}
+#acn-gate .g-logo{height:52px;width:auto;border-radius:10px;padding:4px;background:#fff;
+  box-shadow:0 4px 16px rgba(0,51,102,.18);margin-bottom:12px}
+#acn-gate .g-badge{width:60px;height:60px;border-radius:16px;margin:0 auto 12px;display:none;
+  align-items:center;justify-content:center;font-size:30px;
+  background:linear-gradient(135deg,#062A52,#0A4E8C);box-shadow:0 6px 18px rgba(0,51,102,.3)}
+#acn-gate h1{font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:800;color:#003366;letter-spacing:.4px}
+#acn-gate .g-sub{font-size:11.5px;color:#9C7522;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;margin-top:4px}
+#acn-gate .g-lock{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:#5C6B7E;
+  font-weight:600;margin:2px 0 20px}
+#acn-gate label{display:block;font-size:11px;font-weight:800;color:#5C6B7E;text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px 2px}
+#acn-gate .g-field{margin-bottom:14px}
+#acn-gate .g-inwrap{position:relative}
+#acn-gate input{width:100%;padding:12px 14px;border:1.5px solid #D3DCE7;border-radius:12px;font-size:15px;color:#0E1B2A;
+  background:#F8FAFD;font-family:inherit;transition:border .18s,box-shadow .18s,background .18s}
+#acn-gate input:focus{outline:none;border-color:#003366;background:#fff;box-shadow:0 0 0 4px rgba(0,51,102,.10)}
+#acn-gate .g-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;
+  cursor:pointer;font-size:16px;padding:6px;opacity:.55;line-height:1}
+#acn-gate .g-eye:hover{opacity:.9}
+#acn-gate .g-btn{width:100%;margin-top:6px;padding:14px;border:none;border-radius:13px;cursor:pointer;
+  font-family:inherit;font-size:15.5px;font-weight:800;letter-spacing:.3px;color:#fff;
+  background:linear-gradient(135deg,#003366,#0A4E8C);box-shadow:0 10px 26px rgba(0,51,102,.32);
+  display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s,box-shadow .18s,filter .15s}
+#acn-gate .g-btn:hover{filter:brightness(1.08);box-shadow:0 14px 32px rgba(0,51,102,.42);transform:translateY(-2px)}
+#acn-gate .g-btn:active{transform:translateY(0)}
+#acn-gate .g-err{min-height:18px;text-align:center;font-size:12.5px;color:#C0392B;font-weight:700;margin-top:12px}
+#acn-gate .g-foot{text-align:center;font-size:10.5px;color:#AEBBC9;margin-top:14px}
+#acn-gate.shake .g-card{animation:gShake .4s}
+@keyframes gShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+@media(prefers-reduced-motion:reduce){#acn-gate *,#acn-gate.shake .g-card{animation:none!important;transition:none!important}}
+</style>
+<div id="acn-gate" role="dialog" aria-modal="true" aria-label="Acesso ao sistema">
+  <div class="g-glow"></div>
+  <div class="g-card">
+    <div class="g-brand">
+      <img id="acn-gate-logo" class="g-logo" alt="Aço Naval" style="display:none"/>
+      <div id="acn-gate-badge" class="g-badge">🔥</div>
+      <h1>AÇO NAVAL</h1>
+      <div class="g-sub">Sistema de Orçamentos</div>
+    </div>
+    <div class="g-lock">🔒 Acesso restrito à equipe</div>
+    <div class="g-field">
+      <label for="acn-gate-user">Usuário</label>
+      <input id="acn-gate-user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="seu usuário"/>
+    </div>
+    <div class="g-field">
+      <label for="acn-gate-pass">Senha</label>
+      <div class="g-inwrap">
+        <input id="acn-gate-pass" type="password" autocomplete="current-password" placeholder="sua senha"/>
+        <button type="button" class="g-eye" id="acn-gate-eye" aria-label="Mostrar senha">👁️</button>
+      </div>
+    </div>
+    <button type="button" class="g-btn" id="acn-gate-btn">🔓 Entrar</button>
+    <div class="g-err" id="acn-gate-err"></div>
+    <div class="g-foot">Aço Naval · Calor que transforma</div>
+  </div>
+</div>
+<script>
+(function(){
+  // ── Credenciais (edite aqui para trocar) ─────────────────────────
+  var ACN_USER = 'pacifico';
+  var ACN_PASS = 'pp748748';
+  var KEY = 'acnAuth_v1';
+  // ─────────────────────────────────────────────────────────────────
+  var gate = document.getElementById('acn-gate');
+  if (!gate) return;
+
+  // Já autenticado nesta sessão? remove a tela sem piscar.
+  try { if (sessionStorage.getItem(KEY) === '1') { gate.remove(); return; } } catch(e){}
+
+  // Trava a rolagem do app atrás da tela.
+  var prevOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+
+  // Reaproveita o logo real do topo. O .topbar é parseado DEPOIS do gate,
+  // então resolvemos o logo quando o DOM estiver pronto.
+  function acnGateLogo(){
+    var g = document.getElementById('acn-gate-logo');
+    var b = document.getElementById('acn-gate-badge');
+    try {
+      var topImg = document.querySelector('.topbar img');
+      if (topImg && topImg.src) { g.src = topImg.src; g.style.display=''; }
+      else { g.style.display='none'; b.style.display='flex'; }
+    } catch(e){ if(g) g.style.display='none'; if(b) b.style.display='flex'; }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', acnGateLogo);
+  else acnGateLogo();
+
+  var uEl = document.getElementById('acn-gate-user');
+  var pEl = document.getElementById('acn-gate-pass');
+  var err = document.getElementById('acn-gate-err');
+  var btn = document.getElementById('acn-gate-btn');
+  var eye = document.getElementById('acn-gate-eye');
+
+  setTimeout(function(){ try{ uEl.focus(); }catch(e){} }, 60);
+
+  eye.addEventListener('click', function(){
+    var show = pEl.type === 'password';
+    pEl.type = show ? 'text' : 'password';
+    eye.textContent = show ? '🙈' : '👁️';
+    pEl.focus();
+  });
+
+  function entrar(){
+    var u = (uEl.value||'').trim().toLowerCase();
+    var p = (pEl.value||'');
+    if (u === ACN_USER && p === ACN_PASS) {
+      try { sessionStorage.setItem(KEY, '1'); } catch(e){}
+      document.body.style.overflow = prevOverflow;
+      gate.style.transition = 'opacity .35s ease';
+      gate.style.opacity = '0';
+      setTimeout(function(){ gate.remove(); }, 360);
+    } else {
+      err.textContent = '⚠️ Usuário ou senha incorretos.';
+      gate.classList.remove('shake'); void gate.offsetWidth; gate.classList.add('shake');
+      pEl.value = ''; pEl.focus();
+    }
+  }
+  btn.addEventListener('click', entrar);
+  [uEl, pEl].forEach(function(el){
+    el.addEventListener('keydown', function(ev){ if (ev.key === 'Enter') { ev.preventDefault(); entrar(); } });
+    el.addEventListener('input', function(){ if (err.textContent) err.textContent=''; });
+  });
+})();
+</script>
+<!-- ══════════ FIM TELA DE ACESSO ══════════ -->
 
 <div class="topbar">
   <div style="display:flex;align-items:center;gap:10px">
@@ -2510,13 +2662,75 @@ function toggleFiltrosPanel(){
   renderFiltrosDefPanel();
 }
 
+// ── Reordenar filtros/valores arrastando (funciona no mouse e no toque) ──
+// Guarda índices por posição (categoria/filtro/valor) para reordenar filtrosDef.
+let _reo = null;
+function reoStart(e){
+  const chip = e.currentTarget.closest('[data-reo]');
+  if(!chip) return;
+  e.preventDefault(); e.stopPropagation();
+  _reo = {
+    kind: chip.dataset.reo,
+    ci: +chip.dataset.ci,
+    fi: chip.dataset.fi !== undefined ? +chip.dataset.fi : null,
+    vi: chip.dataset.vi !== undefined ? +chip.dataset.vi : null,
+    chip
+  };
+  chip.classList.add('reo-dragging');
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_){}
+  document.addEventListener('pointermove', reoMove, {passive:false});
+  document.addEventListener('pointerup', reoEnd);
+  document.addEventListener('pointercancel', reoEnd);
+}
+function reoMove(e){
+  if(!_reo) return;
+  e.preventDefault();
+  const t = document.elementFromPoint(e.clientX, e.clientY);
+  const over = t && t.closest ? t.closest('[data-reo="'+_reo.kind+'"]') : null;
+  document.querySelectorAll('.reo-over').forEach(x=>x.classList.remove('reo-over'));
+  _reo.target = null;
+  if(over && over !== _reo.chip && +over.dataset.ci === _reo.ci &&
+     (_reo.kind === 'filtro' || +over.dataset.fi === _reo.fi)){
+    over.classList.add('reo-over');
+    _reo.target = over;
+  }
+}
+function reoEnd(){
+  document.removeEventListener('pointermove', reoMove);
+  document.removeEventListener('pointerup', reoEnd);
+  document.removeEventListener('pointercancel', reoEnd);
+  const st = _reo; _reo = null;
+  document.querySelectorAll('.reo-dragging').forEach(x=>x.classList.remove('reo-dragging'));
+  document.querySelectorAll('.reo-over').forEach(x=>x.classList.remove('reo-over'));
+  if(!st || !st.target) return;
+  const cat = categorias[st.ci];
+  if(cat === undefined) return;
+  if(st.kind === 'val'){
+    const f = (filtrosDef[cat]||[])[st.fi];
+    if(!f || !f.opcoes) return;
+    const to = +st.target.dataset.vi, from = st.vi;
+    if(from == null || isNaN(to) || from === to) return;
+    const [m] = f.opcoes.splice(from,1); f.opcoes.splice(to,0,m);
+  } else {
+    const arr = filtrosDef[cat];
+    if(!arr) return;
+    const to = +st.target.dataset.fi, from = st.fi;
+    if(from == null || isNaN(to) || from === to) return;
+    const [m] = arr.splice(from,1); arr.splice(to,0,m);
+  }
+  renderFiltrosDefPanel();
+  renderFiltrosExtrasForm();
+  renderProdutos();
+  saveConfig();
+}
+
 function renderFiltrosDefPanel(){
   const wrap=document.getElementById('filtros-def-list');
   if(!wrap) return;
   if(!categorias.length){
     wrap.innerHTML='<div style="font-size:12px;color:#aaa;margin-bottom:10px">Nenhuma categoria criada ainda. Crie a primeira abaixo.</div>';
   } else {
-    wrap.innerHTML = categorias.map(cat=>{
+    wrap.innerHTML = categorias.map((cat,catIdx)=>{
       const fs = filtrosDef[cat] || [];
       const prefix = catPrefixes[cat] || '';
       const slug = slugify(cat);
@@ -2544,14 +2758,15 @@ function renderFiltrosDefPanel(){
         </div>
         <div class="cat-eixos" style="margin-top:8px">
           ${fs.length ? fs.map((f,i)=>`
-            <div class="eixo-row">
+            <div class="eixo-row" data-reo="filtro" data-ci="${catIdx}" data-fi="${i}">
               <div class="eixo-row-head">
+                <span class="reo-h" onpointerdown="reoStart(event)" title="Arraste para reordenar o filtro">⠿</span>
                 <span class="eixo-nome">🎚️ ${f.nome}</span>
                 <button class="btn btn-ghost btn-sm" style="padding:1px 8px;font-size:11px;color:#a32d2d;border-color:#f0c5c5" onclick="removeFiltroDef('${cat.replace(/'/g,"\\'")}',${i})" title="Remover filtro">🗑 filtro</button>
               </div>
               <div class="eixo-opcoes">
                 ${(f.opcoes||[]).length
-                  ? (f.opcoes||[]).map((o,j)=>`<span class="eixo-opc-chip">${o}<button onclick="removeValorFiltroDef('${cat.replace(/'/g,"\\'")}',${i},${j})" title="Remover valor">✕</button></span>`).join('')
+                  ? (f.opcoes||[]).map((o,j)=>`<span class="eixo-opc-chip" data-reo="val" data-ci="${catIdx}" data-fi="${i}" data-vi="${j}"><span class="reo-h" onpointerdown="reoStart(event)" title="Arraste para reordenar">⠿</span>${o}<button onclick="removeValorFiltroDef('${cat.replace(/'/g,"\\'")}',${i},${j})" title="Remover valor">✕</button></span>`).join('')
                   : '<span style="font-size:11px;color:#bbb">Sem valores — adicione abaixo</span>'}
               </div>
               <div class="eixo-add-row">
