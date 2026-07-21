@@ -72,6 +72,13 @@
   .item-nome{font-size:14.5px;font-weight:800;color:var(--ink);line-height:1.25}
   .item-dim{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.5}
   .item-preco{font-family:var(--f-body);font-variant-numeric:tabular-nums;font-size:16px;font-weight:800;color:var(--navy);margin-top:6px}
+  .item-brinde{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.6px;color:#5A3D00;position:relative;overflow:hidden;background:linear-gradient(120deg,var(--gold-400),#FFE9A8 45%,var(--gold) 90%);border:1.5px solid var(--gold);box-shadow:0 3px 12px rgba(201,154,46,.35)}
+  .item-brinde::after{content:"";position:absolute;top:0;left:-120%;width:60%;height:100%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.85),transparent);transform:skewX(-18deg);animation:brindeShine 2.4s ease-in-out infinite}
+  @keyframes brindeShine{0%{left:-120%}55%{left:130%}100%{left:130%}}
+  .item-brinde-ico{font-size:14px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.15));animation:brindeBob 2.4s ease-in-out infinite}
+  @keyframes brindeBob{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-2px) rotate(-9deg)}60%{transform:translateY(-2px) rotate(9deg)}}
+  .item-brinde-sub{font-weight:700;font-size:10px;letter-spacing:.4px;color:#7A5A0C;text-transform:uppercase}
+  @media (prefers-reduced-motion:reduce){.item-brinde::after,.item-brinde-ico{animation:none}}
   .item-projeto-preview{width:96px;height:96px;object-fit:cover;border-radius:12px;flex-shrink:0;cursor:pointer;background:#f5f5f5;border:2px solid var(--gold-400);box-shadow:0 3px 12px rgba(201,154,46,.28);transition:transform .18s,box-shadow .18s}
   .item-projeto-preview:hover{transform:scale(1.04);box-shadow:0 6px 20px rgba(201,154,46,.45)}
   .btn-abrir-projeto{width:100%;margin-top:12px;padding:11px;background:linear-gradient(135deg,#FFF6DC,#FDEEC0);color:var(--gold-700);border:1.5px solid var(--gold-400);border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;font-family:var(--f-body);letter-spacing:.3px;transition:filter .15s,transform .1s}
@@ -582,7 +589,7 @@ function renderPedido(p) {
           <div class="item-num">Item ${String(i+1).padStart(2,'0')}</div>
           <div class="item-nome">${nome}</div>
           ${dims?`<div class="item-dim">${dims}</div>`:''}
-          ${item.preco>0?`<div class="item-preco">${fmtBRL(item.preco)}</div>`:''}
+          ${item.preco>0?`<div class="item-preco">${fmtBRL(item.preco)}</div>`:`<div class="item-brinde"><span class="item-brinde-ico">🎁</span>BRINDE<span class="item-brinde-sub">Cortesia Aço Naval</span></div>`}
         </div>
         ${temGaleria?`<img class="item-projeto-preview" src="${fotosProj[0]}" onclick="abrirGaleria(${i},0)"/>`:''}
       </div>

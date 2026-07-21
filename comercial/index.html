@@ -90,6 +90,7 @@ body{background:#f5f7fa;color:#222;min-height:100vh}
 .ac-item-name{font-weight:600;color:#003366;font-size:13px}
 .ac-item-sub{font-size:11px;color:#888;margin-top:2px}
 .ac-item-price{font-size:13px;font-weight:700;color:#185FA5;white-space:nowrap;flex-shrink:0}
+.ac-more{padding:8px 14px;font-size:11px;color:#8a97a6;background:#f7f9fc;text-align:center;font-weight:600}
 /* ── CATEGORY FILTER ── */
 .cat-filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;align-items:center}
 .cat-chip{padding:4px 12px;border-radius:999px;border:1px solid #d0d4d8;background:#fff;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;color:#555}
@@ -3386,7 +3387,7 @@ function renderItems() {
       <div>
         <label class="form-label">Código</label>
         <input class="form-input" id="cod-${item.id}" placeholder="Cód..." autocomplete="off"
-          value="${item.codigoInput||''}"
+          value="${escHtml(item.codigoInput||'')}"
           oninput="onCodInputOrc(${item.id},this.value)"
           onblur="buscarPorCodigo(${item.id})"
           onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPorCodigo(${item.id});}"
@@ -3396,7 +3397,7 @@ function renderItems() {
         <label class="form-label">Buscar Produto</label>
         <div class="ac-wrap">
           <input class="form-input" id="search-${item.id}" placeholder="Digite o nome do produto..." autocomplete="off"
-            value="${item.searchText||''}"
+            value="${escHtml(item.searchText||'')}"
             oninput="onSearchInput(${item.id},this.value)"
             onkeydown="onSearchKey(event,${item.id})"
             onfocus="openDropdown(${item.id})"/>
@@ -3405,7 +3406,7 @@ function renderItems() {
       </div>
       <div>
         <label class="form-label">Descrição</label>
-        <input class="form-input" id="desc-${item.id}" value="${item.desc}" placeholder="Descrição do item" oninput="onDescChange(${item.id}, this.value)"/>
+        <input class="form-input" id="desc-${item.id}" value="${escHtml(item.desc)}" placeholder="Descrição do item" oninput="onDescChange(${item.id}, this.value)"/>
       </div>
       <div>
         <label class="form-label">Valor (R$)</label>
@@ -3446,22 +3447,29 @@ function onSearchInput(id, val) {
   acIndex[id] = 0;
   openDropdown(id);
 }
+// Teto de itens desenhados no autocomplete. Sem esse limite, digitar uma letra
+// comum num catálogo grande montava centenas de <div> a cada tecla e travava a
+// aba de orçamento ("às vezes trava pra selecionar os produtos").
+var AC_MAX_RESULTS = 40;
 function openDropdown(id) {
   const inp = document.getElementById('search-'+id); if(!inp) return;
   const val = (inp.value||'').toLowerCase().trim();
   const drop = document.getElementById('drop-'+id); if(!drop) return;
-  const matches = val
+  const todos = val
     ? produtos.filter(p => p.nome.toLowerCase().includes(val) || (p.cat||'').toLowerCase().includes(val) || String(p.codigo||'').toLowerCase().includes(val))
     : produtos.slice(0, 12);
-  if (!matches.length) { drop.classList.remove('open'); return; }
+  if (!todos.length) { drop.classList.remove('open'); return; }
+  const matches = todos.slice(0, AC_MAX_RESULTS);
+  if (acIndex[id] == null || acIndex[id] >= matches.length) acIndex[id] = 0;
   drop.innerHTML = matches.map((p,i) => `
     <div class="ac-item${i===acIndex[id]?' active':''}" onmousedown="selectProd(${id},${p.id})">
       <div class="ac-item-info">
-        <div class="ac-item-name">${p.nome}</div>
-        ${p.dim||p.cat||p.codigo ? `<div class="ac-item-sub">${[p.codigo?'Cód: '+p.codigo:null,p.cat,p.dim].filter(Boolean).join(' · ')}</div>` : ''}
+        <div class="ac-item-name">${escHtml(p.nome)}</div>
+        ${p.dim||p.cat||p.codigo ? `<div class="ac-item-sub">${escHtml([p.codigo?'Cód: '+p.codigo:null,p.cat,p.dim].filter(Boolean).join(' · '))}</div>` : ''}
       </div>
       <div class="ac-item-price">${fmtBRL(p.preco)}</div>
-    </div>`).join('');
+    </div>`).join('')
+    + (todos.length > matches.length ? `<div class="ac-more">+${todos.length - matches.length} resultados — refine a busca para ver mais</div>` : '');
   drop.classList.add('open');
 }
 function onSearchKey(e, id) {
@@ -3612,12 +3620,21 @@ async function gerarOrcamento() {
     const orc = { id: Date.now(), num: proxNumOrc, ...dados, criadoEm: new Date().toISOString() };
     orcamentos.push(orc);
     updateBadge();
+    // Copia a mensagem do orçamento AUTOMATICAMENTE, já aproveitando o gesto do
+    // clique em "Gerar Orçamento" (precisa ser antes do await do save, senão o
+    // navegador bloqueia a escrita no clipboard sem interação do usuário).
+    const copyPromise = copiarMsgOrcamentoClipboard(orc);
     showOrcamento(orc.id);
-    // Bug fix: salva com handler de erro visível ao usuário
-    save().catch(e => {
+    try {
+      await save();
+      const copiado = await copyPromise;
+      setStatus(copiado
+        ? '✅ Salvo! Mensagem do orçamento copiada — é só colar no WhatsApp do cliente.'
+        : '✅ Salvo! (não consegui copiar sozinho — use o botão "🔗 Link")', 'ok');
+    } catch(e) {
       console.error('Erro ao salvar orçamento:', e);
       setStatus('⚠️ Erro ao salvar — verifique sua conexão', 'erro');
-    });
+    }
   }
 }
 
@@ -3690,7 +3707,9 @@ async function showOrcamento(id) {
   // Renderiza o MESMO HTML do PDF dentro do modal via iframe
   const printHTML = getHTMLOrc(o);
   const blob = new Blob([printHTML], {type:'text/html'});
+  if (_orcBlobUrl) { URL.revokeObjectURL(_orcBlobUrl); }  // libera o preview anterior
   const blobUrl = URL.createObjectURL(blob);
+  _orcBlobUrl = blobUrl;
   document.getElementById('modal-body').innerHTML =
     `<iframe src="${blobUrl}"
       style="width:100%;height:70vh;border:none;border-radius:4px"
@@ -3698,7 +3717,12 @@ async function showOrcamento(id) {
     </iframe>`;
   document.getElementById('modal-orc').classList.add('open');
 }
-function closeModal() { document.getElementById('modal-orc').classList.remove('open'); }
+let _orcBlobUrl = null;
+function closeModal() {
+  document.getElementById('modal-orc').classList.remove('open');
+  if (_orcBlobUrl) { URL.revokeObjectURL(_orcBlobUrl); _orcBlobUrl = null; }
+  document.getElementById('modal-body').innerHTML = '';
+}
 
 function getHTMLOrc(o) {
   const avista = o.avistaVal > 0 ? o.avistaVal : (o.total||o.subtotal) * .90;
@@ -4035,24 +4059,33 @@ function gerarLinkById(id, btn) {
   gerarLinkOrc(btn);
 }
 
-function gerarLinkOrc(btn) {
-  const o = currentOrcamento; if (!o) return;
-
-  // Gera slug do nome do cliente (ex: "João da Silva" → "Joao-da-Silva")
-  const slug = o.cliente
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/[^a-zA-Z0-9-]/g, '');
-
-  // Monta a URL absoluta para visualizar.html
+// Mensagem pronta de WhatsApp com o link do orçamento (usada tanto pelo botão
+// "Link" quanto pela cópia automática ao gerar). Única fonte da verdade — antes
+// o texto estava duplicado dentro do próprio gerarLinkOrc (try e catch).
+function montarMsgOrcamento(o) {
+  if (!o) return '';
   const base = location.href.replace(/\/[^\/]*$/, '/');
   const url  = `${base}visualizar.html?id=${o.id}`;
-
-  // Monta a mensagem pronta para WhatsApp
-  const num  = String(o.num).padStart(3, '0');
-  const nome = o.cliente.toUpperCase();
   const primeiroNome = (o.cliente || '').trim().split(/\s+/)[0];
-  const msg  = `Olá ${primeiroNome}, segue o link do seu orçamento, entra no link confere as informações, preenche o formulário e clica em enviar solicitação para fechar sua encomenda. Clica aqui: ${url}\n\nPode ter certeza ${primeiroNome} que vai valer cada centavo, vamos caprichar e depois vc vai nos enviar uma foto bem bonita pra gente postar tá?\n\nQualquer dúvida que tiver, só me perguntar.`;
+  return `Olá ${primeiroNome}, segue o link do seu orçamento, entra no link confere as informações, preenche o formulário e clica em enviar solicitação para fechar sua encomenda. Clica aqui: ${url}\n\nPode ter certeza ${primeiroNome} que vai valer cada centavo, vamos caprichar e depois vc vai nos enviar uma foto bem bonita pra gente postar tá?\n\nQualquer dúvida que tiver, só me perguntar.`;
+}
+// Dispara a cópia da mensagem do orçamento e devolve Promise<boolean>. Precisa
+// ser chamada AINDA dentro do gesto do clique (antes de qualquer await de rede),
+// senão o navegador bloqueia a escrita no clipboard sem interação do usuário.
+function copiarMsgOrcamentoClipboard(o) {
+  try {
+    return navigator.clipboard.writeText(montarMsgOrcamento(o))
+      .then(() => true)
+      .catch(e => { console.warn('Cópia automática do orçamento falhou:', e); return false; });
+  } catch(e) {
+    console.warn('Clipboard indisponível:', e);
+    return Promise.resolve(false);
+  }
+}
+
+function gerarLinkOrc(btn) {
+  const o = currentOrcamento; if (!o) return;
+  const msg = montarMsgOrcamento(o);
 
   navigator.clipboard.writeText(msg).then(() => {
     const orig = btn.textContent;
@@ -4068,11 +4101,7 @@ function gerarLinkOrc(btn) {
     }, 2500);
   }).catch(() => {
     // Fallback: abre em janela pequena para copiar manualmente
-    const num2 = String(o.num).padStart(3,'0');
-    const url2 = `${base}visualizar.html?id=${o.id}`;
-    const primeiroNome2 = (o.cliente || '').trim().split(/\s+/)[0];
-    const msg2 = `Olá ${primeiroNome2}, segue o link do seu orçamento, entra no link confere as informações, preenche o formulário e clica em enviar solicitação para fechar sua encomenda. Clica aqui: ${url2}\n\nPode ter certeza ${primeiroNome2} que vai valer cada centavo, vamos caprichar e depois vc vai nos enviar uma foto bem bonita pra gente postar tá?\n\nQualquer dúvida que tiver, só me perguntar.`;
-    prompt('Copie a mensagem abaixo:', msg2);
+    prompt('Copie a mensagem abaixo:', msg);
   });
 }
 
@@ -4102,6 +4131,9 @@ function doConfirm() {
 
 const fmtBRL = v => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0);
 function fmtDate(iso) { if(!iso) return '—'; const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; }
+// Escapa texto para uso seguro dentro de HTML/atributos (nomes de produto com
+// aspas, <, > ou & quebravam a marcação dos cards e do autocomplete).
+function escHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
 (async function init() {
   renderProdutos(); updateBadge(); // render vazio enquanto carrega
@@ -4426,14 +4458,18 @@ ${link}
 
 Assim que você assinar, já encaminhamos seu pedido para o setor de produção e criamos um grupo para ir te atualizando sobre todos os detalhes até a entrega.`;
 }
-// Copia o link automaticamente (usado logo após gerar o pedido).
-async function copiarLinkAssinaturaAuto(id) {
+// Copia o link de assinatura e devolve Promise<boolean> (true = copiou).
+// Deve ser chamada AINDA dentro do gesto do clique (antes dos awaits de rede),
+// senão o navegador bloqueia a escrita no clipboard sem interação do usuário.
+// Quem chama decide a mensagem de status (evita ser sobrescrita pelo save).
+function copiarLinkAssinaturaAuto(id) {
   try {
-    await navigator.clipboard.writeText(montarMsgAssinatura(id));
-    setPS('✅ Pedido salvo! Link de assinatura copiado — é só colar no WhatsApp do cliente.', 'ok');
+    return navigator.clipboard.writeText(montarMsgAssinatura(id))
+      .then(() => true)
+      .catch(e => { console.warn('Não foi possível copiar o link automaticamente:', e); return false; });
   } catch(e) {
-    // Clipboard pode falhar sem gesto do usuário; não bloqueia nada.
-    console.warn('Não foi possível copiar o link automaticamente:', e);
+    console.warn('Clipboard indisponível:', e);
+    return Promise.resolve(false);
   }
 }
 function enviarLinkAssinatura(id, num) {
@@ -4519,7 +4555,7 @@ function renderItemsPedido() {
       <div>
         <label class="form-label">Código</label>
         <input class="form-input" id="pd-cod-${idx}" placeholder="Cód..." autocomplete="off"
-          value="${item.codigoInput||''}"
+          value="${escHtml(item.codigoInput||'')}"
           oninput="onCodInputPd(${idx},this.value)"
           onblur="buscarPorCodigoPd(${idx})"
           onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPorCodigoPd(${idx});}"
@@ -4529,8 +4565,8 @@ function renderItemsPedido() {
         <label class="form-label">Buscar Produto</label>
         <div class="ac-wrap">
           <input class="form-input" id="pd-search-${idx}" placeholder="Digite o nome do produto..." autocomplete="off"
-            value="${item.searchText||''}"
-            oninput="openDropdownPd(${idx})"
+            value="${escHtml(item.searchText||'')}"
+            oninput="onSearchInputPd(${idx},this.value)"
             onkeydown="onSearchKeyPd(event,${idx})"
             onfocus="openDropdownPd(${idx})"/>
           <div class="ac-dropdown" id="pd-drop-${idx}"></div>
@@ -4538,7 +4574,7 @@ function renderItemsPedido() {
       </div>
       <div>
         <label class="form-label">Descrição</label>
-        <input class="form-input" id="pd-desc-${idx}" value="${item.desc||''}" placeholder="Descrição do item" oninput="onDescChangePd(${idx}, this.value)"/>
+        <input class="form-input" id="pd-desc-${idx}" value="${escHtml(item.desc||'')}" placeholder="Descrição do item" oninput="onDescChangePd(${idx}, this.value)"/>
       </div>
       <div>
         <label class="form-label">Valor (R$)</label>
@@ -4578,20 +4614,26 @@ function removeItemPd(idx) {
   itemsPedido.splice(idx, 1);
   renderItemsPedido(); updatePreviewPd();
 }
+function onSearchInputPd(idx, val) {
+  if (itemsPedido[idx]) itemsPedido[idx].searchText = val;
+  openDropdownPd(idx);
+}
 function openDropdownPd(idx) {
   const inp = document.getElementById('pd-search-'+idx); if(!inp) return;
   const val = (inp.value||'').toLowerCase().trim();
   const drop = document.getElementById('pd-drop-'+idx); if(!drop) return;
-  const matches = val ? produtos.filter(p=>p.nome.toLowerCase().includes(val)||(p.cat||'').toLowerCase().includes(val)||String(p.codigo||'').toLowerCase().includes(val)) : produtos.slice(0,12);
-  if (!matches.length) { drop.classList.remove('open'); return; }
+  const todos = val ? produtos.filter(p=>p.nome.toLowerCase().includes(val)||(p.cat||'').toLowerCase().includes(val)||String(p.codigo||'').toLowerCase().includes(val)) : produtos.slice(0,12);
+  if (!todos.length) { drop.classList.remove('open'); return; }
+  const matches = todos.slice(0, AC_MAX_RESULTS);
   drop.innerHTML = matches.map(p=>`
     <div class="ac-item" onmousedown="selectProdPd(${idx},${p.id})">
       <div class="ac-item-info">
-        <div class="ac-item-name">${p.nome}</div>
-        ${p.dim||p.cat||p.codigo?`<div class="ac-item-sub">${[p.codigo?'Cód: '+p.codigo:null,p.cat,p.dim].filter(Boolean).join(' · ')}</div>`:''}
+        <div class="ac-item-name">${escHtml(p.nome)}</div>
+        ${p.dim||p.cat||p.codigo?`<div class="ac-item-sub">${escHtml([p.codigo?'Cód: '+p.codigo:null,p.cat,p.dim].filter(Boolean).join(' · '))}</div>`:''}
       </div>
       <div class="ac-item-price">${fmtBRL(p.preco)}</div>
-    </div>`).join('');
+    </div>`).join('')
+    + (todos.length > matches.length ? `<div class="ac-more">+${todos.length - matches.length} resultados — refine a busca para ver mais</div>` : '');
   drop.classList.add('open');
 }
 function onSearchKeyPd(e,idx) {
@@ -5083,11 +5125,16 @@ async function gerarPedido() {
     const pedido = { id: Date.now(), ...dadosPedido, criadoEm: new Date().toISOString() };
     pedidos.push(pedido);
     updateBadgePedidos();
+    // #7 — copia o link de assinatura AUTOMATICAMENTE, já aproveitando o gesto do
+    // clique (antes do await do save, senão o navegador bloqueia a cópia).
+    const copyPromise = copiarLinkAssinaturaAuto(pedido.id);
     if (btnGerar) { btnGerar.disabled = true; btnGerar.textContent = '💾 Salvando…'; }
     await savePedidos().catch(e => console.warn('Save:', e));
     if (btnGerar) { btnGerar.disabled = false; btnGerar.textContent = txtBtnOriginal; }
-    // #7 — copia o link de assinatura automaticamente ao gerar
-    await copiarLinkAssinaturaAuto(pedido.id);
+    const copiado = await copyPromise;
+    setPS(copiado
+      ? '✅ Pedido salvo! Link de assinatura copiado — é só colar no WhatsApp do cliente.'
+      : '✅ Pedido salvo! (não consegui copiar sozinho — use o botão "Copiar link" na lista)', 'ok');
     showPedido(pedido.id);
   }
 }
@@ -5275,7 +5322,9 @@ async function showPedido(id){
   // Renderiza o MESMO HTML do PDF dentro do modal via iframe
   const printHTML = getHTMLPed(p);
   const blob = new Blob([printHTML], {type:'text/html'});
+  if (_pedBlobUrl) { URL.revokeObjectURL(_pedBlobUrl); }  // libera o preview anterior
   const blobUrl = URL.createObjectURL(blob);
+  _pedBlobUrl = blobUrl;
   document.getElementById('modal-pedido-body').innerHTML =
     `<iframe src="${blobUrl}"
       style="width:100%;height:70vh;border:none;border-radius:4px"
@@ -5283,7 +5332,12 @@ async function showPedido(id){
     </iframe>`;
   document.getElementById('modal-pedido').style.display='flex';
 }
-function closeModalPedido(){document.getElementById('modal-pedido').style.display='none';}
+let _pedBlobUrl = null;
+function closeModalPedido(){
+  document.getElementById('modal-pedido').style.display='none';
+  if (_pedBlobUrl) { URL.revokeObjectURL(_pedBlobUrl); _pedBlobUrl = null; }
+  document.getElementById('modal-pedido-body').innerHTML = '';
+}
 
 // ── PRINT PEDIDO ──────────────────────────────────────────────────
 function getHTMLPed(p) {

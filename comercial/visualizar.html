@@ -96,8 +96,34 @@ body{font-family:var(--f-body);background:
   font-family:var(--f-body);letter-spacing:.3px;transition:filter .15s,transform .1s}
 .btn-abrir-projeto:hover{filter:brightness(1.04)}
 .btn-abrir-projeto:active{transform:translateY(1px)}
-.item-total-bar{background:linear-gradient(135deg,var(--green-050),#DCF1E4);border:1px solid var(--green-bd);
-  border-radius:12px;padding:14px 16px;margin-top:14px;display:flex;justify-content:space-between;align-items:center}
+/* SELO DE BRINDE — aparece no lugar do preço quando o item é R$ 0 (cortesia).
+   Deixa claro que o item não tem custo, em vez de aparecer sem valor nenhum. */
+.item-brinde{display:inline-flex;align-items:center;gap:7px;margin-top:9px;padding:7px 13px;border-radius:999px;
+  font-size:12.5px;font-weight:800;letter-spacing:.6px;color:#5A3D00;position:relative;overflow:hidden;
+  background:linear-gradient(120deg,var(--gold-400),#FFE9A8 45%,var(--gold) 90%);
+  border:1.5px solid var(--gold);box-shadow:0 3px 12px rgba(201,154,46,.35)}
+.item-brinde::after{content:"";position:absolute;top:0;left:-120%;width:60%;height:100%;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,.85),transparent);transform:skewX(-18deg);
+  animation:brindeShine 2.4s ease-in-out infinite}
+@keyframes brindeShine{0%{left:-120%}55%{left:130%}100%{left:130%}}
+.item-brinde-ico{font-size:15px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.15));animation:brindeBob 2.4s ease-in-out infinite}
+@keyframes brindeBob{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-2px) rotate(-9deg)}60%{transform:translateY(-2px) rotate(9deg)}}
+.item-brinde-sub{font-weight:700;font-size:10.5px;letter-spacing:.4px;color:#7A5A0C;text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){.item-brinde::after,.item-brinde-ico{animation:none}}
+
+/* TOTAL GERAL — fica junto das formas de pagamento (longe da lista de itens),
+   pra cliente não confundir os preços dos itens com um valor que "vai somando". */
+.total-geral{background:linear-gradient(135deg,var(--navy-900),var(--navy) 60%,var(--navy-600));color:#fff;
+  border-radius:14px;padding:18px 20px;margin-bottom:16px;position:relative;overflow:hidden;
+  box-shadow:0 10px 30px rgba(6,32,68,.22);border:1px solid var(--navy-600)}
+.total-geral::before{content:"";position:absolute;top:-40px;right:-30px;width:170px;height:170px;
+  background:radial-gradient(circle,rgba(242,169,59,.28),transparent 62%);pointer-events:none}
+.total-geral::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,var(--gold-400),var(--gold-700))}
+.total-geral-label{font-size:11px;color:var(--gold-400);text-transform:uppercase;letter-spacing:1.2px;font-weight:800;position:relative}
+.total-geral-value{font-family:var(--f-disp);font-size:34px;font-weight:800;line-height:1.05;margin-top:4px;position:relative;
+  text-shadow:0 2px 14px rgba(242,169,59,.30)}
+.total-geral-note{font-size:11.5px;color:#CFE0F2;margin-top:8px;line-height:1.45;position:relative;font-weight:600}
 
 /* LIGHTBOX */
 .lightbox-overlay{position:fixed;inset:0;background:rgba(4,12,26,.94);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
@@ -293,6 +319,11 @@ select.fform-input{cursor:pointer}
     <div class="card">
       <div class="card-header">💰 Formas de Pagamento</div>
       <div class="card-body">
+        <div class="total-geral">
+          <div class="total-geral-label">Valor Total do Orçamento</div>
+          <div class="total-geral-value" id="total-geral-value">—</div>
+          <div class="total-geral-note">Este é o valor único e final de todo o orçamento — não é a soma dos preços dos itens acima.</div>
+        </div>
         <div class="pay-grid">
           <div class="pay-cell">
             <div class="pay-type">💳 Cartão de Crédito</div>
@@ -488,7 +519,7 @@ function buildItemHtml(item, idx) {
     : '<div class="item-foto-ph">📦</div>';
   var precoHtml = item.preco > 0
     ? '<div class="item-preco">' + fmtBRL(item.preco) + '</div>'
-    : '';
+    : '<div class="item-brinde"><span class="item-brinde-ico">🎁</span>BRINDE<span class="item-brinde-sub">Cortesia Aço Naval</span></div>';
   var dimsHtml = dims
     ? '<div class="item-dim">' + dims + '</div>'
     : '';
@@ -562,10 +593,9 @@ function renderOrcamento(o) {
   for (var i = 0; i < o.items.length; i++) {
     itemsHtml += buildItemHtml(o.items[i], i);
   }
-  itemsHtml += '<div class="item-total-bar">'
-    + '<span style="font-size:12px;text-transform:uppercase;color:#3B6D11;font-weight:700;letter-spacing:.5px">Total do Orçamento</span>'
-    + '<span style="font-size:16px;font-weight:700;color:#1a7a44">' + fmtBRL(o.subtotal) + '</span>'
-    + '</div>';
+  // O "Total do Orçamento" foi movido para o card de Formas de Pagamento
+  // (mais abaixo, longe dos itens) — evita a cliente confundir os preços dos
+  // itens com um valor que iria "somando" na lista.
   document.getElementById('items-body').innerHTML = itemsHtml;
 
   // Obs
@@ -580,6 +610,8 @@ function renderOrcamento(o) {
   var avista   = (o.avistaVal != null && o.avistaVal > 0) ? o.avistaVal : totalPag * 0.90;
   var parcela  = Math.ceil(totalPag / 12 * 100) / 100;
 
+  var totalGeralEl = document.getElementById('total-geral-value');
+  if (totalGeralEl) totalGeralEl.textContent = fmtBRL(totalPag);
   document.getElementById('pay-cartao').textContent   = fmtBRL(totalPag);
   document.getElementById('pay-parcelas').textContent = '12x de ' + fmtBRL(parcela) + ' sem juros';
   document.getElementById('pay-avista').textContent   = fmtBRL(avista);
