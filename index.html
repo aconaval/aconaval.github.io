@@ -537,6 +537,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .cat-bar{top:54px;margin:0 -12px 14px;padding:10px 12px 8px}
   .cat-row{flex-wrap:wrap;gap:7px}
   .cat-chip{font-size:12px;padding:6px 13px}
+  #subfilter-bar.subfilter-bar{margin:2px 0 14px;padding-top:0;border-top:none}
 
   /* Busca */
   .search-bar{padding:10px 12px}
@@ -1225,7 +1226,7 @@ function renderSubFiltros() {
       const count = base.filter(p => p.filtros && p.filtros[nome] === v).length;
       const on = subFiltros[nome] === v;
       const cls = 'sf-chip' + (on ? ' active' : '') + (!on && count === 0 ? ' disabled' : '');
-      return `<button class="${cls}" onclick="setSubFiltro(decodeURIComponent('${encodeURIComponent(nome)}'),decodeURIComponent('${encodeURIComponent(v)}'))">${escHtml(v)}<span class="sf-count">${count}</span></button>`;
+      return `<button class="${cls}" onclick="setSubFiltro(decodeURIComponent('${encodeURIComponent(nome)}'),decodeURIComponent('${encodeURIComponent(v)}'))">${escHtml(v)}</button>`;
     }).join('');
     html += `<div class="sf-row"><span class="sf-label">${escHtml(nome)}</span>${chips}</div>`;
   });
@@ -1720,6 +1721,21 @@ function showToast(msg) {
 }
 
 // ── RESPONSIVE CHECKOUT GRID ─────────────────────────────────────
+// No CELULAR, os subfiltros saem da barra fixa e passam a rolar junto com os
+// produtos (some ao rolar), liberando espaço de visualização. No desktop eles
+// continuam dentro da barra fixa de categorias (comportamento original).
+function ajustarSubfiltroSticky() {
+  const bar = document.getElementById('subfilter-bar');
+  const catbar = document.getElementById('cat-bar');
+  if (!bar || !catbar) return;
+  const mobile = window.matchMedia('(max-width:768px)').matches;
+  if (mobile) {
+    if (bar.parentElement === catbar) catbar.parentNode.insertBefore(bar, catbar.nextSibling);
+  } else {
+    if (bar.parentElement !== catbar) catbar.appendChild(bar);
+  }
+}
+
 function checkGrid() {
   const grid = document.getElementById('checkout-grid');
   if (!grid) return;
@@ -1728,6 +1744,8 @@ function checkGrid() {
 }
 window.addEventListener('resize', checkGrid);
 checkGrid();
+window.addEventListener('resize', ajustarSubfiltroSticky);
+ajustarSubfiltroSticky();
 
 // ── LIGHTBOX ─────────────────────────────────────────────────────
 let lbFotos = [];
