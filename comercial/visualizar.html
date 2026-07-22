@@ -8,17 +8,19 @@
      JavaScript — ele lê só estas meta tags estáticas). A imagem precisa
      estar hospedada como URL pública (data URI não funciona pra og:image)
      e abaixo de ~300KB pra prévia grande aparecer em todas as versões.
-     IMPORTANTE: suba o arquivo og-orcamento.jpg (incluso no pacote) na
-     MESMA pasta deste visualizar.html e, se a URL pública do sistema for
-     diferente de www.aconaval.com, ajuste o endereço absoluto abaixo. -->
+     A URL abaixo aponta pra pasta /comercial/ do GitHub Pages, onde os
+     arquivos do sistema ficam hospedados. -->
 <meta property="og:site_name" content="Aço Naval">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Clique aqui e confira seu orçamento — Aço Naval">
 <meta property="og:description" content="Rápido, fácil e sem compromisso. Calor que transforma.">
-<meta property="og:image" content="https://www.aconaval.com/og-orcamento.jpg">
+<meta property="og:image" content="https://www.aconaval.com/comercial/og-orcamento.jpg">
+<meta property="og:image:secure_url" content="https://www.aconaval.com/comercial/og-orcamento.jpg">
 <meta property="og:image:width" content="1024">
 <meta property="og:image:height" content="1024">
 <meta property="og:image:type" content="image/jpeg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://www.aconaval.com/comercial/og-orcamento.jpg">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
