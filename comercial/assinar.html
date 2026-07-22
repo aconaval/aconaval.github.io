@@ -118,6 +118,7 @@
   .pay-type{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
   .pay-value{font-family:var(--f-body);font-variant-numeric:tabular-nums;font-size:19px;font-weight:800;color:var(--navy)}
   .pay-value.green{color:var(--green-800)}
+  .pay-parc-num{font-size:12.5px;font-weight:800;color:var(--navy);letter-spacing:.2px;margin-bottom:2px}
   .pay-sub{font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.4}
 
   /* ASSINATURA */
@@ -284,8 +285,9 @@
         <div class="pay-grid">
           <div class="pay-cell" id="pay-cell-cartao">
             <div class="pay-type">💳 Cartão</div>
-            <div class="pay-value" id="p-cartao">—</div>
-            <div class="pay-sub" id="p-parcela">—</div>
+            <div class="pay-parc-num" id="p-parc-num">—</div>
+            <div class="pay-value" id="p-parcela-val">—</div>
+            <div class="pay-sub">por mês, no cartão</div>
           </div>
           <div class="pay-cell" id="pay-cell-pix">
             <div class="pay-type">💰 À Vista PIX</div>
@@ -605,8 +607,8 @@ function renderPedido(p) {
   document.getElementById('p-subtotal').textContent = fmtBRL(p.subtotal||0);
   document.getElementById('p-total').textContent = fmtBRL(totalPag);
   document.getElementById('p-avista').textContent = `À vista: ${fmtBRL(avista)}`;
-  document.getElementById('p-cartao').textContent = fmtBRL(totalPag);
-  document.getElementById('p-parcela').textContent = `Até ${_parcN}x de ${fmtBRL(parc)}`;
+  document.getElementById('p-parc-num').textContent = `${_parcN}x sem juros`;
+  document.getElementById('p-parcela-val').textContent = fmtBRL(parc);
   document.getElementById('p-pix').textContent = fmtBRL(avista);
   // Opção parcelada do à vista (avistaparc)
   const _avistaParc = parseInt(p.avistaparc) || 0;

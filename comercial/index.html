@@ -2467,15 +2467,10 @@ function copiarLinkProduto(id, btnEl) {
     btnEl.innerHTML = ok ? '✅ Copiado!' : '⚠️ Copie manualmente';
     setTimeout(() => { btnEl.innerHTML = textoOriginal; }, 1600);
   }
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(texto).then(() => avisar(true)).catch(() => {
-      prompt('Copie o texto abaixo (Ctrl+C):', texto);
-      avisar(false);
-    });
-  } else {
-    prompt('Copie o texto abaixo (Ctrl+C):', texto);
-    avisar(false);
-  }
+  copiarTexto(texto).then(ok => {
+    if (ok) avisar(true);
+    else { prompt('Copie o texto abaixo (Ctrl+C):', texto); avisar(false); }
+  });
 }
 // Retorna o MENOR código inteiro positivo ainda não usado. Preenche lacunas
 // deixadas por exclusões, então o número para de "subir" sem parar.
@@ -2640,11 +2635,7 @@ function copiarLinkCategoria(cat) {
     ? 'https://loja.contato-aconaval.workers.dev/?cat=' + slugCatWorker(cat)
     : 'https://www.aconaval.com/';
   const ok = () => setStatus(cat ? `✅ Link de "${cat}" copiado (com prévia)!` : '✅ Link do catálogo copiado!', 'ok');
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(link).then(ok).catch(() => prompt('Copie o link (Ctrl+C):', link));
-  } else {
-    prompt('Copie o link (Ctrl+C):', link);
-  }
+  copiarTexto(link).then(copiado => copiado ? ok() : prompt('Copie o link (Ctrl+C):', link));
 }
 
 // Clique no chip de categoria: filtra a lista (comportamento atual) E já copia o link público.
@@ -3694,7 +3685,13 @@ async function prepararLadosDoc(doc) {
   const itensEsq = (doc && doc.items ? doc.items : []).filter(i => i.lado === 'Esquerda' && i.prodId);
   await Promise.all(itensEsq.map(async it => {
     const pr = prodDoItem(it);
-    if (!pr || Array.isArray(pr.fotosprojetoDir)) return;
+    // Bug fix: antes, um array vazio já cacheado (`pr.fotosprojetoDir === []`) era
+    // tratado como "já carregado" e nunca mais buscava de novo — se a primeira
+    // tentativa acontecesse antes das fotos existirem (ou desse vazio por qualquer
+    // motivo), o projeto ficava escondido pro resto da sessão, mesmo depois de
+    // subir as fotos no produto. Agora só pula a busca quando já tem fotos de
+    // verdade em cache (array não-vazio).
+    if (!pr || (Array.isArray(pr.fotosprojetoDir) && pr.fotosprojetoDir.length)) return;
     try { pr.fotosprojetoDir = await carregarFotosProjetoDir(pr.id) || []; }
     catch(e) { pr.fotosprojetoDir = []; }
   }));
@@ -4073,21 +4070,15 @@ function montarMsgOrcamento(o) {
 // ser chamada AINDA dentro do gesto do clique (antes de qualquer await de rede),
 // senão o navegador bloqueia a escrita no clipboard sem interação do usuário.
 function copiarMsgOrcamentoClipboard(o) {
-  try {
-    return navigator.clipboard.writeText(montarMsgOrcamento(o))
-      .then(() => true)
-      .catch(e => { console.warn('Cópia automática do orçamento falhou:', e); return false; });
-  } catch(e) {
-    console.warn('Clipboard indisponível:', e);
-    return Promise.resolve(false);
-  }
+  return copiarTexto(montarMsgOrcamento(o));
 }
 
 function gerarLinkOrc(btn) {
   const o = currentOrcamento; if (!o) return;
   const msg = montarMsgOrcamento(o);
 
-  navigator.clipboard.writeText(msg).then(() => {
+  copiarTexto(msg).then(copiado => {
+    if (!copiado) { prompt('Copie a mensagem abaixo:', msg); return; }
     const orig = btn.textContent;
     btn.textContent = '✅ Copiado!';
     btn.style.background = '#EAF3DE';
@@ -4099,9 +4090,6 @@ function gerarLinkOrc(btn) {
       btn.style.borderColor = '#B5D4F4';
       btn.style.color = '#185FA5';
     }, 2500);
-  }).catch(() => {
-    // Fallback: abre em janela pequena para copiar manualmente
-    prompt('Copie a mensagem abaixo:', msg);
   });
 }
 
@@ -4134,6 +4122,42 @@ function fmtDate(iso) { if(!iso) return '—'; const [y,m,d]=iso.split('-'); ret
 // Escapa texto para uso seguro dentro de HTML/atributos (nomes de produto com
 // aspas, <, > ou & quebravam a marcação dos cards e do autocomplete).
 function escHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+// ── Cópia para o clipboard com fallback em camadas ──────────────────
+// A Clipboard API moderna (navigator.clipboard.writeText) pode falhar
+// silenciosamente por vários motivos: documento sem foco, sem permissão
+// (comum dentro de webviews), ou por ter perdido a "ativação do usuário"
+// depois de um await de rede. O fallback via execCommand('copy') funciona
+// em muito mais contextos (não depende da Permissions API). Mesma lógica de
+// fallback em camadas já usada pro compartilhamento de vídeo do produto.html.
+function copiarTexto(txt) {
+  function viaClipboardApi() {
+    if (!(navigator.clipboard && navigator.clipboard.writeText)) return Promise.reject(new Error('Clipboard API indisponível'));
+    return navigator.clipboard.writeText(txt);
+  }
+  function viaExecCommand() {
+    return new Promise((resolve, reject) => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, txt.length);
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? resolve() : reject(new Error('execCommand retornou false'));
+      } catch(e) { reject(e); }
+    });
+  }
+  return viaClipboardApi().then(() => true).catch(() =>
+    viaExecCommand().then(() => true).catch(e => { console.warn('Cópia falhou em todas as camadas:', e); return false; })
+  );
+}
 
 (async function init() {
   renderProdutos(); updateBadge(); // render vazio enquanto carrega
@@ -4463,18 +4487,12 @@ Assim que você assinar, já encaminhamos seu pedido para o setor de produção 
 // senão o navegador bloqueia a escrita no clipboard sem interação do usuário.
 // Quem chama decide a mensagem de status (evita ser sobrescrita pelo save).
 function copiarLinkAssinaturaAuto(id) {
-  try {
-    return navigator.clipboard.writeText(montarMsgAssinatura(id))
-      .then(() => true)
-      .catch(e => { console.warn('Não foi possível copiar o link automaticamente:', e); return false; });
-  } catch(e) {
-    console.warn('Clipboard indisponível:', e);
-    return Promise.resolve(false);
-  }
+  return copiarTexto(montarMsgAssinatura(id));
 }
 function enviarLinkAssinatura(id, num) {
   const msg = montarMsgAssinatura(id);
-  navigator.clipboard.writeText(msg).then(() => {
+  copiarTexto(msg).then(copiado => {
+    if (!copiado) { window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank'); return; }
     const btn = document.querySelector(`button[onclick*="enviarLinkAssinatura(${id}"]`);
     if (btn) {
       const orig = btn.innerHTML;
@@ -4482,8 +4500,6 @@ function enviarLinkAssinatura(id, num) {
       btn.style.background = '#1a7a44';
       setTimeout(() => { btn.innerHTML = orig; btn.style.background = '#25D366'; }, 2000);
     }
-  }).catch(() => {
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   });
 }
 
@@ -5040,6 +5056,15 @@ async function gerarPedido() {
   const prazoVal = document.getElementById('pd-prazo').value.trim();
   if (!prazoVal) return alert('Selecione o prazo de entrega (verde ou vermelho).');
 
+  // Bug fix: a cópia automática do link de assinatura não estava funcionando —
+  // ela só acontecia DEPOIS do "await refreshPedidosFresh()" (consulta de rede),
+  // e depois de um await de rede o navegador já não deixa mais escrever no
+  // clipboard sem confirmação (perde a "ativação" do clique). Por isso o ID do
+  // pedido é gerado JÁ AQUI (ainda dentro do gesto do clique, sem nenhum await
+  // no meio) e a cópia dispara imediatamente — antes de qualquer chamada de rede.
+  const pedidoIdNovo = pedidoEditandoId || Date.now();
+  const copyPromise = pedidoEditandoId ? null : copiarLinkAssinaturaAuto(pedidoIdNovo);
+
   // ── Barreira de segurança ──────────────────────────────────────────
   // Antes de gravar, busca no Firestore a lista de pedidos mais atual
   // (evita decidir com base em dados antigos guardados na memória, o que
@@ -5122,12 +5147,9 @@ async function gerarPedido() {
       showPedido(id);
     }
   } else {
-    const pedido = { id: Date.now(), ...dadosPedido, criadoEm: new Date().toISOString() };
+    const pedido = { id: pedidoIdNovo, ...dadosPedido, criadoEm: new Date().toISOString() };
     pedidos.push(pedido);
     updateBadgePedidos();
-    // #7 — copia o link de assinatura AUTOMATICAMENTE, já aproveitando o gesto do
-    // clique (antes do await do save, senão o navegador bloqueia a cópia).
-    const copyPromise = copiarLinkAssinaturaAuto(pedido.id);
     if (btnGerar) { btnGerar.disabled = true; btnGerar.textContent = '💾 Salvando…'; }
     await savePedidos().catch(e => console.warn('Save:', e));
     if (btnGerar) { btnGerar.disabled = false; btnGerar.textContent = txtBtnOriginal; }
@@ -5718,7 +5740,12 @@ function getHTMLPed(p) {
       const nome = `<strong style="font-size:15pt;text-transform:uppercase">${lines[0]}</strong>`;
       const resto = lines.slice(1).join('<br>');
       const descHtml = nome + (resto?'<br><span style="font-size:14pt;font-weight:normal">'+resto+'</span>':'');
-      const prodFotoPdBig = item.prodId ? (produtos.find(p => p.id == item.prodId)||{}).foto || '' : (item.foto||'');
+      // Bug fix: antes essa página buscava a foto direto (produtos.find(...).foto),
+      // sempre a foto PADRÃO (Direita) — ignorando o sentido escolhido no item.
+      // Isso fazia a Ordem de Produção mostrar uma foto DIFERENTE da que aparece
+      // na página do cliente (que usa fotoDoItemLado e respeita o sentido).
+      // Agora as duas páginas usam a MESMA função, sempre mostrando a mesma foto.
+      const prodFotoPdBig = item.prodId ? fotoDoItemLado(item) : (item.foto||'');
       return `<tr>
         <td class="idx" style="vertical-align:top;padding-top:16px;font-size:14pt">${String(idx+1).padStart(2,'0')}</td>
         <td style="padding:14px 10px;vertical-align:top">
