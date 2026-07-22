@@ -4,8 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Orçamento — Aço Naval</title>
+<!-- Open Graph: card de prévia do link no WhatsApp (o WhatsApp NÃO executa
+     JavaScript — ele lê só estas meta tags estáticas). A imagem precisa
+     estar hospedada como URL pública (data URI não funciona pra og:image)
+     e abaixo de ~300KB pra prévia grande aparecer em todas as versões.
+     IMPORTANTE: suba o arquivo og-orcamento.jpg (incluso no pacote) na
+     MESMA pasta deste visualizar.html e, se a URL pública do sistema for
+     diferente de www.aconaval.com, ajuste o endereço absoluto abaixo. -->
 <meta property="og:site_name" content="Aço Naval">
-<meta property="og:description" content="Visualize seu orçamento da Aço Naval">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Clique aqui e confira seu orçamento — Aço Naval">
+<meta property="og:description" content="Rápido, fácil e sem compromisso. Calor que transforma.">
+<meta property="og:image" content="https://www.aconaval.com/og-orcamento.jpg">
+<meta property="og:image:width" content="1024">
+<meta property="og:image:height" content="1024">
+<meta property="og:image:type" content="image/jpeg">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
@@ -99,17 +112,11 @@ body{font-family:var(--f-body);background:
 /* SELO DE BRINDE — aparece no lugar do preço quando o item é R$ 0 (cortesia).
    Deixa claro que o item não tem custo, em vez de aparecer sem valor nenhum. */
 .item-brinde{display:inline-flex;align-items:center;gap:7px;margin-top:9px;padding:7px 13px;border-radius:999px;
-  font-size:12.5px;font-weight:800;letter-spacing:.6px;color:#5A3D00;position:relative;overflow:hidden;
+  font-size:12.5px;font-weight:800;letter-spacing:.6px;color:#5A3D00;
   background:linear-gradient(120deg,var(--gold-400),#FFE9A8 45%,var(--gold) 90%);
   border:1.5px solid var(--gold);box-shadow:0 3px 12px rgba(201,154,46,.35)}
-.item-brinde::after{content:"";position:absolute;top:0;left:-120%;width:60%;height:100%;
-  background:linear-gradient(105deg,transparent,rgba(255,255,255,.85),transparent);transform:skewX(-18deg);
-  animation:brindeShine 2.4s ease-in-out infinite}
-@keyframes brindeShine{0%{left:-120%}55%{left:130%}100%{left:130%}}
-.item-brinde-ico{font-size:15px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.15));animation:brindeBob 2.4s ease-in-out infinite}
-@keyframes brindeBob{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-2px) rotate(-9deg)}60%{transform:translateY(-2px) rotate(9deg)}}
+.item-brinde-ico{font-size:15px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.15))}
 .item-brinde-sub{font-weight:700;font-size:10.5px;letter-spacing:.4px;color:#7A5A0C;text-transform:uppercase}
-@media (prefers-reduced-motion:reduce){.item-brinde::after,.item-brinde-ico{animation:none}}
 
 /* TOTAL GERAL — fica junto das formas de pagamento (longe da lista de itens),
    pra cliente não confundir os preços dos itens com um valor que "vai somando". */

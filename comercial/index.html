@@ -4056,15 +4056,16 @@ function gerarLinkById(id, btn) {
   gerarLinkOrc(btn);
 }
 
-// Mensagem pronta de WhatsApp com o link do orçamento (usada tanto pelo botão
-// "Link" quanto pela cópia automática ao gerar). Única fonte da verdade — antes
-// o texto estava duplicado dentro do próprio gerarLinkOrc (try e catch).
+// Mensagem do link do orçamento: título identificando o documento + link.
+// O título em negrito faz o compartilhamento no WhatsApp mostrar de cara
+// "ORÇAMENTO 012 — NOME DO CLIENTE" em vez de só um link solto.
 function montarMsgOrcamento(o) {
   if (!o) return '';
   const base = location.href.replace(/\/[^\/]*$/, '/');
   const url  = `${base}visualizar.html?id=${o.id}`;
-  const primeiroNome = (o.cliente || '').trim().split(/\s+/)[0];
-  return `Olá ${primeiroNome}, segue o link do seu orçamento, entra no link confere as informações, preenche o formulário e clica em enviar solicitação para fechar sua encomenda. Clica aqui: ${url}\n\nPode ter certeza ${primeiroNome} que vai valer cada centavo, vamos caprichar e depois vc vai nos enviar uma foto bem bonita pra gente postar tá?\n\nQualquer dúvida que tiver, só me perguntar.`;
+  const num  = String(o.num || '').padStart(3, '0');
+  const nome = (o.cliente || '').trim().toUpperCase();
+  return `*ORÇAMENTO ${num}${nome ? ' — ' + nome : ''}*\n${url}`;
 }
 // Dispara a cópia da mensagem do orçamento e devolve Promise<boolean>. Precisa
 // ser chamada AINDA dentro do gesto do clique (antes de qualquer await de rede),
@@ -4124,39 +4125,42 @@ function fmtDate(iso) { if(!iso) return '—'; const [y,m,d]=iso.split('-'); ret
 function escHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
 // ── Cópia para o clipboard com fallback em camadas ──────────────────
-// A Clipboard API moderna (navigator.clipboard.writeText) pode falhar
-// silenciosamente por vários motivos: documento sem foco, sem permissão
-// (comum dentro de webviews), ou por ter perdido a "ativação do usuário"
-// depois de um await de rede. O fallback via execCommand('copy') funciona
-// em muito mais contextos (não depende da Permissions API). Mesma lógica de
-// fallback em camadas já usada pro compartilhamento de vídeo do produto.html.
+// ORDEM IMPORTA: o execCommand('copy') é SÍNCRONO — roda na hora, ainda
+// dentro do gesto do clique, então é a forma mais confiável de copiar
+// (não depende de permissão nem de Promise). A Clipboard API moderna
+// (navigator.clipboard.writeText) fica como fallback: ela é assíncrona e
+// pode falhar silenciosamente por falta de foco/permissão (comum em
+// webviews) ou por perder a "ativação do usuário".
 function copiarTexto(txt) {
-  function viaClipboardApi() {
-    if (!(navigator.clipboard && navigator.clipboard.writeText)) return Promise.reject(new Error('Clipboard API indisponível'));
-    return navigator.clipboard.writeText(txt);
-  }
+  // Camada 1 — execCommand síncrono via textarea escondido
   function viaExecCommand() {
-    return new Promise((resolve, reject) => {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = txt;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.top = '-9999px';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        ta.setSelectionRange(0, txt.length);
-        const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        ok ? resolve() : reject(new Error('execCommand retornou false'));
-      } catch(e) { reject(e); }
-    });
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      const focoAnterior = document.activeElement;
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, txt.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (focoAnterior && focoAnterior.focus) { try { focoAnterior.focus(); } catch(e) {} }
+      return ok;
+    } catch(e) { return false; }
   }
-  return viaClipboardApi().then(() => true).catch(() =>
-    viaExecCommand().then(() => true).catch(e => { console.warn('Cópia falhou em todas as camadas:', e); return false; })
-  );
+  if (viaExecCommand()) return Promise.resolve(true);
+  // Camada 2 — Clipboard API moderna
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(txt)
+      .then(() => true)
+      .catch(e => { console.warn('Cópia falhou em todas as camadas:', e); return false; });
+  }
+  console.warn('Cópia indisponível: nem execCommand nem Clipboard API funcionaram.');
+  return Promise.resolve(false);
 }
 
 (async function init() {
@@ -4470,24 +4474,26 @@ function buscarEmailSolicitacao() {
   const sol = solicitacoes.find(x => (x.fone || '').replace(/\D/g, '') === foneDigitos && x.email);
   if (sol) emailEl.value = sol.email;
 }
-function montarMsgAssinatura(id) {
+// Mensagem do link de assinatura: título identificando o pedido + link.
+// Aceita `info` ({num, cidade, estado}) para quando a mensagem é montada
+// ANTES do pedido entrar na lista `pedidos` (caso da cópia automática no
+// gerarPedido — sem isso, o find() abaixo não achava nada e os dados do
+// título saíam vazios).
+function montarMsgAssinatura(id, info) {
   const base = location.href.replace(/\/[^\/]*$/, '/');
   const link = `${base}assinar.html?id=${id}`;
-  const ped = pedidos.find(p => String(p.id) === String(id));
-  const primeiroNome = ped ? (ped.nome || '').split(' ')[0] : '';
-  return `Oii ${primeiroNome} tudo bem? 😄🔥
-Segue o link para você conferir e assinar o pedido:
-
-${link}
-
-Assim que você assinar, já encaminhamos seu pedido para o setor de produção e criamos um grupo para ir te atualizando sobre todos os detalhes até a entrega.`;
+  const ped = info || pedidos.find(p => String(p.id) === String(id)) || {};
+  const num = ped.num ? String(ped.num).padStart(3, '0') : '';
+  const local = [(ped.cidade || '').trim().toUpperCase(), (ped.estado || '').trim().toUpperCase()].filter(Boolean).join(' — ');
+  const titulo = ['PEDIDO', num, local].filter(Boolean).join(' — ');
+  return `*${titulo}*\n${link}`;
 }
 // Copia o link de assinatura e devolve Promise<boolean> (true = copiou).
 // Deve ser chamada AINDA dentro do gesto do clique (antes dos awaits de rede),
 // senão o navegador bloqueia a escrita no clipboard sem interação do usuário.
 // Quem chama decide a mensagem de status (evita ser sobrescrita pelo save).
-function copiarLinkAssinaturaAuto(id) {
-  return copiarTexto(montarMsgAssinatura(id));
+function copiarLinkAssinaturaAuto(id, info) {
+  return copiarTexto(montarMsgAssinatura(id, info));
 }
 function enviarLinkAssinatura(id, num) {
   const msg = montarMsgAssinatura(id);
@@ -5063,7 +5069,13 @@ async function gerarPedido() {
   // pedido é gerado JÁ AQUI (ainda dentro do gesto do clique, sem nenhum await
   // no meio) e a cópia dispara imediatamente — antes de qualquer chamada de rede.
   const pedidoIdNovo = pedidoEditandoId || Date.now();
-  const copyPromise = pedidoEditandoId ? null : copiarLinkAssinaturaAuto(pedidoIdNovo);
+  // Dados lidos do formulário AGORA (o pedido ainda não existe na lista
+  // `pedidos` neste ponto — sem isso o título da mensagem sairia vazio).
+  const copyPromise = pedidoEditandoId ? null : copiarLinkAssinaturaAuto(pedidoIdNovo, {
+    num: numVal,
+    cidade: (document.getElementById('pd-cidade')?.value || '').trim(),
+    estado: (document.getElementById('pd-estado')?.value || '').trim(),
+  });
 
   // ── Barreira de segurança ──────────────────────────────────────────
   // Antes de gravar, busca no Firestore a lista de pedidos mais atual
