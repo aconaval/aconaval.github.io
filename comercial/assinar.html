@@ -91,15 +91,21 @@
   .item-brinde{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.6px;color:#5A3D00;background:linear-gradient(120deg,var(--gold-400),#FFE9A8 45%,var(--gold) 90%);border:1.5px solid var(--gold);box-shadow:0 3px 12px rgba(201,154,46,.35)}
   .item-brinde-ico{font-size:14px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.15))}
   .item-brinde-sub{font-weight:700;font-size:10px;letter-spacing:.4px;color:#7A5A0C;text-transform:uppercase}
-  .item-projeto-preview{width:96px;height:96px;object-fit:cover;border-radius:12px;flex-shrink:0;cursor:pointer;background:#f5f5f5;border:2px solid var(--gold-400);box-shadow:0 3px 12px rgba(201,154,46,.28);transition:transform .18s,box-shadow .18s}
-  .item-projeto-preview:hover{transform:scale(1.04);box-shadow:0 6px 20px rgba(201,154,46,.45)}
-  .btn-abrir-projeto{width:100%;margin-top:12px;padding:11px;background:linear-gradient(135deg,#FFF6DC,#FDEEC0);color:var(--gold-700);border:1.5px solid var(--gold-400);border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;font-family:var(--f-body);letter-spacing:.3px;transition:filter .15s,transform .1s}
-  .btn-abrir-projeto:hover{filter:brightness(1.04)}
-  .btn-abrir-projeto:active{transform:translateY(1px)}
+  /* PROJETO SEMPRE ABERTO — todas as páginas visíveis, sem botão. */
+  .proj-wrap{margin-top:13px;padding-top:12px;border-top:1px dashed #DCE5F0}
+  .proj-titulo{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;font-weight:800;color:var(--gold-700);text-transform:uppercase;letter-spacing:.7px;margin-bottom:9px}
+  .proj-zoom-dica{font-size:10px;font-weight:700;color:var(--muted);text-transform:none;letter-spacing:.2px;background:#F1F5FA;border:1px solid var(--line);padding:3px 9px;border-radius:999px}
+  .proj-page{margin-bottom:11px}
+  .proj-page:last-child{margin-bottom:0}
+  .proj-img{display:block;width:100%;height:auto;border-radius:12px;background:#fff;cursor:zoom-in;border:1.5px solid var(--gold-400);box-shadow:0 3px 14px rgba(201,154,46,.22)}
+  .proj-page-num{text-align:center;font-size:10px;font-weight:700;color:var(--muted);margin-top:5px;letter-spacing:.3px}
 
   /* LIGHTBOX */
   .lightbox-overlay{position:fixed;inset:0;background:rgba(4,12,26,.94);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
-  .lightbox-img{max-width:92vw;max-height:78vh;object-fit:contain;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  .lightbox-img{max-width:92vw;max-height:78vh;object-fit:contain;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.6);touch-action:none;transform-origin:center center;will-change:transform;cursor:zoom-in;user-select:none;-webkit-user-drag:none}
+  .lightbox-img.zoomed{cursor:grab;border-radius:4px}
+  .lightbox-img.zoomed:active{cursor:grabbing}
+  .lightbox-dica{position:absolute;top:16px;left:50%;transform:translateX(-50%);color:#fff;font-size:11.5px;font-weight:600;background:rgba(0,0,0,.5);padding:5px 13px;border-radius:14px;pointer-events:none;transition:opacity .4s}
   .lightbox-close{position:absolute;top:16px;right:16px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid rgba(255,255,255,.2)}
   .lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid rgba(255,255,255,.2)}
   .lightbox-prev{left:12px}.lightbox-next{right:12px}
@@ -386,6 +392,7 @@
   <div class="lightbox-close" onclick="fecharGaleria()">✕</div>
   <div class="lightbox-nav lightbox-prev" id="lb-prev" onclick="navegarGaleria(-1)">‹</div>
   <img class="lightbox-img" id="lightbox-img" src="" alt="Foto do projeto"/>
+  <div class="lightbox-dica" id="lightbox-dica">Pinça ou duplo toque para dar zoom</div>
   <div class="lightbox-nav lightbox-next" id="lb-next" onclick="navegarGaleria(1)">›</div>
   <div class="lightbox-counter" id="lightbox-counter" style="display:none"></div>
 </div>
@@ -446,6 +453,7 @@ function navegarGaleria(dir) {
 }
 function mostrarFotoGaleria() {
   document.getElementById('lightbox-img').src = galeriaAtual[galeriaIdx];
+  lbZoomReset();
   const multi = galeriaAtual.length > 1;
   document.getElementById('lb-prev').style.display = multi ? 'flex' : 'none';
   document.getElementById('lb-next').style.display = multi ? 'flex' : 'none';
@@ -453,6 +461,149 @@ function mostrarFotoGaleria() {
   counter.style.display = multi ? 'block' : 'none';
   if (multi) counter.textContent = `${galeriaIdx+1} / ${galeriaAtual.length}`;
 }
+
+// ── ZOOM DO PROJETO EM TELA CHEIA ─────────────────────────────────
+// Suporta: pinça (2 dedos), duplo toque/clique, roda do mouse e arrastar
+// para mover quando ampliado. Tudo em JS simples (sem biblioteca).
+var lbScale = 1, lbTX = 0, lbTY = 0;
+var LB_MIN = 1, LB_MAX = 6;
+
+function lbImg() { return document.getElementById('lightbox-img'); }
+
+function lbAplicar() {
+  var im = lbImg(); if (!im) return;
+  im.style.transform = 'translate(' + lbTX + 'px,' + lbTY + 'px) scale(' + lbScale + ')';
+  if (lbScale > 1.02) im.classList.add('zoomed');
+  else im.classList.remove('zoomed');
+  // Setas de navegação atrapalham quando está ampliado
+  var multi = galeriaAtual.length > 1;
+  var mostrarSetas = multi && lbScale <= 1.02 ? 'flex' : 'none';
+  var p = document.getElementById('lb-prev'), n = document.getElementById('lb-next');
+  if (p) p.style.display = mostrarSetas;
+  if (n) n.style.display = mostrarSetas;
+}
+
+function lbZoomReset() {
+  lbScale = 1; lbTX = 0; lbTY = 0;
+  var im = lbImg();
+  if (im) { im.style.transition = 'none'; }
+  lbAplicar();
+  var dica = document.getElementById('lightbox-dica');
+  if (dica) { dica.style.opacity = '1'; setTimeout(function(){ dica.style.opacity = '0'; }, 2600); }
+}
+
+// Mantém a imagem dentro de limites razoáveis ao arrastar
+function lbLimitar() {
+  var im = lbImg(); if (!im) return;
+  var lim = (lbScale - 1) * im.clientWidth / 2 + 40;
+  var limY = (lbScale - 1) * im.clientHeight / 2 + 40;
+  if (lbTX >  lim) lbTX =  lim;
+  if (lbTX < -lim) lbTX = -lim;
+  if (lbTY >  limY) lbTY =  limY;
+  if (lbTY < -limY) lbTY = -limY;
+}
+
+function lbSetScale(novo, suave) {
+  var im = lbImg(); if (!im) return;
+  if (novo < LB_MIN) novo = LB_MIN;
+  if (novo > LB_MAX) novo = LB_MAX;
+  lbScale = novo;
+  if (lbScale === 1) { lbTX = 0; lbTY = 0; }
+  else lbLimitar();
+  im.style.transition = suave ? 'transform .22s ease' : 'none';
+  lbAplicar();
+}
+
+(function lbInitZoom() {
+  var im = lbImg(); if (!im) return;
+
+  // Duplo clique/toque: alterna entre normal e ampliado
+  im.addEventListener('dblclick', function(e) {
+    e.preventDefault();
+    lbSetScale(lbScale > 1.02 ? 1 : 2.6, true);
+  });
+
+  // Roda do mouse (desktop)
+  im.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    lbSetScale(lbScale * (e.deltaY < 0 ? 1.15 : 0.87), false);
+  }, { passive: false });
+
+  // ── Arrastar com o mouse quando ampliado ──
+  var arrastando = false, x0 = 0, y0 = 0, tx0 = 0, ty0 = 0;
+  im.addEventListener('mousedown', function(e) {
+    if (lbScale <= 1.02) return;
+    e.preventDefault();
+    arrastando = true; x0 = e.clientX; y0 = e.clientY; tx0 = lbTX; ty0 = lbTY;
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!arrastando) return;
+    lbTX = tx0 + (e.clientX - x0);
+    lbTY = ty0 + (e.clientY - y0);
+    lbLimitar(); im.style.transition = 'none'; lbAplicar();
+  });
+  document.addEventListener('mouseup', function() { arrastando = false; });
+
+  // ── Toque: pinça (2 dedos) e arrastar (1 dedo, quando ampliado) ──
+  var distIni = 0, escalaIni = 1, tocando = false;
+  var ultToque = 0;
+
+  function dist(t) {
+    var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  im.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 2) {
+      distIni = dist(e.touches); escalaIni = lbScale; tocando = false;
+      e.preventDefault();
+    } else if (e.touches.length === 1) {
+      // duplo toque manual (alguns navegadores móveis não disparam dblclick)
+      var agora = Date.now();
+      if (agora - ultToque < 300) {
+        e.preventDefault();
+        lbSetScale(lbScale > 1.02 ? 1 : 2.6, true);
+        ultToque = 0;
+        return;
+      }
+      ultToque = agora;
+      if (lbScale > 1.02) {
+        tocando = true;
+        x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+        tx0 = lbTX; ty0 = lbTY;
+      }
+    }
+  }, { passive: false });
+
+  im.addEventListener('touchmove', function(e) {
+    if (e.touches.length === 2 && distIni > 0) {
+      e.preventDefault();
+      lbSetScale(escalaIni * (dist(e.touches) / distIni), false);
+    } else if (tocando && e.touches.length === 1) {
+      e.preventDefault();
+      lbTX = tx0 + (e.touches[0].clientX - x0);
+      lbTY = ty0 + (e.touches[0].clientY - y0);
+      lbLimitar(); im.style.transition = 'none'; lbAplicar();
+    }
+  }, { passive: false });
+
+  im.addEventListener('touchend', function(e) {
+    if (e.touches.length < 2) distIni = 0;
+    if (e.touches.length === 0) tocando = false;
+  });
+
+  // ESC fecha, setas navegam (desktop)
+  document.addEventListener('keydown', function(e) {
+    var lb = document.getElementById('lightbox');
+    if (!lb || lb.style.display === 'none') return;
+    if (e.key === 'Escape') fecharGaleria();
+    else if (e.key === 'ArrowLeft' && lbScale <= 1.02) navegarGaleria(-1);
+    else if (e.key === 'ArrowRight' && lbScale <= 1.02) navegarGaleria(1);
+    else if (e.key === '+' || e.key === '=') lbSetScale(lbScale * 1.3, true);
+    else if (e.key === '-') lbSetScale(lbScale / 1.3, true);
+    else if (e.key === '0') lbSetScale(1, true);
+  });
+})();
 const prodFotos = {}; // mapa prodId -> foto carregado do acn_produtos (foto genérica do catálogo, usada só como fallback)
 const prodFotosDir = {}; // mapa prodId -> fotoDir (lado ESQUERDO)
 const prodFotosProjetoDir = {}; // mapa prodId -> [fotos do projeto do lado ESQUERDO] (acn_prod_fotos/{id}_fd{i})
@@ -592,6 +743,17 @@ function renderPedido(p) {
     const dims = lines.slice(1).join(' · ');
     const fotosProj = itemsFotosProjetoAtual[i];
     const temGaleria = fotosProj.length > 0;
+    // Projetos sempre ABERTOS: todas as páginas aparecem direto, sem botão.
+    // Clicar em qualquer uma abre em tela cheia com zoom.
+    const projetosHtml = temGaleria
+      ? `<div class="proj-wrap">
+           <div class="proj-titulo">📐 Projeto Técnico<span class="proj-zoom-dica">toque para ampliar</span></div>
+           ${fotosProj.map((f,pi)=>`<div class="proj-page">
+             <img class="proj-img" src="${f}" loading="lazy" onclick="abrirGaleria(${i},${pi})" alt="Projeto"/>
+             ${fotosProj.length>1?`<div class="proj-page-num">Página ${pi+1} de ${fotosProj.length}</div>`:''}
+           </div>`).join('')}
+         </div>`
+      : '';
     // Miniatura respeita o SENTIDO: Esquerda usa a foto própria do lado esquerdo (se houver)
     const fotoSrc = (item.lado === 'Esquerda' && item.prodId && prodFotosDir[String(item.prodId)])
       ? prodFotosDir[String(item.prodId)]
@@ -605,9 +767,8 @@ function renderPedido(p) {
           ${dims?`<div class="item-dim">${dims}</div>`:''}
           ${item.preco>0?`<div class="item-preco">${fmtBRL(item.preco)}</div>`:`<div class="item-brinde"><span class="item-brinde-ico">🎁</span>BRINDE<span class="item-brinde-sub">Cortesia Aço Naval</span></div>`}
         </div>
-        ${temGaleria?`<img class="item-projeto-preview" src="${fotosProj[0]}" onclick="abrirGaleria(${i},0)"/>`:''}
       </div>
-      ${temGaleria?`<button class="btn-abrir-projeto" onclick="abrirGaleria(${i},0)">📐 Abrir projeto</button>`:''}
+      ${projetosHtml}
     </div>`;
   }).join('');
 
